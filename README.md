@@ -4,6 +4,10 @@ Base de desenvolvimento para um sistema de testes caixa preta com Pi, um
 orquestrador e quatro especialistas: curadoria, planejamento, execução e relatório.
 O produto e sua metodologia ainda serão implementados a partir dos RF, RN, RG e US.
 
+**Equipe: comecem pelo [guia de desenvolvimento da sprint](docs/requisitos/README.md).**
+Ele reúne o escopo proposto para 26/09, os contratos, a divisão de trabalho e os
+critérios para considerar o protótipo pronto.
+
 ## Começar na própria máquina
 
 Requisitos: Git e Docker Desktop/Engine com Compose 2.24 ou posterior. O container

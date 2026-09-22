@@ -1,0 +1,481 @@
+{
+  "fixture": true,
+  "notice": "EXEMPLO SINTÉTICO. Não houve execução, chamada de modelo, acesso ao alvo ou geração de evidências. Não apresentar como teste real.",
+  "run": {
+    "id": "run-demo-001",
+    "status": "interrupted",
+    "phase": "execution",
+    "input": {
+      "startUrl": "http://qa-demo.invalid/login",
+      "credentialRef": "fixture-only-no-secret",
+      "objective": "Verificar reservas conforme US-01.",
+      "artifactIds": [
+        "artifact-demo"
+      ]
+    },
+    "artifacts": [
+      {
+        "id": "artifact-demo",
+        "name": "artefato-demo.md",
+        "version": "demo-v1",
+        "text": "# Artefato sintético: reservar itens\n\nDocumento inventado para integrar o protótipo. Não pertence a um cliente.\nVersão: demo-v1. Os resultados do JSON associado também são simulados.\n\n## US-01\n\nComo usuário autenticado, quero reservar itens para informar a quantidade desejada.\n\n## CA-01\n\nA quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva.\n\n## CA-02\n\nO comentário é opcional. Quando informado, deve ser salvo junto à reserva.\n\n## Percurso sugerido para a aplicação controlada\n\nApós o login, a página inicial oferece “Reservas”. A tela de reservas oferece\n“Nova reserva”. O formulário apresenta quantidade, comentário e “Confirmar”.\nO agente ainda precisa observar e registrar esse percurso no navegador real.\n"
+      }
+    ],
+    "requirements": [
+      {
+        "id": "US-01",
+        "statement": "Usuário autenticado reserva itens informando a quantidade desejada.",
+        "rules": [
+          {
+            "id": "CA-01",
+            "statement": "Quantidade inteira de 1 a 10 inclusive gera reserva; quantidade fora do intervalo ou não inteira gera mensagem de erro e não cria reserva.",
+            "sources": [
+              {
+                "artifactId": "artifact-demo",
+                "locator": "CA-01",
+                "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+              }
+            ]
+          },
+          {
+            "id": "CA-02",
+            "statement": "Comentário é opcional; quando informado, é salvo junto à reserva.",
+            "sources": [
+              {
+                "artifactId": "artifact-demo",
+                "locator": "CA-02",
+                "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+              }
+            ]
+          }
+        ],
+        "sources": [
+          {
+            "artifactId": "artifact-demo",
+            "locator": "CA-01",
+            "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+          },
+          {
+            "artifactId": "artifact-demo",
+            "locator": "CA-02",
+            "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+          }
+        ]
+      }
+    ],
+    "questions": [],
+    "navigation": {
+      "screens": [
+        {
+          "id": "home",
+          "name": "Início após autenticação",
+          "recognition": "Página com opção Reservas."
+        },
+        {
+          "id": "reservations",
+          "name": "Reservas",
+          "recognition": "Lista de reservas e opção Nova reserva."
+        },
+        {
+          "id": "form",
+          "name": "Nova reserva",
+          "recognition": "Campos Quantidade e Comentário e botão Confirmar."
+        }
+      ],
+      "transitions": [
+        {
+          "id": "t-home-list",
+          "from": "home",
+          "action": "Clicar em Reservas.",
+          "to": "reservations"
+        },
+        {
+          "id": "t-list-form",
+          "from": "reservations",
+          "action": "Clicar em Nova reserva.",
+          "to": "form"
+        }
+      ],
+      "paths": [
+        {
+          "id": "path-create-reservation",
+          "startScreenId": "home",
+          "transitionIds": [
+            "t-home-list",
+            "t-list-form"
+          ]
+        }
+      ]
+    },
+    "testCases": [
+      {
+        "id": "case-1",
+        "requirementIds": [
+          "US-01"
+        ],
+        "ruleIds": [
+          "CA-01",
+          "CA-02"
+        ],
+        "preconditions": [
+          "Conta de teste válida e autenticada.",
+          "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+        ],
+        "pathId": "path-create-reservation",
+        "data": {
+          "quantity": 1,
+          "comment": ""
+        },
+        "techniques": [
+          {
+            "name": "PCE",
+            "description": "Classe válida: inteiro entre 1 e 10.",
+            "values": [
+              1
+            ]
+          },
+          {
+            "name": "AVL",
+            "description": "Limite inferior 1 e vizinho inválido 0; domínio inteiro.",
+            "values": [
+              1
+            ]
+          }
+        ],
+        "expected": "Mostrar “Reserva criada” e criar a reserva com a quantidade informada, sem exigir comentário.",
+        "sources": [
+          {
+            "artifactId": "artifact-demo",
+            "locator": "CA-01",
+            "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+          },
+          {
+            "artifactId": "artifact-demo",
+            "locator": "CA-02",
+            "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+          }
+        ],
+        "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+      },
+      {
+        "id": "case-2",
+        "requirementIds": [
+          "US-01"
+        ],
+        "ruleIds": [
+          "CA-01",
+          "CA-02"
+        ],
+        "preconditions": [
+          "Conta de teste válida e autenticada.",
+          "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+        ],
+        "pathId": "path-create-reservation",
+        "data": {
+          "quantity": 11,
+          "comment": ""
+        },
+        "techniques": [
+          {
+            "name": "PCE",
+            "description": "Classe inválida: inteiro fora do intervalo permitido.",
+            "values": [
+              11
+            ]
+          },
+          {
+            "name": "AVL",
+            "description": "Limite superior 10 e vizinho inválido 11; domínio inteiro.",
+            "values": [
+              11
+            ]
+          }
+        ],
+        "expected": "Mostrar “Quantidade inválida” e não criar reserva.",
+        "sources": [
+          {
+            "artifactId": "artifact-demo",
+            "locator": "CA-01",
+            "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+          },
+          {
+            "artifactId": "artifact-demo",
+            "locator": "CA-02",
+            "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+          }
+        ],
+        "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+      },
+      {
+        "id": "case-3",
+        "requirementIds": [
+          "US-01"
+        ],
+        "ruleIds": [
+          "CA-01",
+          "CA-02"
+        ],
+        "preconditions": [
+          "Conta de teste válida e autenticada.",
+          "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+        ],
+        "pathId": "path-create-reservation",
+        "data": {
+          "quantity": 0,
+          "comment": ""
+        },
+        "techniques": [
+          {
+            "name": "PCE",
+            "description": "Classe inválida: inteiro fora do intervalo permitido.",
+            "values": [
+              0
+            ]
+          },
+          {
+            "name": "AVL",
+            "description": "Limite inferior 1 e vizinho inválido 0; domínio inteiro.",
+            "values": [
+              0
+            ]
+          }
+        ],
+        "expected": "Mostrar “Quantidade inválida” e não criar reserva.",
+        "sources": [
+          {
+            "artifactId": "artifact-demo",
+            "locator": "CA-01",
+            "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+          },
+          {
+            "artifactId": "artifact-demo",
+            "locator": "CA-02",
+            "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+          }
+        ],
+        "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+      },
+      {
+        "id": "case-4",
+        "requirementIds": [
+          "US-01"
+        ],
+        "ruleIds": [
+          "CA-01",
+          "CA-02"
+        ],
+        "preconditions": [
+          "Conta de teste válida e autenticada.",
+          "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+        ],
+        "pathId": "path-create-reservation",
+        "data": {
+          "quantity": 10,
+          "comment": ""
+        },
+        "techniques": [
+          {
+            "name": "PCE",
+            "description": "Classe válida: inteiro entre 1 e 10.",
+            "values": [
+              10
+            ]
+          },
+          {
+            "name": "AVL",
+            "description": "Limite superior 10 e vizinho inválido 11; domínio inteiro.",
+            "values": [
+              10
+            ]
+          }
+        ],
+        "expected": "Mostrar “Reserva criada” e criar a reserva com a quantidade informada, sem exigir comentário.",
+        "sources": [
+          {
+            "artifactId": "artifact-demo",
+            "locator": "CA-01",
+            "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+          },
+          {
+            "artifactId": "artifact-demo",
+            "locator": "CA-02",
+            "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+          }
+        ],
+        "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+      },
+      {
+        "id": "case-5",
+        "requirementIds": [
+          "US-01"
+        ],
+        "ruleIds": [
+          "CA-01",
+          "CA-02"
+        ],
+        "preconditions": [
+          "Conta de teste válida e autenticada.",
+          "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+        ],
+        "pathId": "path-create-reservation",
+        "data": {
+          "quantity": 1.5,
+          "comment": ""
+        },
+        "techniques": [
+          {
+            "name": "PCE",
+            "description": "Classe inválida: valor não inteiro.",
+            "values": [
+              1.5
+            ]
+          }
+        ],
+        "expected": "Mostrar “Quantidade inválida” e não criar reserva.",
+        "sources": [
+          {
+            "artifactId": "artifact-demo",
+            "locator": "CA-01",
+            "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+          },
+          {
+            "artifactId": "artifact-demo",
+            "locator": "CA-02",
+            "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+          }
+        ],
+        "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+      }
+    ],
+    "results": [
+      {
+        "caseId": "case-1",
+        "verdict": "passed",
+        "attempts": [
+          {
+            "id": "attempt-1-1",
+            "status": "completed",
+            "events": [
+              {
+                "at": "2026-09-23T20:01:00Z",
+                "action": "Percorrer o caminho, preencher quantidade e confirmar.",
+                "observation": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 1."
+              }
+            ],
+            "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 1.",
+            "evidenceIds": [],
+            "evidenceGaps": [
+              "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+            ],
+            "reason": "Observação simulada atende à expectativa.",
+            "verdict": "passed",
+            "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado."
+          }
+        ],
+        "reason": "Observação simulada atende à expectativa."
+      },
+      {
+        "caseId": "case-2",
+        "verdict": "failed",
+        "attempts": [
+          {
+            "id": "attempt-2-1",
+            "status": "completed",
+            "events": [
+              {
+                "at": "2026-09-23T20:02:00Z",
+                "action": "Percorrer o caminho, preencher quantidade e confirmar.",
+                "observation": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 11."
+              }
+            ],
+            "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 11.",
+            "evidenceIds": [],
+            "evidenceGaps": [
+              "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+            ],
+            "reason": "Defeito fictício: a observação simulada contradiz CA-01.",
+            "verdict": "failed",
+            "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado."
+          }
+        ],
+        "reason": "Defeito fictício: a observação simulada contradiz CA-01."
+      },
+      {
+        "caseId": "case-3",
+        "verdict": "blocked",
+        "attempts": [
+          {
+            "id": "attempt-3-1",
+            "status": "blocked",
+            "events": [
+              {
+                "at": "2026-09-23T20:03:00Z",
+                "action": "Abrir a entrada autorizada.",
+                "observation": "Login indisponível antes de alcançar o formulário."
+              }
+            ],
+            "observed": "Login indisponível antes de alcançar o formulário.",
+            "evidenceIds": [],
+            "evidenceGaps": [
+              "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+            ],
+            "reason": "Acesso é pré-condição; o caso não pôde prosseguir.",
+            "verdict": "blocked",
+            "setupObservation": "Exemplo de acesso indisponível; pré-condição não estabelecida."
+          }
+        ],
+        "reason": "Acesso é pré-condição; o caso não pôde prosseguir."
+      },
+      {
+        "caseId": "case-4",
+        "verdict": "inconclusive",
+        "attempts": [
+          {
+            "id": "attempt-4-1",
+            "status": "error",
+            "events": [
+              {
+                "at": "2026-09-23T20:04:00Z",
+                "action": "Preencher quantidade e confirmar; tentar capturar resposta.",
+                "observation": "Após confirmar, a captura de tela falhou antes de observar a resposta."
+              }
+            ],
+            "observed": "Após confirmar, a captura de tela falhou antes de observar a resposta.",
+            "evidenceIds": [],
+            "evidenceGaps": [
+              "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+            ],
+            "reason": "Sem observação suficiente para avaliar a aplicação.",
+            "verdict": "inconclusive",
+            "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado."
+          }
+        ],
+        "reason": "Sem observação suficiente para avaliar a aplicação."
+      },
+      {
+        "caseId": "case-5",
+        "verdict": "not_run",
+        "attempts": [],
+        "reason": "Execução ilustrativa interrompida antes deste caso."
+      }
+    ],
+    "evidence": [],
+    "report": {
+      "summary": "Exemplo de relatório parcial com cinco classificações distintas. Todos os dados são simulados.",
+      "caseIds": [
+        "case-1",
+        "case-2",
+        "case-3",
+        "case-4",
+        "case-5"
+      ],
+      "limitations": [
+        "Não houve interação com navegador nem inferência de IA.",
+        "O percurso é ilustrativo; a implementação precisa observá-lo no alvo real.",
+        "Não há vídeos; a interface deve mostrar a ausência, sem links inventados.",
+        "A suíte ilustrativa não cobre todos os valores de AVL nem o comentário preenchido.",
+        "A presença de todos os status serve ao desenvolvimento da interface, não é avaliação de qualidade."
+      ]
+    }
+  }
+}
