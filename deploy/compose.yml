@@ -1,0 +1,30 @@
+# Executado separadamente com -p akcit-qa-dev e -p akcit-qa-prod.
+services:
+  app:
+    image: ${APP_IMAGE:?APP_IMAGE obrigatório}
+    restart: unless-stopped
+    env_file: ${RUNTIME_ENV_FILE:?RUNTIME_ENV_FILE obrigatório}
+    environment:
+      APP_ENV: ${APP_ENV:?APP_ENV obrigatório}
+      APP_REVISION: ${APP_REVISION:?APP_REVISION obrigatório}
+      DATA_DIR: /data
+    ports:
+      - "127.0.0.1:${APP_PORT:?APP_PORT obrigatório}:3000"
+    volumes:
+      - app_data:/data
+    cpus: ${APP_CPUS:-1.0}
+    mem_limit: ${APP_MEMORY:-2g}
+    memswap_limit: ${APP_MEMORY:-2g}
+    shm_size: 512m
+    pids_limit: 512
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+      - /home/node:size=128m,uid=1000,gid=1000,mode=0700
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '3' }
+volumes:
+  app_data:

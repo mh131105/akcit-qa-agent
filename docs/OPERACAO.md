@@ -1,0 +1,89 @@
+# Operação dos ambientes
+
+## Inventário
+
+Servidor: Ubuntu 24.04, 2 vCPU, cerca de 8 GiB RAM; SSH `matheus@76.13.175.64`.
+Raiz do projeto: `/home/matheus/akcit-qa-agent`.
+
+| Ambiente | Compose project | Porta na VPS | CPU máxima | Memória máxima | Volume |
+|---|---|---|---|---|---|
+| Desenvolvimento | akcit-qa-dev | 127.0.0.1:3101 | 0,75 vCPU | 2 GiB | akcit-qa-dev_app_data |
+| Produção | akcit-qa-prod | 127.0.0.1:3102 | 1 vCPU | 3 GiB | akcit-qa-prod_app_data |
+
+Cada ambiente tem seu container, rede, volume e arquivo de segredos. Uma sessão de
+navegador por ambiente é o limite inicial de operação. Os especialistas compartilham
+o processo do produto; não há um container por especialista. Os modelos serão
+consumidos por API; esta configuração não dimensiona inferência de LLM local.
+
+Os limites não são reservas exclusivas: os containers compartilham a CPU física da
+VPS. Avaliar concorrência, memória e latência quando o fluxo de agentes existir.
+Os serviços Perio, Traefik, PostgreSQL, Redis, Portainer e Gotenberg não são alterados.
+
+## Segurança e credenciais
+
+- Container como usuário `node`, sem privilégios, sem socket do Docker, com
+  capabilities removidas e root filesystem somente leitura.
+- `/data` persistente e exclusivo por ambiente. `/tmp` e home transitórios.
+- Navegador com tela virtual Xvfb. O Chromium deste protótipo usa o isolamento do
+  container; não contamos com o sandbox interno do Chromium. Antes de permitir
+  navegação aberta a URLs arbitrárias, revisar isolamento por execução e rede.
+- Logs limitados a 3 arquivos de 10 MiB por container.
+- Nenhuma porta da aplicação publicada na Internet antes do domínio/HTTPS.
+- Chaves de publicação distintas com comandos forçados; sem terminal nem túneis.
+- Tokens do registry são temporários, provenientes de GITHUB_TOKEN; o publicador
+  apaga seu diretório temporário de autenticação ao terminar.
+- Chaves da equipe só acessam HTTP de desenvolvimento pelo relay `dev-access.py`.
+
+Os arquivos `development/runtime.env` e `production/runtime.env` na VPS têm modo
+600. Configure neles o provedor, modelo e a chave necessária, sem comitar valores.
+Credenciais de outros projetos não são copiadas. Após alterar um arquivo, recrie
+somente o container do ambiente correspondente.
+
+## Publicação e recuperação
+
+O workflow de desenvolvimento testa a imagem antes do envio ao GHCR. A VPS confere
+o evento e branch no GitHub, os identificadores de commit/árvore e labels da imagem.
+Após subir o container, executa healthcheck e teste de Pi, navegador, cursor e vídeo.
+Somente uma publicação bem-sucedida atualiza `release.json` e `current.env`.
+Falhas na nova imagem disparam retorno à imagem anterior quando ela existe.
+
+Produção exige execução manual pelo responsável e igualdade entre a árvore de
+`main` e a árvore validada em dev. A verificação usa o digest guardado na VPS;
+alterar uma tag no registry não troca a imagem promovida. As publicações são
+serializadas por lock no servidor.
+
+Consultar status de desenvolvimento:
+
+```sh
+cd /home/matheus/akcit-qa-agent
+docker compose -p akcit-qa-dev --env-file development/current.env -f ops/compose.yml ps
+docker compose -p akcit-qa-dev --env-file development/current.env -f ops/compose.yml logs --tail=100
+cat development/release.json
+```
+
+Para produção, troque `akcit-qa-dev` por `akcit-qa-prod` e `development` por
+`production`. Para uma reversão manual, utilize `previous.env`, verifique o
+healthcheck e registre a alteração do release. A reversão de imagem não desfaz
+migrações de dados; migrations serão definidas com os requisitos do produto.
+
+Os arquivos `ops/deploy.py`, `ops/dev-access.py` e `ops/compose.yml` são a base de
+operação confiável na VPS. Alterações neles devem passar por PR e ser aplicadas
+pelo operador via SSH, antes de depender de novas opções em workflows. A aplicação
+é atualizada por imagem; seu código não é editado diretamente na VPS.
+
+## Backup
+
+Use `deploy/backup.sh development` ou `deploy/backup.sh production` na VPS, com o
+arquivo instalado em `ops/backup.sh`. O script pausa a escrita do container durante
+a cópia do volume e reinicia-o mesmo se houver falha. Faz backup dos dados e da
+configuração de release, não das chaves do GitHub. Guarde `runtime.env` em um cofre
+separado. Copie backups para fora da VPS antes de armazenar dados importantes.
+
+Backups manuais ficam em `backups/`, com permissões restritas. Não há agendamento
+nem retenção automática: a política de dados e evidências será definida pela equipe.
+
+## Referências
+
+- [SDK do Pi](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md)
+- [Docker Compose em produção](https://docs.docker.com/compose/how-tos/production/)
+- [Limites de ambientes por plano GitHub](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)

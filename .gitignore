@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.data/
+.pi/
+artifacts/
+coverage/
+*.log
+*.pem
+*.key
+.DS_Store
+.deployment/
+__pycache__/
+*.pyc

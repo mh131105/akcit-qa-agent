@@ -1,0 +1,27 @@
+{
+  "name": "akcit-qa-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Base de desenvolvimento do sistema multiagentes de testes caixa preta.",
+  "engines": { "node": ">=24 <25" },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "dev:remote": "node scripts/dev-access.mjs",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "check": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "smoke:runtime": "node scripts/smoke-runtime.mjs",
+    "pi": "pi"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.87.0",
+    "playwright-core": "1.63.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
+  }
+}
