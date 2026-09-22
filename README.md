@@ -1,8 +1,14 @@
 # AKCIT QA Agent
 
 Base de desenvolvimento para um sistema de testes caixa preta com Pi, um
-orquestrador e quatro especialistas: curadoria, planejamento, execução e relatório.
+orquestrador e cinco especialistas: curadoria, planejamento, execução, relatório e
+validação das saídas. O validador avalia o trabalho dos outros especialistas; o
+orquestrador encaminha as tarefas e aplica os pareceres, sem julgar a qualidade.
 O produto e sua metodologia ainda serão implementados a partir dos RF, RN, RG e US.
+
+**Equipe: comecem pelo [guia de desenvolvimento da sprint](docs/requisitos/README.md).**
+Ele reúne o escopo proposto para 26/09, os contratos, a divisão de trabalho e os
+critérios para considerar o protótipo pronto.
 
 ## Começar na própria máquina
 
