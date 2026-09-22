@@ -14,6 +14,8 @@ Data de referência: 22/09/2026. Status: proposta técnica para revisão da equi
   e análise de valores-limite (AVL), quando aplicáveis. O relatório inclui vídeos
   curtos das execuções.
 - A equipe ainda decidirá entre acompanhamento contínuo e QA por demanda.
+- A equipe decidiu incluir o sexto agente `output-validator`, responsável pela
+  qualidade das saídas dos demais especialistas. O orquestrador não faz essa avaliação.
 - A aplicação de demonstração, a conta e os artefatos ainda serão providenciados;
   a equipe não consegue defini-los em 22/09.
 - A equipe quer escolher modelos por tarefa, priorizando qualidade e avaliando
@@ -28,11 +30,21 @@ esperado, resultado observado e evidências que eu consiga conferir.
 ```mermaid
 flowchart LR
     A[Usuário informa aplicação e artefatos] --> B[Curadoria preserva e estrutura requisitos]
-    B --> C[Agente identifica telas e percursos]
-    C --> D[Planejamento cria casos com PCE e AVL]
-    D --> E[Agente percorre a interface e executa os casos]
-    E --> F[Relatório mostra resultados e vídeos]
+    B --> V1[Validador revisa curadoria]
+    V1 -->|Aprovado| C[Agente identifica telas e percursos]
+    C --> V2[Validador revisa mapa]
+    V2 -->|Aprovado| D[Planejamento cria casos com PCE e AVL]
+    D --> V3[Validador revisa plano]
+    V3 -->|Aprovado| E[Agente percorre a interface e executa os casos]
+    E --> V4[Validador revisa resultados e evidências]
+    V4 -->|Aprovado| F[Agente redige relatório]
+    F --> V5[Validador revisa relatório]
+    V5 -->|Aprovado| G[Interface publica conclusões e vídeos]
 ```
+
+Os cinco pontos de revisão usam o mesmo papel de validador, em tarefas separadas.
+Uma correção retorna ao produtor; um bloqueio impede a etapa dependente. A interface
+pode exibir progresso e rascunhos identificados como não validados durante o trabalho.
 
 ## Escopo funcional e aceitação
 
@@ -46,6 +58,7 @@ flowchart LR
 | RF-06 | Produzir evidências | Associar o vídeo curto ao caso e à tentativa; informar quando a captura faltar; distinguir execução original de reprodução |
 | RF-07 | Exibir o relatório | Mostrar casos aprovados, reprovados, bloqueados, inconclusivos e não executados, com esperado, observado e evidência |
 | RF-08 | Preservar a execução | Após recarregar a página ou reiniciar o serviço, manter entradas, plano e resultados já salvos; indicar interrupção |
+| RF-09 | Validar as saídas com agente independente | Curadoria, mapa, plano, resultados e relatório recebem parecer vinculado à revisão exata; somente aprovação libera o consumo pela etapa seguinte |
 
 Uma mesma história pode ter casos de várias classes e limites. A quantidade de casos
 depende das regras escolhidas; não prometer cobertura total da aplicação.
@@ -79,6 +92,27 @@ de pré-condição precisam aparecer com a classificação adequada. Um número 
 **RQ-06 — Tentativas separadas.** Se houver reprodução, preservar a primeira tentativa.
 Cada tentativa tem seus próprios eventos e mídias. Preparar ou restaurar dados de
 teste deve seguir um procedimento explícito, fora das ações avaliadas do agente.
+
+**RQ-07 — Validação independente.** O validador compara cada saída com as entradas,
+critérios e evidências em contexto próprio. Ele justifica aprovação, pedido de correção
+ou bloqueio. O backend confere formato e referências; o orquestrador aplica o parecer
+sem substituí-lo. Falha de validação, resposta inválida e limite de correções esgotado
+não permitem avançar. Uma nova revisão exige novo parecer; dependentes de uma saída
+alterada precisam de nova revisão. Não há autovalidação recursiva do validador.
+
+**RQ-08 — Dois resultados distintos.** O veredito do caso avalia a aplicação.
+O parecer do validador avalia o trabalho do agente. É possível aprovar a saída que
+documenta um teste reprovado ou inconclusivo, desde que ela esteja bem sustentada.
+Acrescentar um revisor de IA não garante acerto; a equipe confere também seus pareceres
+contra exemplos de referência.
+
+## Decisão técnica confirmada
+
+**DT-01 — Validador dedicado.** Decisão do grupo registrada em 22/09/2026. A arquitetura
+passa a ter orquestrador, curador, planejador, executor, redator e validador. O novo
+papel concentra a avaliação de qualidade, separada da coordenação do fluxo. As quatro
+frentes de desenvolvimento permanecem; C define a metodologia de validação e B conecta
+o validador ao fluxo. O custo e o tempo das revisões entram na medição da execução.
 
 ## Decisões provisórias que destravam a implementação
 
@@ -116,8 +150,14 @@ continua pendente. Uma execução em alvo controlado não comprova generalizaç�
 
 ## Critério de pronto do protótipo
 
-- O usuário percorre RF-01 a RF-08 pela interface, sem transferência manual oculta
+- O usuário percorre RF-01 a RF-09 pela interface, sem transferência manual oculta
   de dados entre etapas. O fluxo utiliza modelos e navegador reais.
+- Cada saída consumida por outra etapa tem aprovação do validador para aquela revisão.
+  Um erro inserido na saída gera correção ou bloqueio, sem aprovação pelo orquestrador.
+  Verificar também erro/timeout do validador, limite de correções e parecer de revisão antiga.
+- O relatório final só publica conclusões validadas; progresso e saídas pendentes
+  aparecem identificados. Um defeito bem documentado mantém `failed` mesmo quando
+  sua documentação recebe `approved` do validador.
 - O time confere a normalização contra os artefatos originais, incluindo uma regra
   com limites e uma condição ou exceção.
 - O agente produz casos de classes válidas/inválidas e limites justificados, executa

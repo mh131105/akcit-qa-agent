@@ -8,6 +8,10 @@ Este material é uma **proposta para revisão da equipe**. O prazo e as premissa
 identificadas como confirmadas vieram da conversa. As escolhas provisórias permitem
 começar sem presumir que a equipe já decidiu o modelo de negócio.
 
+**Decisão confirmada da equipe:** haverá um sexto agente, `output-validator`, para
+avaliar as saídas dos demais especialistas. O orquestrador encaminha o trabalho e
+aplica o parecer; não realiza essa avaliação.
+
 ## O que fazer agora
 
 1. Leiam o [escopo e as decisões](PROTOTIPO.md) juntos e escolham um responsável
@@ -42,6 +46,7 @@ manter três descrições diferentes da mesma regra.
 
 O repositório tem servidor inicial, fábrica de sessões do Pi, diretórios dos
 especialistas, ambiente de navegador/cursor/vídeo e publicação em dev/prod.
+O cadastro inclui o novo validador, com seus diretórios de tools e skills.
 **A interface do produto, os agentes e o fluxo de testes ainda não estão implementados.**
 As sessões atuais não habilitam chamadas de rede ao modelo, skills ou tools.
 O smoke de infraestrutura não comprova a qualidade dos testes de software.
