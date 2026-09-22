@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { chromium } from 'playwright-core';
@@ -44,13 +44,18 @@ try {
   execFileSync('xdotool', ['mousemove', '--sync', '200', '350', 'click', '1'], { timeout: 10000 });
   await page.waitForFunction(() => document.title === 'clicked', null, { timeout: 10000 });
   const screenshot = join(root, 'cursor.png');
-  await page.screenshot({ path: screenshot });
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'x11grab', '-video_size', '1366x768', '-draw_mouse', '1', '-i', process.env.DISPLAY ?? ':99', '-frames:v', '1', '-threads', '1', '-update', '1', screenshot], { timeout: 15000 });
   assert.ok((await stat(screenshot)).size > 1000);
   const [exitCode] = await recordingFinished;
   assert.equal(exitCode, 0, recordingError);
   const info = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'json', video], { encoding: 'utf8' }));
   assert.ok(Number(info.format.duration) >= 1);
   const result = { status: 'passed', checked: ['pi-cli', 'pi-sdk-isolated-session', 'pdf-reader', 'headed-chromium', 'real-mouse-click', 'screenshot', 'screen-video'], durationMs: Date.now() - started };
+  if (process.env.SMOKE_ARTIFACT_DIR) {
+    await mkdir(process.env.SMOKE_ARTIFACT_DIR, { recursive: true });
+    await copyFile(screenshot, join(process.env.SMOKE_ARTIFACT_DIR, 'cursor.png'));
+    await copyFile(video, join(process.env.SMOKE_ARTIFACT_DIR, 'cursor.mp4'));
+  }
   if (process.env.SMOKE_RESULT_FILE) await writeFile(process.env.SMOKE_RESULT_FILE, JSON.stringify(result, null, 2));
   console.log(JSON.stringify(result));
 } finally {

@@ -87,6 +87,7 @@ O domínio e HTTPS público serão conectados ao Traefik quando a equipe os forn
 - `.github/workflows/`: CI, desenvolvimento e promoção de produção.
 - `docs/requisitos/`: espaço para os RF, RN, RG e US.
 - `docs/OPERACAO.md`: limites, dados, segredos, backup e recuperação.
+- `docs/EQUIPE.md`: convites e acesso temporário da equipe ao desenvolvimento.
 
 O runtime não inicia chamadas de LLM. A equipe definirá o provedor e o modelo e
 configurará credenciais no ambiente correspondente ao implementar os agentes.
