@@ -23,8 +23,8 @@ Redistribuir tarefas menores quando houver bloqueio, mantendo clara a responsabi
 
 ## Lista de tarefas
 
-Os códigos abaixo permanecem estáveis; os números do GitHub aparecem no índice da
-sprint quando as issues forem abertas. Cada issue deve receber responsável e PR.
+As dez tarefas estão no [marco da entrega no GitHub](https://github.com/mh131105/akcit-qa-agent/milestone/1).
+Os códigos T0–T9 permanecem estáveis. Cada issue deve receber responsável e PR.
 
 As dependências abaixo são necessárias para **concluir**, não para começar.
 T4 começa com persistência mínima, e T9 começa no primeiro dia: cada frente integra
@@ -32,16 +32,16 @@ o trecho disponível enquanto desenvolve o restante.
 
 | ID | Frente | Resultado esperado e critério para encerrar | Depende de |
 | --- | --- | --- | --- |
-| T0 | Todas; coordenação B | Definir responsáveis; registrar alvo/acesso/artefatos e provedor quando chegarem; indicar o que segue pendente. Segredos fora da issue | Disponibilidade dos insumos, sem prazo confirmado |
-| T1 | B + revisão A/C/D | Tipos e validação dos contratos; decidir envio do formulário; interface e backend leem o mesmo exemplo; mudança de contrato revisada pelos consumidores | Documentos desta proposta |
-| T2 | A | Criar execução, mostrar fase/questões e relatório com casos, esperado/observado e vídeo; indicar simulação e captura ausente | T1; pode começar com fixture |
-| T3 | B | Persistir entradas, estados, casos, tentativas e referências de mídia; servir API; reinício preserva resultados e marca interrupção | T1 |
-| T4 | B | Ligar Pi às etapas e tools; configurar modelo por papel; validar saídas; limitar tempo/ações/tentativas; registrar modelo e consumo disponível | T1, T3; credencial para execução real |
-| T5 | C | Curar texto/PDF textual; preservar significado e origem; sinalizar conflito localizado; humano confere limites e exceções | T1; começa com artefato sintético |
-| T6 | C | Planejar com mapa + requisitos; gerar PCE/AVL justificada; estruturar relatório sem alterar vereditos ou inventar evidências | T1, T5; mapa de exemplo até T8 |
-| T7 | A + C; revisão D | Montar alvo controlado separado com login, navegação, regra explícita, defeito conhecido e reset documentado; manter gabarito fora do contexto do executor | Escolha local do exemplo; independente do alvo externo |
-| T8 | D | Habilitar visão/cursor/teclado; mapear percurso e executar caso; produzir vídeo vinculado à tentativa; registrar bloqueio e falha de captura | T1, T7; modelo para navegação autônoma |
-| T9 | Todas; coordenação B | Integrar RF-01 a RF-08 em dev, verificar critérios de pronto, ensaiar e promover imagem validada; registrar limitações externas | T2–T8; credenciais utilizáveis |
+| [T0 · #3](https://github.com/mh131105/akcit-qa-agent/issues/3) | Todas; coordenação B | Definir responsáveis; registrar alvo/acesso/artefatos e provedor quando chegarem; indicar o que segue pendente. Segredos fora da issue | Disponibilidade dos insumos, sem prazo confirmado |
+| [T1 · #4](https://github.com/mh131105/akcit-qa-agent/issues/4) | B + revisão A/C/D | Tipos e validação dos contratos; decidir envio do formulário; interface e backend leem o mesmo exemplo; mudança de contrato revisada pelos consumidores | Documentos desta proposta |
+| [T2 · #5](https://github.com/mh131105/akcit-qa-agent/issues/5) | A | Criar execução, mostrar fase/questões e relatório com casos, esperado/observado e vídeo; indicar simulação e captura ausente | T1; API de T3 e mídia de T8 para concluir; começa com fixture |
+| [T3 · #6](https://github.com/mh131105/akcit-qa-agent/issues/6) | B | Persistir entradas, estados, casos, tentativas e referências de mídia; servir API; reinício preserva resultados e marca interrupção | T1 |
+| [T4 · #7](https://github.com/mh131105/akcit-qa-agent/issues/7) | B | Ligar Pi às etapas e tools; configurar modelo por papel; validar saídas; limitar tempo/ações/tentativas; registrar modelo e consumo disponível | T1, T3; credencial para execução real |
+| [T5 · #8](https://github.com/mh131105/akcit-qa-agent/issues/8) | C | Curar texto/PDF textual; preservar significado e origem; sinalizar conflito localizado; humano confere limites e exceções | T1; começa com artefato sintético |
+| [T6 · #9](https://github.com/mh131105/akcit-qa-agent/issues/9) | C | Planejar com mapa + requisitos; gerar PCE/AVL justificada; estruturar relatório sem alterar vereditos ou inventar evidências | T1, T5; mapa de exemplo até T8 |
+| [T7 · #10](https://github.com/mh131105/akcit-qa-agent/issues/10) | A + C; revisão D | Montar alvo controlado separado com login, navegação, regra explícita, defeito conhecido e reset documentado; manter gabarito fora do contexto do executor | Escolha local do exemplo; independente do alvo externo |
+| [T8 · #11](https://github.com/mh131105/akcit-qa-agent/issues/11) | D | Habilitar visão/cursor/teclado; mapear percurso e executar caso; produzir vídeo vinculado à tentativa; registrar bloqueio e falha de captura | T1, T7; modelo para navegação autônoma |
+| [T9 · #12](https://github.com/mh131105/akcit-qa-agent/issues/12) | Todas; coordenação B | Integrar RF-01 a RF-08 em dev, verificar critérios de pronto, ensaiar e promover imagem validada; registrar limitações externas | T2–T8; credenciais utilizáveis |
 
 T7 deve ser pequena: a frente A prepara telas simples e C fornece requisitos e
 gabarito. O código do alvo e seu reset ficam separados da aplicação de QA. O agente
