@@ -278,6 +278,183 @@ agentes. API/persistência (T3) e orquestração (T4) integrarão esses controle
 em [`test/plan-approval.test.ts`](../../test/plan-approval.test.ts) usam curadoria,
 plano e pareceres **sintéticos** do exemplo, sem chamadas pagas ou dependência da VPS.
 
+## Persistência da aprovação do plano — T3.1
+
+[`src/storage/runs.ts`](../../src/storage/runs.ts) e
+[`src/application/plan-approval.ts`](../../src/application/plan-approval.ts) integram
+o domínio de T1.1 ao disco. Cobrem parcialmente RF-08, RF-14, RN-05, RN-06 e RNF-06.
+O domínio e seus testes permanecem inalterados.
+
+### Registro físico
+
+Cada execução ocupa `config.dataDir/runs/<runId>.json`; `DATA_DIR` configura a raiz,
+que corresponde a `/data` no volume persistente do container:
+
+```ts
+type StoredRun = {
+  schemaVersion: 1;
+  run: RunRecord; // Registro completo, com os campos do contrato e campos adicionais.
+  workIntents: WorkIntent[];
+};
+type WorkIntent = {
+  id: string; // UUID gerado pelo backend.
+  type: 'create_cases' | 'analyze_feedback';
+  outputId: string;
+  outputRevision: number;
+  createdAt: string; // UTC, YYYY-MM-DDTHH:mm:ss.sssZ.
+  status: 'pending' | 'interrupted';
+  interruption?: { reason: 'service_restart'; at: string }; // Obrigatório se interrupted.
+};
+```
+
+`run` conserva identificação, proprietário, entradas, artefatos, conteúdo das
+saídas, versões, pareceres, aprovações, perguntas, respostas, política, ciclos e
+campos adicionais. `input.credentialRef` é string ou `null`; o serviço não resolve
+essa referência nem copia segredos para o registro. Conteúdo de documentos e
+saídas é dado, não instrução. A leitura confere envelope, identificação, estrutura
+dos campos utilizados e intenções; não valida semanticamente todos os payloads.
+Não há conversão automática de schema, nem substituição de dados inválidos por
+uma execução vazia. As regras de aprovação continuam exclusivamente no domínio.
+
+`RunStore(dataDir)` oferece `initialize()`, `create(run)`, `read(runId)`,
+`update(runId, change)` e `recoverInterrupted()`. A criação devolve o envelope
+salvo com intenções vazias e recusa um ID existente, mesmo que o arquivo esteja
+inválido. A leitura devolve o envelope completo. Não há cache nem descritores
+mantidos abertos: outra instância lê os mesmos dados e não é necessário `close()`.
+IDs aceitam de 1 a 128 caracteres ASCII alfanuméricos, `_` e `-`, começando por
+alfanumérico. Separadores, pontos e tentativas de sair do diretório são recusados
+antes da formação de caminhos. Diretórios usam `0700`, arquivos novos `0600`;
+a leitura recusa links simbólicos no arquivo da execução.
+
+### Serviço interno
+
+```ts
+executePlanCommand(
+  store: RunStore, // Inicializado com config.dataDir.
+  runId: string,
+  request: Readonly<{
+    type: 'approve_plan' | 'request_plan_changes' | 'continue';
+    outputId: string;
+    outputRevision: number;
+    comment?: string;
+  }>,
+  context: Readonly<{ userId: string; resourceReserved?: boolean }>,
+): Promise<PlanCommandResult>
+```
+
+O solicitante escolhe somente comando, referência esperada e comentário. A
+identidade `context.userId` é fornecida pelo backend e precisa corresponder a
+`ownerId`; não representa autenticação implementada. Apenas
+`context.resourceReserved === true` confirma reserva já obtida pelo chamador
+interno. Omissão significa recurso indisponível. UUID e horário UTC da decisão e
+da intenção são gerados pelo serviço. Campos extras de autoria, tempo, parecer,
+estado ou reserva no request não são usados para construir o comando.
+
+O resultado é `{ok: true, status, phase, approvals, work}`, em que `approvals`
+contém o histórico de decisões salvo e `work` é a nova intenção persistida ou
+`null`. Não há despacho. Recusas retornam somente
+`{ok: false, work: null, error: {code, message}}`, sem execução ou projeção; mensagens
+de armazenamento são fixas e não expõem documentos, caminhos ou credenciais.
+
+Dentro da trava compartilhada pelo processo, a operação:
+
+1. Relê o registro do disco e confere o proprietário.
+2. Seleciona plano e curadoria por `phase`, exigindo um único ID lógico por saída
+   e revisões sem duplicatas. A vigente é a maior revisão do mesmo ID,
+   independentemente da ordem do array e de quais revisões foram aprovadas.
+   Revisão numérica inválida não é ignorada em favor de uma válida: o domínio
+   recebe essa versão e a recusa. Saída ausente vira `null` na projeção.
+3. Monta `PlanApprovalState` com versões, estado, pareceres e decisões salvos;
+   constrói o comando e chama `applyPlanApprovalCommand`.
+4. Em recusa, não grava. Em sucesso, altera somente `run.status`, `run.phase` e
+   acrescenta as decisões novas; registra a intenção retornada no mesmo envelope.
+   Nunca substitui a execução completa pela projeção `result.state`.
+5. Escreve o envelope completo em temporário exclusivo no mesmo diretório,
+   sincroniza e fecha o arquivo, renomeia sobre o definitivo, sincroniza o
+   diretório e então confirma.
+   Falha antes da substituição conserva o arquivo anterior e não confirma trabalho.
+
+Se a renomeação ocorrer mas a sincronização do diretório falhar, o retorno ainda
+será erro; o registro pode já estar salvo e deve ser relido. Isso não autoriza
+despachar trabalho presumindo sucesso nem repetir a intenção fora deste serviço.
+
+`update<T>` recebe uma função `(record: StoredRun) => {value: T, save: boolean}`
+(também pode ser assíncrona). O callback altera o registro recém-lido e indica
+`save: true` para persistir; `false` descarta qualquer mudança local. `value` só é
+devolvido depois da gravação solicitada. A trava cobre **ler → aplicar → salvar**,
+é compartilhada entre instâncias de `RunStore` e também protege a criação.
+Todo futuro escritor, inclusive cancelamento, deve usar esse caminho. Callbacks
+não podem chamar `update`/`create` recursivamente: a trava não é reentrante.
+A implantação pressupõe **um único processo escritor por ambiente**; a trava
+não coordena processos e não reserva o navegador.
+
+### Erros, repetição e reinício
+
+Os códigos do domínio listados em T1.1 são preservados. O serviço acrescenta:
+
+| Código | Comportamento |
+| --- | --- |
+| `INVALID_RUN_ID` | Recusa ID inseguro antes de construir o caminho |
+| `RUN_NOT_FOUND` | Registro inexistente |
+| `RUN_INACCESSIBLE` | Registro inacessível ou arquivo não regular/link simbólico |
+| `RUN_EXISTS` | Criação recusada sem sobrescrever |
+| `INVALID_RECORD` | JSON, envelope ou estrutura inválidos; arquivo preservado |
+| `STORAGE_FAILURE` | Falha ao concluir a operação de armazenamento; nenhum sucesso confirmado |
+| `UNAUTHORIZED` | Contexto sem usuário válido ou usuário diferente do proprietário; nenhum dado da execução devolvido |
+| `AMBIGUOUS_RECORD` | Mais de um ID de plano/curadoria ou revisão duplicada nessa saída |
+
+Decisões idênticas repetidas, inclusive concorrentes, mantêm UUID e horário
+originais e não regravam o arquivo. Decisões conflitantes recebem
+`DECISION_CONFLICT`, sem sobrescrever a vencedora. Duas continuidades concorrentes
+produzem um sucesso e um `INVALID_STATE`, com apenas uma intenção salva junto da
+transição. Repetir a continuidade após o avanço também é `INVALID_STATE`, conforme
+o domínio. Sem reserva, `RESOURCE_UNAVAILABLE` mantém a decisão e a espera, sem
+intenção. Aprovar e pedir alteração não exigem reserva.
+
+Antes de devolver o servidor em `createApp`, `recoverInterrupted()` lê os JSONs e
+usa `update` para mudar cada execução `running` para `interrupted`. Acrescenta
+`{reason: 'service_restart', at: <UTC>}` ao histórico `run.interruptions` e marca
+cada intenção `pending` dessa execução como `interrupted`, com o mesmo evento em
+`work.interruption`. Intenções já interrompidas, decisões e conteúdo permanecem.
+A recuperação retorna a quantidade de execuções alteradas; repeti-la não muda
+horários nem acrescenta eventos. Rascunhos, esperas humanas e estados encerrados
+ficam intactos. JSON inválido ou falha de recuperação impede disponibilizar o
+servidor, sem apagar o registro. A recuperação é por execução: registros já
+recuperados continuam válidos se outro arquivo falhar; nova tentativa é segura.
+Temporários `.tmp` de uma queda são ignorados, nunca promovidos automaticamente.
+
+Exemplo interno, com uma execução sintética previamente criada em espera e com
+plano/curadoria vigentes validados:
+
+```ts
+const store = new RunStore(config.dataDir);
+await store.initialize();
+const reference = { outputId: 'out-planning', outputRevision: 1 };
+const context = { userId: 'user-demo' };
+const approved = await executePlanCommand(store, 'run-demo-001', {
+  type: 'approve_plan', ...reference,
+}, context);
+if (!approved.ok) throw new Error(approved.error.code);
+
+const reopened = new RunStore(config.dataDir);
+await reopened.initialize();
+const saved = await reopened.read('run-demo-001'); // Mesma decisão, UUID e horário.
+// A orquestração obtém a reserva real antes desta chamada:
+const continued = await executePlanCommand(reopened, saved.run.id, {
+  type: 'continue', ...reference,
+}, { ...context, resourceReserved: true });
+if (!continued.ok) throw new Error(continued.error.code);
+const pending = (await reopened.read(saved.run.id)).workIntents; // Uma create_cases.
+```
+
+Os testes em [`test/plan-approval-storage.test.ts`](../../test/plan-approval-storage.test.ts)
+usam arquivos reais temporários e cópia do exemplo sintético; a aplicação não
+carrega esse exemplo. Página inicial e healthcheck conservam o comportamento.
+**Limites:** sem API, autenticação implementada, reserva real, agendamento, consumo
+de intenções, Pi ou execução dos especialistas. T3 e T4 permanecem abertas.
+Intenção única não prova execução de agente exatamente uma vez. A orquestração
+ainda precisa tratar reserva, recusas, falhas e recuperação explícita do trabalho.
+
 ## Mapeamento, dúvidas e execução
 
 Tela: `{id, name, recognition}`. Transição: `{id, from, action, to}`. Caminho:

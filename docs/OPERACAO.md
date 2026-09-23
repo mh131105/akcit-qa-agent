@@ -82,6 +82,33 @@ separado. Copie backups para fora da VPS antes de armazenar dados importantes.
 Backups manuais ficam em `backups/`, com permissões restritas. Não há agendamento
 nem retenção automática: a política de dados e evidências será definida pela equipe.
 
+## Dados das execuções
+
+`DATA_DIR` configura o diretório de dados (`.data` por padrão no ambiente local).
+Nos containers, ele é `/data`, no volume persistente exclusivo de cada ambiente.
+Cada execução fica em `DATA_DIR/runs/<runId>.json`, com o registro completo e o
+histórico de intenções de trabalho autorizado. Os diretórios usam modo `0700` e
+os arquivos, `0600`; credenciais permanecem referências, sem segredos no JSON.
+Esses arquivos já integram o backup do volume descrito acima. Restaurar uma cópia
+deve preservar suas permissões e o proprietário usado pelo serviço.
+
+Antes de disponibilizar o servidor, a aplicação recupera execuções `running`:
+grava o estado `interrupted`, motivo `service_restart` e horário UTC, e interrompe
+as intenções `pending` dessas execuções. Decisões, versões, conteúdo e histórico
+permanecem salvos. Rascunhos, esperas humanas e execuções encerradas mantêm seus
+estados. Repetir a recuperação preserva o motivo e horário originais; nenhum
+trabalho é executado ou reenviado automaticamente. Como o backup existente para
+e reinicia o container, seu reinício também segue essa recuperação.
+
+A atualização protege a sequência de leitura, mudança e gravação com uma trava
+compartilhada pelo processo, inclusive para futuras operações de cancelamento.
+O registro completo é escrito e sincronizado em arquivo temporário no mesmo
+diretório antes da renomeação; falhas anteriores preservam o arquivo definitivo.
+Um arquivo inválido causa erro e não é substituído por uma execução vazia.
+Essa solução exige **um único processo escritor por ambiente**, como na
+implantação atual. Não edite os arquivos enquanto o serviço estiver ativo.
+A trava de dados não reserva o navegador; reserva e despacho cabem à orquestração.
+
 ## Referências
 
 - [SDK do Pi](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md)
