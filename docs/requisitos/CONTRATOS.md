@@ -149,6 +149,135 @@ mantém `failed` enquanto a saída recebe `approved`. O mesmo vale para bloqueio
 incertezas classificados corretamente. O validador não substitui evidência por uma
 estimativa de confiança.
 
+## Controle implementado da aprovação do plano — T1.1
+
+O módulo [`src/domain/plan-approval.ts`](../../src/domain/plan-approval.ts) implementa
+somente o controle entre a revisão humana do plano e a solicitação de trabalho.
+**Aprovar registra uma decisão; continuar é uma operação separada.** O controle
+atende parcialmente RF-09, RF-14, RN-04, RN-05, RN-06 e RN-12 e não substitui as
+demais etapas do produto.
+
+```ts
+applyPlanApprovalCommand(
+  state: PlanApprovalState,
+  command: PlanApprovalCommand,
+): PlanApprovalResult
+```
+
+A função é pura e determinística: não altera a entrada, não lê relógio, não persiste
+dados e não chama modelos, agentes ou rede. O chamador fornece estes campos de
+`PlanApprovalState`, todos tratados como somente leitura:
+
+| Campo | Formato e origem |
+| --- | --- |
+| `status`, `phase` | Strings do estado salvo da execução; somente `awaiting_approval` e `planning` aceitam comandos |
+| `plan` | Snapshot vigente `{id, revision, dependsOn: [{outputId, revision}]}`, ou `null` |
+| `curation` | Snapshot vigente `{id, revision}`, ou `null` |
+| `validations` | Lista de `{outputId, outputRevision, validator, status}`; usa os estados de parecer definidos acima |
+| `approvals` | Histórico de `{id, outputId, outputRevision, actorId, at, decision, comment}`; `decision` é `approved` ou `changes_requested` |
+
+O backend obtém os snapshots vigentes e seu histórico no armazenamento. Modelo e
+navegador do usuário não escolhem qual revisão é vigente. Este recorte aceita
+exatamente uma dependência do plano: a referência ao ID e revisão da curadoria vigente.
+Dependência ausente, adicional ou divergente impede o comando. Todas as revisões
+conferidas devem ser inteiros positivos seguros em JavaScript. O backend continua
+responsável por invalidar saídas quando artefatos ou respostas mudarem; este módulo
+não percorre `answerRefs` nem o grafo completo de dependências.
+
+Plano e curadoria precisam, cada um, de exatamente um parecer de qualidade da revisão
+vigente emitido por `output-validator`, com `status: approved`. Pareceres de outros
+papéis ou revisões não autorizam a operação. Tentativas técnicas com `error` são
+preservadas e ignoradas na contagem de pareceres de qualidade; somente erros, ausência,
+rejeição (`changes_requested`), bloqueio ou mais de um parecer de qualidade impedem
+a operação.
+
+`PlanApprovalCommand` é a união de somente três comandos. Todos contêm `outputId`
+e `outputRevision` esperados pelo solicitante, conferidos contra o plano vigente:
+
+| `type` | Outros campos e condições | Efeito de sucesso |
+| --- | --- | --- |
+| `approve_plan` | `id`, `actorId`, `at`; `comment` opcional; plano e curadoria vigentes e validados | Acrescenta decisão `approved`; mantém `planning` / `awaiting_approval`; `work: null` |
+| `request_plan_changes` | `id`, `actorId`, `at`; `comment` obrigatório e não composto apenas por espaços; plano e curadoria vigentes e validados | Acrescenta decisão `changes_requested`; mantém `planning` / `awaiting_approval`; `work: null` |
+| `continue` | `resourceReserved: boolean`; reconfere versões, pareceres e decisão humana válida da mesma revisão | Com reserva e decisão `approved`: `case_design` / `running`, intenção `create_cases`; com reserva e `changes_requested`: `planning` / `running`, intenção `analyze_feedback` |
+
+Nos comandos de decisão, `id` identifica o registro, `actorId` identifica o autor e
+`at` informa uma data/hora UTC real em `YYYY-MM-DDTHH:mm:ssZ` ou
+`YYYY-MM-DDTHH:mm:ss.sssZ`. Os três campos devem ser não vazios. Comentário omitido
+vira `''`; comentários informados são strings preservadas literalmente.
+`analyze_feedback` encaminha a análise do pedido: especialista
+e validador ainda avaliarão quais saídas e aprovações precisam ser revistas. Não
+significa refazer automaticamente somente o plano.
+
+O retorno discriminado contém sempre o estado e a intenção:
+
+```ts
+type PlanApprovalResult =
+  | { ok: true; state: PlanApprovalState; work: null | {
+      type: 'create_cases' | 'analyze_feedback';
+      outputId: string; outputRevision: number;
+    } }
+  | { ok: false; state: PlanApprovalState; work: null; error: {
+      code: PlanApprovalErrorCode; message: string;
+    } };
+```
+
+Todo erro devolve o mesmo objeto `state` recebido, integralmente preservado, e
+`work: null`. `error.code` é estável para integração; `error.message` explica o motivo
+à pessoa. A indisponibilidade do recurso também é um erro sem alteração de estado.
+
+| Código | Motivo |
+| --- | --- |
+| `INVALID_STATE` | Comando desconhecido ou execução fora de `planning` / `awaiting_approval`, inclusive `running`, `cancelled`, `completed`, `interrupted` ou `error` |
+| `INVALID_DECISION` | Registro de decisão sem identificador, autor ou horário UTC válido, ou comentário que não seja string |
+| `STALE_VERSION` | Plano, curadoria ou referência ausente, inválida ou desatualizada; revisão inválida; plano e curadoria com o mesmo ID; dependência não atendida pelo recorte |
+| `INSUFFICIENT_VALIDATION` | Plano ou curadoria sem o parecer único e aprovado exigido para a revisão vigente |
+| `DECISION_MISSING` | Continuidade sem decisão humana válida para a revisão vigente |
+| `DECISION_CONFLICT` | Decisão diferente já registrada para a revisão; múltiplas decisões nessa revisão; identificador já utilizado por outra decisão |
+| `COMMENT_REQUIRED` | Pedido de alteração sem comentário não vazio |
+| `RESOURCE_UNAVAILABLE` | Continuidade sem reserva do ambiente; decisão e espera permanecem registradas |
+
+A repetição compara revisão, autor, decisão e comentário literal. Se o conteúdo for
+idêntico e a revisão ainda estiver vigente e validada, devolve sucesso sem acrescentar
+registro, preservando o ID e horário originais; um novo `id` ou `at` recebido não
+transforma a repetição em outra decisão. Conteúdo ou autor diferente gera conflito;
+não há edição retroativa. Revisões antigas e suas decisões ficam no histórico; uma
+nova revisão exige novo parecer e nova decisão. Repetir `continue` depois do avanço
+retorna `INVALID_STATE`, sem produzir outra intenção.
+
+Exemplo com `state` preparado em `planning` / `awaiting_approval`, plano
+`out-planning` revisão 1, plano e curadoria vigentes validados e nenhuma decisão:
+
+```ts
+const approved = applyPlanApprovalCommand(state, {
+  type: 'approve_plan', outputId: 'out-planning', outputRevision: 1,
+  id: 'approval-1', actorId: 'user-1', at: '2026-09-23T16:00:00Z',
+}); // ok: true; awaiting_approval; work: null
+const busy = applyPlanApprovalCommand(approved.state, {
+  type: 'continue', outputId: 'out-planning', outputRevision: 1,
+  resourceReserved: false,
+}); // ok: false; RESOURCE_UNAVAILABLE; aprovação preservada; work: null
+const started = applyPlanApprovalCommand(busy.state, {
+  type: 'continue', outputId: 'out-planning', outputRevision: 1,
+  resourceReserved: true,
+}); // ok: true; running / case_design; work.type: create_cases
+```
+
+Na integração, o backend deve conferir autenticação e propriedade da execução,
+definir autor e horário confiáveis e validar os dados recebidos. Decisões são salvas
+sem exigir disponibilidade do ambiente. Para continuar, o backend obtém a reserva,
+aplica o comando sobre estado atualizado e persiste a transição antes de despachar a
+intenção ao especialista. Deve impedir transições concorrentes, liberar a reserva em
+recusas e tratar falhas de persistência ou despacho sem perder a decisão nem duplicar
+trabalho. Falha após persistir precisa de recuperação explícita do trabalho pendente;
+repetir este comando sobre `running` não faz um novo despacho.
+
+`resourceReserved: true` representa uma reserva já obtida pelo backend; não implementa
+exclusão mútua nem prova uma reserva quando enviado pelo navegador. Esta entrega não
+inclui persistência, autenticação, concorrência real, recuperação ou execução de
+agentes. API/persistência (T3) e orquestração (T4) integrarão esses controles. Os testes
+em [`test/plan-approval.test.ts`](../../test/plan-approval.test.ts) usam curadoria,
+plano e pareceres **sintéticos** do exemplo, sem chamadas pagas ou dependência da VPS.
+
 ## Mapeamento, dúvidas e execução
 
 Tela: `{id, name, recognition}`. Transição: `{id, from, action, to}`. Caminho:
@@ -268,7 +397,7 @@ internos nem segredos. Autenticação e cadastro seguem os RF do produto.
 | `GET /api/runs/:id` | Estado, fase, versões, questões, aprovações, pareceres e resultados; distinguir provisório, validado e desatualizado |
 | `POST /api/runs/:id/start` | Validar US/CA e iniciar curadoria/plano, se recurso disponível; acesso pode estar pendente |
 | `POST /api/runs/:id/approve` | Registrar aprovação para `outputId` e `outputRevision`; autor vem da sessão |
-| `POST /api/runs/:id/request-changes` | Registrar revisão exata e comentário; pedir nova versão ao produtor |
+| `POST /api/runs/:id/request-changes` | Registrar decisão sobre revisão exata e comentário; análise do pedido aguarda continuidade com recurso reservado |
 | `POST /api/runs/:id/answer` | Registrar resposta versionada para questão e casos afetados |
 | `POST /api/runs/:id/continue` | Retomar trabalho autorizado/clarificado, se recurso disponível |
 | `POST /api/runs/:id/finish-with-pending` | Após casos elegíveis, registrar encerramento das pendências e gerar relatório sujeito à validação |

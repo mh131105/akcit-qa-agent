@@ -36,6 +36,36 @@ As dependências valem para concluir; começar com exemplos e integrar desde o p
 | [T9 · #12](https://github.com/mh131105/akcit-qa-agent/issues/12) | Todas / B | Cenários A-01 a A-08, metas medidas, validação em dev e promoção da mesma imagem; RNF-03, RNF-11 | T2 a T8 e T10, integrando cada trecho disponível |
 | [T10 · #14](https://github.com/mh131105/akcit-qa-agent/issues/14) | C + B | Validação de curadoria, plano, casos, mapa, detalhamento, resultados e relatório; RF-09; RN-05, RN-10 | T1; T3/T4 para aplicar os pareceres |
 
+### T1.1 · Controlar a aprovação do plano antes de criar casos
+
+História técnica de suporte ao fluxo do usuário, de prioridade alta, **parte de
+[T1 · Contratos](https://github.com/mh131105/akcit-qa-agent/issues/4)**.
+Responsável: um desenvolvedor da frente B. Entrega: [PR #17](https://github.com/mh131105/akcit-qa-agent/pull/17),
+destinado a `develop`; revisão e integração são necessárias para encerrar o card.
+
+Dependência satisfeita: especificação, contratos atuais e exemplo sintético foram
+integrados em `develop` pelo [PR #15](https://github.com/mh131105/akcit-qa-agent/pull/15),
+commit `f037a63`, presentes na base desta branch. O recorte atende parcialmente
+RF-09, RF-14, RN-04, RN-05, RN-06 e RN-12.
+
+A função pura `applyPlanApprovalCommand` separa registro da decisão e continuidade:
+aprovação fica registrada enquanto a continuidade aguarda reserva; pedido de alteração
+exige comentário e encaminha análise;
+criação dos casos exige plano e curadoria vigentes validados, aprovação humana da
+mesma revisão e recurso reservado. Inclui recusa de estados e versões incompatíveis,
+preservação do histórico e proteção contra repetição/conflito. Contrato, transições,
+erros e limites estão em [CONTRATOS.md](requisitos/CONTRATOS.md#controle-implementado-da-aprovação-do-plano--t11).
+
+Os testes automatizados comprovam CA-01 a CA-08 com pareceres sintéticos, sem modelo
+ou VPS; a entrega exige `npm run check`, `npm test` e `npm run build` aprovados.
+T3 — API/persistência consumirá a função sobre estado salvo, com autenticação e
+controle de proprietário. T4 — Orquestração obterá a reserva e despachará as intenções
+persistidas, integrando especialistas, validador, Pi e navegador.
+
+**T1 permanece aberta:** T1.1 comprova somente este controle. Persistência,
+concorrência real, orquestração e validação por IA continuam nas tarefas seguintes;
+o fluxo completo ainda precisa ser integrado e verificado.
+
 Não criar um produto completo para servir de alvo: telas simples com dados
 restauráveis bastam. O agente recebe requisitos e acesso; o código e o gabarito dos
 defeitos ficam fora de seu contexto.
