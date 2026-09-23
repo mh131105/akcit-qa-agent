@@ -118,6 +118,9 @@ export function applyPlanApprovalCommand(
       return refuse('INVALID_DECISION', 'Informe identificador, autor e horário UTC válidos para a decisão.');
     }
     if (previous) {
+      if (!validDecision(previous)) {
+        return refuse('INVALID_DECISION', 'A decisão anterior é inválida; o registro foi preservado.');
+      }
       if (previous.actorId !== decision.actorId || previous.decision !== decision.decision ||
         previous.comment !== decision.comment) {
         return refuse('DECISION_CONFLICT', 'Esta revisão já possui uma decisão diferente; decisões não são editadas.');

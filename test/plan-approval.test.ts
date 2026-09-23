@@ -238,6 +238,25 @@ test('CA-06: repetir decisão idêntica ignora novo id/horário e preserva o reg
   }
 });
 
+test('T3.2: repetir decisão anterior inválida recusa sem corrigir o registro ou gerar trabalho', () => {
+  for (const command of [approve, requestChanges]) {
+    const state = decided(command);
+    for (const invalid of [
+      { ...state.approvals[0]!, at: 'horário-inválido' },
+      { ...state.approvals[0]!, at: '2026-02-30T10:00:00Z' },
+      { ...state.approvals[0]!, id: '' },
+    ]) {
+      const original = { ...state, approvals: [invalid] };
+      const result = refusal(original, {
+        ...command, id: 'retry-id', at: '2026-09-24T10:00:00Z',
+      }, 'INVALID_DECISION');
+      assert.strictEqual(result.state, original);
+      assert.deepEqual(result.state.approvals, [invalid]);
+      refusal(original, proceed, 'DECISION_MISSING');
+    }
+  }
+});
+
 test('CA-06: decisão, autor ou comentário diferente conflitam sem edição retroativa', () => {
   for (const command of [approve, requestChanges]) {
     const state = decided(command);

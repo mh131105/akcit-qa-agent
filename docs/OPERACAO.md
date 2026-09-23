@@ -109,6 +109,70 @@ Essa solução exige **um único processo escritor por ambiente**, como na
 implantação atual. Não edite os arquivos enquanto o serviço estiver ativo.
 A trava de dados não reserva o navegador; reserva e despacho cabem à orquestração.
 
+## Acesso dos participantes do piloto
+
+Configure no ambiente da aplicação as duas variáveis documentadas em
+[`.env.example`](../.env.example). Exemplo local com dados fictícios:
+
+```dotenv
+APP_ORIGIN=http://127.0.0.1:3000
+PILOT_ALLOWED_EMAILS=ana@example.invalid,bruno@example.invalid
+```
+
+`APP_ORIGIN` deve ser a origem exata aberta no navegador: protocolo, host e porta
+quando necessária, sem caminho, barra final, credenciais, consulta ou fragmento.
+Use HTTPS para um domínio publicado. HTTP só é aceito em loopback, como
+`http://127.0.0.1:3000` ou `http://localhost:3000`, para uso local ou pelo túnel
+controlado existente. Se o túnel usa outra porta local, configure essa origem;
+`localhost` e `127.0.0.1` são origens diferentes. O servidor não usa cabeçalhos do
+cliente para definir a origem confiável. Origem informada e inválida é recusada
+na configuração; sem origem, a autenticação responde `503 / AUTH_NOT_CONFIGURED`
+e o healthcheck permanece disponível.
+
+`PILOT_ALLOWED_EMAILS` recebe e-mails separados por vírgulas. Espaços externos são
+removidos e letras convertidas para minúsculas, como no cadastro e no login. Lista
+vazia desabilita acesso por contas. Apenas contas da lista podem cadastrar-se e
+entrar; remover um e-mail revoga seu acesso. A lista **habilita cadastro, mas não
+verifica titularidade do e-mail**. Mantenha o piloto no acesso controlado existente;
+incluir um endereço não substitui verificar quem recebeu acesso ao túnel.
+Não comite os dados reais dos participantes. Na VPS, configure somente o
+`runtime.env` do ambiente pretendido e recrie seu container, preservando os outros
+serviços e o fluxo de promoção da imagem validada em desenvolvimento.
+
+As contas ficam em `DATA_DIR/auth/users.json`, com envelope versionado
+`{schemaVersion: 1, users: [...]}`. Cada conta possui ID interno, nome, e-mail
+normalizado, equipe opcional, criação UTC e hash scrypt com parâmetros e salt;
+senhas não são salvas em texto. O diretório usa `0700`, o arquivo `0600`, e a
+gravação é atômica. Cadastros serializam leitura, unicidade e escrita no processo.
+Assim como execuções, isso pressupõe **um único processo escritor por ambiente**;
+não edite as contas com o serviço ativo.
+
+No container, o arquivo é `/data/auth/users.json`, dentro do mesmo volume que as
+execuções, e integra automaticamente o backup já descrito nesta página. Preserve
+proprietário e permissões ao restaurá-lo; trate backups de contas como dados
+privados. `runtime.env` continua no cofre separado. Reiniciar, inclusive pelo
+backup, **invalida todas as sessões**, mas preserva contas e execuções: os
+participantes entram novamente e reencontram suas decisões. A sessão fica em
+memória, expira em oito horas e é invalidada no logout.
+
+A propriedade da execução usa o **ID interno da conta**, conferido pela sessão;
+nunca o e-mail enviado no cadastro ou login. Execuções antigas não são atribuídas
+a uma conta apenas porque alguém informou o mesmo e-mail. Este recorte não cria
+execuções pela API e não realiza migração automática de proprietários.
+
+Cadastro/login compartilham limite de dez tentativas por e-mail e trinta por
+endereço de conexão em quinze minutos. O endereço é o da conexão direta, sem
+confiar em `X-Forwarded-For`; participantes que chegam pelo mesmo relay podem
+compartilhar esse limite. O excesso responde `429`. Não registre senhas, cookies
+ou hashes para investigar problemas de acesso.
+
+A jornada e os erros estão em
+[API autenticada de revisão do plano — T3.2](requisitos/CONTRATOS.md#api-autenticada-de-revisão-do-plano--t32).
+Com Node.js 24, execute `node --import tsx --test test/authenticated-api.test.ts`
+para reproduzir a jornada HTTP com duas contas, arquivos temporários reais e
+relógio controlado. Os dados sintéticos são preparados exclusivamente no teste;
+nenhuma fixture é carregada pela aplicação.
+
 ## Referências
 
 - [SDK do Pi](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md)

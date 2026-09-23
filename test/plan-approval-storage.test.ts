@@ -446,7 +446,7 @@ test('T3.1 CA-09/10: createApp recupera antes de servir, conserva página/health
   assert.deepEqual(await (await fetch(`${url}/healthz`)).json(), {
     status: 'ok', environment: 'local', revision: 'local', stage: 'environment-ready',
   });
-  assert.equal((await fetch(`${url}/api/runs/run-test/approve`, { method: 'POST' })).status, 405);
+  assert.equal((await fetch(`${url}/api/runs/run-test/approve`, { method: 'POST' })).status, 503);
   assert.deepEqual(await fs.readdir(join(dataDir, 'runs')), ['run-test.json']);
   const empty = await temporaryStore(t);
   await createApp(readConfig({ DATA_DIR: empty.dataDir, PORT: '0' }));

@@ -228,7 +228,7 @@ Todo erro devolve o mesmo objeto `state` recebido, integralmente preservado, e
 | Código | Motivo |
 | --- | --- |
 | `INVALID_STATE` | Comando desconhecido ou execução fora de `planning` / `awaiting_approval`, inclusive `running`, `cancelled`, `completed`, `interrupted` ou `error` |
-| `INVALID_DECISION` | Registro de decisão sem identificador, autor ou horário UTC válido, ou comentário que não seja string |
+| `INVALID_DECISION` | Registro de decisão novo ou anterior sem identificador, autor ou horário UTC válido, ou comentário que não seja string; uma repetição não confirma uma decisão anterior inválida |
 | `STALE_VERSION` | Plano, curadoria ou referência ausente, inválida ou desatualizada; revisão inválida; plano e curadoria com o mesmo ID; dependência não atendida pelo recorte |
 | `INSUFFICIENT_VALIDATION` | Plano ou curadoria sem o parecer único e aprovado exigido para a revisão vigente |
 | `DECISION_MISSING` | Continuidade sem decisão humana válida para a revisão vigente |
@@ -237,12 +237,16 @@ Todo erro devolve o mesmo objeto `state` recebido, integralmente preservado, e
 | `RESOURCE_UNAVAILABLE` | Continuidade sem reserva do ambiente; decisão e espera permanecem registradas |
 
 A repetição compara revisão, autor, decisão e comentário literal. Se o conteúdo for
-idêntico e a revisão ainda estiver vigente e validada, devolve sucesso sem acrescentar
-registro, preservando o ID e horário originais; um novo `id` ou `at` recebido não
+idêntico, a decisão anterior for válida e a revisão ainda estiver vigente e validada,
+devolve sucesso sem acrescentar registro, preservando o ID e horário originais; um novo `id` ou `at` recebido não
 transforma a repetição em outra decisão. Conteúdo ou autor diferente gera conflito;
 não há edição retroativa. Revisões antigas e suas decisões ficam no histórico; uma
 nova revisão exige novo parecer e nova decisão. Repetir `continue` depois do avanço
 retorna `INVALID_STATE`, sem produzir outra intenção.
+
+Se a decisão anterior tiver horário inválido, a repetição retorna `INVALID_DECISION`,
+preserva integralmente o registro recebido e mantém `work: null`; não corrige a data
+automaticamente. A correção de T3.2 não muda as regras de `continue`.
 
 Exemplo com `state` preparado em `planning` / `awaiting_approval`, plano
 `out-planning` revisão 1, plano e curadoria vigentes validados e nenhuma decisão:
@@ -455,6 +459,196 @@ de intenções, Pi ou execução dos especialistas. T3 e T4 permanecem abertas.
 Intenção única não prova execução de agente exatamente uma vez. A orquestração
 ainda precisa tratar reserva, recusas, falhas e recuperação explícita do trabalho.
 
+## API autenticada de revisão do plano — T3.2
+
+[`src/http/api.ts`](../../src/http/api.ts) expõe sete operações sobre o servidor
+`node:http`. [`src/auth.ts`](../../src/auth.ts) fornece a identidade confiável para
+o serviço de T3.1. O recorte cobre parcialmente RF-08, RF-10, RF-14, RN-05,
+RNF-04 e RNF-06. Não cria execuções, envia arquivos, reserva navegador ou aciona
+agentes. Não há rota `/continue`; continuidade e despacho permanecem em T4.
+
+### Operações e entradas
+
+| Método e rota | JSON de entrada | Sucesso |
+| --- | --- | --- |
+| `POST /api/auth/register` | `{name, email, password, teamName?}` | `201`, `{user}`, inicia sessão |
+| `POST /api/auth/login` | `{email, password}` | `200`, `{user}`, inicia nova sessão |
+| `POST /api/auth/logout` | `{}` | `204`, sem corpo; invalida sessão e limpa cookie |
+| `GET /api/auth/me` | Sem corpo; cookie de sessão | `200`, `{user}` |
+| `GET /api/runs/:id` | Sem corpo; cookie de sessão | `200`, consulta pública descrita abaixo |
+| `POST /api/runs/:id/approve` | `{outputId, outputRevision}` | `200`, `{status, phase, approvals}` |
+| `POST /api/runs/:id/request-changes` | `{outputId, outputRevision, comment}` | `200`, `{status, phase, approvals}` |
+
+`user` contém somente `id`, `name`, `email` e `teamName`. O ID interno é gerado pelo
+backend. Nome e equipe têm de 1 a 120 caracteres após remoção de espaços externos;
+equipe é opcional. E-mail tem no máximo 254 caracteres e é normalizado com remoção
+de espaços externos e conversão para minúsculas, inclusive na configuração.
+Senha tem de 15 a 128 caracteres Unicode, sem remoção de espaços ou truncamento.
+`outputId` tem de 1 a 128 caracteres e não pode conter apenas espaços;
+`outputRevision` é inteiro positivo seguro. `comment` tem de 1 a 4.000 caracteres,
+não pode conter apenas espaços e é preservado literalmente.
+
+Todo POST exige `Content-Type: application/json`, corpo JSON objeto e `Origin`
+exatamente igual a `APP_ORIGIN`. Origem ausente, `null`, diferente, ou coincidência
+apenas de prefixo/sufixo é recusada. São conferidos protocolo, host e porta da origem
+completa configurada, sem confiar em `Host`, `X-Forwarded-Host` ou outro cabeçalho
+para descobrir a origem permitida. Não há CORS para outras origens.
+O limite de corpo é **16 KiB**, conferido também durante recebimento em partes.
+JSON inválido, arrays, `null`, tipos incorretos e campos extras são recusados,
+inclusive `actorId`, `at`, `status`, `validations` e `resourceReserved`.
+Todas as respostas da API, inclusive erros, têm `Cache-Control: no-store`.
+
+### Identidade, senha e sessão
+
+`APP_ORIGIN` é a origem exata usada pelo navegador, com protocolo e porta quando
+necessária, sem caminho, credenciais, consulta ou fragmento. HTTPS é aceito; HTTP
+é restrito a loopback para uso local ou túnel. Origem inválida impede carregar a
+configuração. Origem ausente mantém o healthcheck disponível, mas autenticação
+responde `503`, informando a configuração pendente.
+`PILOT_ALLOWED_EMAILS` é a lista separada por vírgulas de e-mails habilitados.
+Cadastro e login exigem participação na lista; removê-la revoga o acesso da conta.
+Lista vazia desabilita acesso por contas; a lista não verifica titularidade de e-mail.
+
+As contas são persistidas em `DATA_DIR/auth/users.json`, envelope
+`{schemaVersion: 1, users: [...]}`, com
+ID interno, nome, e-mail normalizado, equipe opcional, criação UTC e dados do hash.
+Cadastro serializa **ler → verificar unicidade → gravar**, com arquivo temporário,
+sincronização e renomeação atômica, diretório `0700` e arquivo `0600`. Cadastros
+concorrentes não duplicam e-mail nem removem contas. O armazenamento exige um único
+processo escritor por ambiente, como o de execuções.
+
+Senha usa `crypto.scrypt` assíncrono com salt aleatório de 16 bytes, chave de
+64 bytes, `N=32768`, `r=8`, `p=3` e `maxmem=64 MiB`. Algoritmo, parâmetros, salt e
+hash são salvos; a verificação usa `timingSafeEqual`. Os parâmetros seguem as
+[configurações scrypt da OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt)
+e a [API assíncrona do Node.js 24](https://nodejs.org/docs/latest-v24.x/api/crypto.html#cryptoscryptpassword-salt-keylen-options-callback).
+Senha, hash e cookie não são registrados em logs nem devolvidos em JSON.
+
+Cada cadastro ou login bem-sucedido gera token aleatório novo de 32 bytes;
+identificadores de sessão fornecidos pelo cliente não são adotados. A sessão fica
+somente em memória, com validade absoluta de **oito horas**. O cookie `akcit_session`
+usa `HttpOnly; SameSite=Lax; Path=/; Max-Age=28800`, sem `Domain`, e `Secure` quando `APP_ORIGIN` usa
+HTTPS. Logout invalida a sessão e expira o cookie. Reinício exige novo login e
+preserva contas, execuções e decisões. As proteções de cookie e origem seguem as
+orientações da OWASP para
+[sessões](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html)
+e [origem em APIs](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html#using-standard-headers-to-verify-origin).
+
+Cadastro e login compartilham limite de **dez tentativas por e-mail** e **trinta
+por endereço de conexão em quinze minutos**, com `429` no excesso. O endereço vem
+da conexão; `X-Forwarded-For` não é confiável neste recorte. Contadores vencidos
+são removidos; o teto é de 10.000 chaves combinando e-mails e endereços. Saturação
+recusa novas chaves com `429` até a expiração de contadores. Login incorreto usa mensagem
+genérica, sem distinguir e-mail inexistente de senha incorreta.
+
+### Consulta pública e decisão
+
+`getPlanReview(store, runId, {userId})` carrega a execução, confere seu `ownerId`
+contra o ID da sessão e reutiliza a seleção de revisões de T3.1. A consulta retorna
+somente os campos abaixo; o envelope `StoredRun` nunca é serializado na resposta.
+
+| Campo | Conteúdo público |
+| --- | --- |
+| `id`, `name`, `applicationName`, `createdAt`, `status`, `phase` | Identificação e estado da execução |
+| `plan` | `null` se não há plano; caso contrário `{id, revision, payload: {testPlan}, validations}` da revisão vigente |
+| `plan.payload.testPlan` | Somente `objective`, `requirementIds`, `ruleIds`, `priorities`, `exclusions`, `approach`, `preconditions`, `sources` |
+| `priorities` | Itens `{ruleId, reason}` |
+| `exclusions` | Itens `{description, reason}` |
+| `sources` | Itens `{artifactId, locator, quote}` |
+| `plan.validations` | Pareceres da revisão vigente do plano, somente `{outputId, outputRevision, validator, status}`; ausência ou erro não significam aprovação |
+| `approvals` | Decisões humanas, somente `{id, outputId, outputRevision, actorId, at, decision, comment}` |
+
+São selecionados também os campos internos do plano, fontes, pareceres e decisões.
+`credentialRef`, configuração privada do alvo, documentos completos, caminhos,
+`workIntents` e propriedades desconhecidas não integram a resposta. Conteúdo do
+plano malformado gera conflito de registro, sem expor o registro original.
+
+As duas rotas de decisão constroem somente o request permitido e chamam:
+
+```ts
+executePlanCommand(store, runId, request, { userId: session.userId });
+```
+
+Autoria vem da sessão; ID e horário da decisão vêm do serviço. As rotas não
+fornecem `resourceReserved`. Aprovação e pedido de alteração preservam
+`awaiting_approval` / `planning`, sem intenção de trabalho, criação de casos ou
+chamada de modelo. T1.1 continua responsável por revisão vigente, pareceres,
+comentário, conflito e repetição. Repetição válida conserva ID e horário originais.
+Repetição sobre decisão anterior inválida retorna `409 / INVALID_DECISION`,
+preserva o registro sem corrigir seu horário e não confirma aprovação.
+
+Execução inexistente e execução de outra conta devolvem o mesmo `404`, código e
+mensagem, sem dados da execução. E-mail informado nunca atribui propriedade:
+`ownerId` é o ID interno da conta e execuções antigas não são associadas por e-mail.
+
+### Erros HTTP
+
+Erros usam sempre `{ "error": { "code": "CODIGO", "message": "Mensagem legível." } }`.
+Não são expostos stack traces, caminhos, segredos ou dados de outra conta.
+
+| HTTP | Situação e códigos |
+| --- | --- |
+| `400` | Entrada/JSON inválidos (`INVALID_INPUT`, `INVALID_JSON`), comentário obrigatório (`COMMENT_REQUIRED`) ou ID de execução inválido (`INVALID_RUN_ID`) |
+| `401` | Sessão ausente, inválida ou expirada (`INVALID_SESSION`); login inválido com mensagem genérica (`INVALID_CREDENTIALS`) |
+| `403` | Origem recusada (`ORIGIN_REJECTED`) ou cadastro não habilitado (`REGISTRATION_NOT_ALLOWED`) |
+| `404` | Execução inexistente ou de outro proprietário (`RUN_NOT_FOUND`); rota não oferecida (`NOT_FOUND`) |
+| `405` | Método não oferecido para a rota (`METHOD_NOT_ALLOWED`) |
+| `409` | Cadastro duplicado (`ACCOUNT_EXISTS`); revisão, estado, parecer ou decisão incompatíveis (`STALE_VERSION`, `INVALID_STATE`, `INSUFFICIENT_VALIDATION`, `DECISION_CONFLICT`, `INVALID_DECISION`); registro inválido/ambíguo (`INVALID_RECORD`, `AMBIGUOUS_RECORD`) |
+| `413` | Corpo maior que 16 KiB (`BODY_TOO_LARGE`) |
+| `415` | Conteúdo diferente de JSON (`UNSUPPORTED_MEDIA_TYPE`) |
+| `429` | Excesso de tentativas de cadastro/login ou saturação de contadores (`TOO_MANY_ATTEMPTS`) |
+| `503` | Origem não configurada (`AUTH_NOT_CONFIGURED`) ou armazenamento indisponível (`AUTH_STORAGE_UNAVAILABLE`, `STORAGE_FAILURE`, `RUN_INACCESSIBLE`) |
+
+### Exemplos fictícios e teste HTTP
+
+Configure `APP_ORIGIN=http://127.0.0.1:3000` e habilite `ana@example.invalid`.
+Os comandos usam somente dados fictícios. A execução `run-demo-001` representa
+um registro previamente criado pelo backend para o ID interno retornado no
+cadastro; não há endpoint de preparação ou fixture carregada pela aplicação.
+
+```sh
+# Cadastro inicia a sessão e guarda o cookie localmente.
+curl -i -c /tmp/qa-demo.cookies http://127.0.0.1:3000/api/auth/register \
+  -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
+  --data '{"name":"Ana Exemplo","email":"ana@example.invalid","password":"Senha ficticia de exemplo 123","teamName":"Equipe Demo"}'
+
+# Novo login também emite uma sessão nova.
+curl -i -c /tmp/qa-demo.cookies http://127.0.0.1:3000/api/auth/login \
+  -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
+  --data '{"email":"ana@example.invalid","password":"Senha ficticia de exemplo 123"}'
+
+curl -b /tmp/qa-demo.cookies http://127.0.0.1:3000/api/auth/me
+curl -b /tmp/qa-demo.cookies http://127.0.0.1:3000/api/runs/run-demo-001
+curl -b /tmp/qa-demo.cookies http://127.0.0.1:3000/api/runs/run-demo-001/approve \
+  -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
+  --data '{"outputId":"out-planning","outputRevision":1}'
+
+# Em outra execução ainda sem decisão, solicitar alteração exige comentário.
+curl -b /tmp/qa-demo.cookies http://127.0.0.1:3000/api/runs/run-demo-002/request-changes \
+  -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
+  --data '{"outputId":"out-planning","outputRevision":1,"comment":"Incluir o limite superior da quantidade."}'
+
+# Reconsulta a decisão persistida antes de sair.
+curl -b /tmp/qa-demo.cookies http://127.0.0.1:3000/api/runs/run-demo-001
+curl -i -b /tmp/qa-demo.cookies -c /tmp/qa-demo.cookies \
+  http://127.0.0.1:3000/api/auth/logout \
+  -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' --data '{}'
+rm /tmp/qa-demo.cookies
+```
+
+Cadastro/login/me devolvem, por exemplo,
+`{"user":{"id":"<id-interno>","name":"Ana Exemplo","email":"ana@example.invalid","teamName":"Equipe Demo"}}`.
+Uma aprovação devolve `status: "awaiting_approval"`, `phase: "planning"` e a lista
+`approvals` com a decisão `approved`, autor interno e ID/horário gerados pelo serviço.
+A consulta posterior contém essa mesma decisão; logout não devolve JSON.
+
+Com Node.js 24 e as dependências do lockfile, reproduza a jornada com
+`node --import tsx --test test/authenticated-api.test.ts`. O teste inicia `createApp`
+em porta temporária, usa `fetch`, duas contas e diretório temporário real, prepara
+execuções apenas por `RunStore` e controla o relógio para expiração. Não reduz os
+parâmetros de senha nem chama modelos. A verificação completa é `npm run check`,
+`npm test` e `npm run build`.
+
 ## Mapeamento, dúvidas e execução
 
 Tela: `{id, name, recognition}`. Transição: `{id, from, action, to}`. Caminho:
@@ -560,6 +754,11 @@ técnicos; não publica saída rejeitada como achado. Validá-lo não muda `inte
 sem relatório. Cancelamento não dispara chamadas novas para produzir um relatório.
 
 ## API mínima proposta
+
+Esta seção descreve o contrato futuro do produto. As únicas rotas disponíveis
+neste recorte são as sete de T3.2; a consulta de execução implementa apenas a
+projeção de revisão do plano documentada acima. As demais operações, inclusive
+`/continue`, aguardam a integração correspondente.
 
 Cadastro e entrada permitem obter a sessão; saída a invalida. Todas as operações
 de execução abaixo exigem usuário autenticado e conferência de proprietário. Operações
