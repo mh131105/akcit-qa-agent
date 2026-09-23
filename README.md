@@ -4,7 +4,8 @@ Base de desenvolvimento para um sistema de testes caixa preta com Pi, um
 orquestrador e cinco especialistas: curadoria, planejamento, execução, relatório e
 validação das saídas. O validador avalia o trabalho dos outros especialistas; o
 orquestrador encaminha as tarefas e aplica os pareceres, sem julgar a qualidade.
-O produto e sua metodologia ainda serão implementados a partir dos RF, RN, RG e US.
+O produto e sua metodologia ainda serão implementados conforme os requisitos,
+regras e telas em [PROTOTIPO.md](docs/requisitos/PROTOTIPO.md).
 
 **Equipe: comecem pelo [guia de desenvolvimento da sprint](docs/requisitos/README.md).**
 Ele reúne o escopo proposto para 26/09, os contratos, a divisão de trabalho e os
@@ -91,7 +92,7 @@ O domínio e HTTPS público serão conectados ao Traefik quando a equipe os forn
 - `scripts/`: inicialização, verificação de runtime e integração com publicação.
 - `deploy/`: Compose da VPS e publicador com comandos restritos.
 - `.github/workflows/`: CI, desenvolvimento e promoção de produção.
-- `docs/requisitos/`: espaço para os RF, RN, RG e US.
+- `docs/requisitos/`: requisitos, regras de negócio, telas, contratos e exemplos sintéticos.
 - `docs/OPERACAO.md`: limites, dados, segredos, backup e recuperação.
 - `docs/EQUIPE.md`: convites e acesso temporário da equipe ao desenvolvimento.
 

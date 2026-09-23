@@ -1,52 +1,39 @@
 # Comecem por aqui
 
-Entrega informada pela equipe: **26/09/2026 às 17h**. Este plano usa o horário de
-Manaus. São quatro integrantes com disponibilidade alta e equivalente, em uma
-única sprint. Os marcos intermediários são verificações de integração dessa sprint.
+A [especificação do protótipo](PROTOTIPO.md) é a referência para implementar:
+**17 requisitos funcionais, 15 regras de negócio, 12 requisitos não funcionais,
+sete vistas de interface e oito cenários de aceitação**.
 
-Este material é uma **proposta para revisão da equipe**. O prazo e as premissas
-identificadas como confirmadas vieram da conversa. As escolhas provisórias permitem
-começar sem presumir que a equipe já decidiu o modelo de negócio.
+Ela incorpora o fluxo aprovado em 23/09: plano e casos antes do mapeamento, duas
+aprovações humanas e validador independente. Os limites operacionais e o recorte das
+telas são a base técnica proposta pelo CTO; devem ser verificados na implementação.
+Entrega: **26/09/2026 às 17h, horário de Manaus**, com quatro integrantes.
 
-**Decisão confirmada da equipe:** haverá um sexto agente, `output-validator`, para
-avaliar as saídas dos demais especialistas. O orquestrador encaminha o trabalho e
-aplica o parecer; não realiza essa avaliação.
+## Onde trabalhar
 
-## O que fazer agora
-
-1. Leiam o [escopo e as decisões](PROTOTIPO.md) juntos e escolham um responsável
-   por cada frente da [sprint](../SPRINT.md).
-2. Usem os [contratos](CONTRATOS.md) e o [exemplo compartilhado](exemplos/execucao-demo.json)
-   para desenvolver as partes em paralelo. O exemplo contém dados inventados;
-   nenhum teste nele foi executado.
-3. Criem branches a partir de `develop` e abram PRs pequenos. Registrem nas issues
-   as dependências e as evidências de conclusão. Não esperem terminar uma frente
-   inteira para integrar uma parte utilizável.
-4. Atualizem o contrato junto de quem fornece e de quem consome o dado quando uma
-   mudança de implementação afetar outra frente.
-
-## Onde cada coisa fica
-
-| Informação | Lugar |
+| Precisa saber | Leia ou use |
 | --- | --- |
-| O que entregar e como aceitar | [PROTOTIPO.md](PROTOTIPO.md) |
-| Dados trocados entre componentes | [CONTRATOS.md](CONTRATOS.md) e [exemplo](exemplos/execucao-demo.json) |
-| Quem faz, dependências e agenda | [SPRINT.md](../SPRINT.md) e GitHub Issues |
-| Código e revisão de mudanças | Branch de trabalho e PR para `develop` |
-| Metodologia e tools por especialista | `agents/<papel>/skills/` e `agents/<papel>/tools/` |
-| Configuração, publicação e operação | [README](../../README.md) e [OPERACAO.md](../OPERACAO.md) |
-| Documentos do cliente, credenciais, sessões e vídeos | Armazenamento da aplicação; fora do Git |
+| O que entregar, telas, regras e critérios de pronto | [PROTOTIPO.md](PROTOTIPO.md) |
+| Dados, estados, versões, aprovações e operações | [CONTRATOS.md](CONTRATOS.md) |
+| Exemplo compartilhado para integrar as partes | [execucao-demo.json](exemplos/execucao-demo.json) e [artefato de origem](exemplos/artefato-demo.md) |
+| Responsabilidades, dependências e tarefas | [SPRINT.md](../SPRINT.md) e GitHub Issues |
+| Ambiente, código e publicação | [README](../../README.md) e [OPERACAO.md](../OPERACAO.md) |
 
-Nas issues, mantenham o responsável, o resultado esperado e o bloqueio atual.
-Nos documentos, mantenham as decisões que continuam válidas. No PR, expliquem a
-mudança, como a verificaram e qual critério de aceitação ela atende. Isso evita
-manter três descrições diferentes da mesma regra.
+A especificação descreve o comportamento esperado. O contrato descreve como as
+partes trocam dados. A issue registra trabalho e bloqueios. O PR registra mudança
+e verificação. Se uma mudança afetar outro componente, atualizar contrato e exemplo
+no mesmo PR, junto de quem fornece e de quem consome os dados.
 
-## O que já existe
+O exemplo é sintético: não houve teste real nem validação de IA. Ele ilustra plano,
+casos, aprovações humanas, mapa, detalhamento e uma correção antes do relatório parcial.
 
-O repositório tem servidor inicial, fábrica de sessões do Pi, diretórios dos
-especialistas, ambiente de navegador/cursor/vídeo e publicação em dev/prod.
-O cadastro inclui o novo validador, com seus diretórios de tools e skills.
-**A interface do produto, os agentes e o fluxo de testes ainda não estão implementados.**
-As sessões atuais não habilitam chamadas de rede ao modelo, skills ou tools.
-O smoke de infraestrutura não comprova a qualidade dos testes de software.
+## Estado conferido da base
+
+Há servidor inicial, fábrica de sessões do Pi, cadastro dos seis papéis, diretórios
+de tools/skills, ambiente de navegador/cursor/vídeo e publicação em dev/prod.
+**Os requisitos deste documento ainda precisam ser implementados e aceitos.** A
+fábrica atual não habilita rede do modelo, skills ou tools. O smoke de infraestrutura
+não comprova a qualidade nem o funcionamento do fluxo de testes do produto.
+
+Documentos de clientes, credenciais, sessões e vídeos ficam no armazenamento da
+aplicação, fora do Git. No repositório, manter apenas exemplos sintéticos e metodologia.

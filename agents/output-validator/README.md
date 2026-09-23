@@ -4,9 +4,12 @@ Papel decidido pela equipe: `output-validator`. O cadastro e os pontos de extens
 estão preparados; o comportamento e suas tools/skills ainda serão implementados.
 
 O validador revisa a saída de cada tarefa dos demais especialistas: curadoria,
-exploração do executor, planejamento, execução dos casos e redação do relatório.
+plano, casos lógicos, mapa, detalhamento dos percursos, resultados e relatório.
 O orquestrador solicita a revisão e encaminha o resultado; a decisão de qualidade
 pertence ao validador.
+
+O parecer sobre plano e casos vem antes das respectivas aprovações humanas. Ele não
+substitui essas decisões; todas permanecem vinculadas à versão exata da saída.
 
 ## Contexto e acesso
 
