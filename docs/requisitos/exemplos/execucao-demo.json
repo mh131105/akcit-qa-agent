@@ -1,6 +1,6 @@
 {
   "fixture": true,
-  "notice": "EXEMPLO SINTÉTICO. Não houve execução, chamada de modelo, validação real ou geração de evidências. Ilustra uma saída devolvida ao executor e corrigida antes do relatório parcial. Os limites de validação são apenas valores de exemplo.",
+  "notice": "EXEMPLO SINTÉTICO. Não houve execução, chamada de modelo, aprovação humana real ou geração de evidências. Ilustra plano e casos aprovados antes do mapa, detalhamento sem mudança semântica e correção de uma saída sem prova antes do relatório parcial.",
   "run": {
     "id": "run-demo-001",
     "status": "interrupted",
@@ -11,7 +11,10 @@
       "objective": "Verificar reservas conforme US-01.",
       "artifactIds": [
         "artifact-demo"
-      ]
+      ],
+      "accessProfile": "Usuário de teste com permissão para reservar itens.",
+      "dataPreparation": "Restaurar dados do alvo controlado entre casos e confirmar o estado inicial pela interface.",
+      "authorizedTarget": true
     },
     "artifacts": [
       {
@@ -72,7 +75,471 @@
             }
           ],
           "questions": []
-        }
+        },
+        "answerRefs": [],
+        "budgetCycleId": "budget-1"
+      },
+      {
+        "id": "out-planning",
+        "phase": "planning",
+        "producer": "test-designer",
+        "revision": 1,
+        "dependsOn": [
+          {
+            "outputId": "out-curation",
+            "revision": 1
+          }
+        ],
+        "payload": {
+          "testPlan": {
+            "objective": "Verificar reservas conforme US-01 e CA-01/CA-02.",
+            "requirementIds": [
+              "US-01"
+            ],
+            "ruleIds": [
+              "CA-01",
+              "CA-02"
+            ],
+            "priorities": [
+              {
+                "ruleId": "CA-01",
+                "reason": "Verificar rejeição de quantidades inválidas e aceitação dos limites."
+              },
+              {
+                "ruleId": "CA-02",
+                "reason": "Verificar comentário opcional e persistência quando informado."
+              }
+            ],
+            "exclusions": [
+              {
+                "description": "Outras funcionalidades da aplicação.",
+                "reason": "Não fazem parte das histórias recebidas."
+              }
+            ],
+            "approach": [
+              "PCE: quantidades inteiras válidas, fora do intervalo e não inteiras; comentário vazio e preenchido.",
+              "AVL: limites inteiros 1 e 10 e seus vizinhos 0, 2, 9 e 11."
+            ],
+            "preconditions": [
+              "Conta de teste válida com permissão para reservar.",
+              "Dados do ambiente preparados e procedimento de restauração disponível."
+            ],
+            "sources": [
+              {
+                "artifactId": "artifact-demo",
+                "locator": "CA-01",
+                "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+              },
+              {
+                "artifactId": "artifact-demo",
+                "locator": "CA-02",
+                "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+              }
+            ]
+          }
+        },
+        "answerRefs": [],
+        "budgetCycleId": "budget-1"
+      },
+      {
+        "id": "out-case-design",
+        "phase": "case_design",
+        "producer": "test-designer",
+        "revision": 1,
+        "dependsOn": [
+          {
+            "outputId": "out-curation",
+            "revision": 1
+          },
+          {
+            "outputId": "out-planning",
+            "revision": 1
+          }
+        ],
+        "payload": {
+          "testCases": [
+            {
+              "id": "case-1",
+              "requirementIds": [
+                "US-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "preconditions": [
+                "Conta de teste válida e autenticada.",
+                "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+              ],
+              "pathId": null,
+              "data": {
+                "quantity": 1,
+                "comment": ""
+              },
+              "techniques": [
+                {
+                  "name": "PCE",
+                  "description": "Classe válida: inteiro entre 1 e 10.",
+                  "values": [
+                    1
+                  ]
+                },
+                {
+                  "name": "AVL",
+                  "description": "Limite inferior 1 e vizinho inválido 0; domínio inteiro.",
+                  "values": [
+                    1
+                  ]
+                }
+              ],
+              "expected": "Mostrar “Reserva criada” e criar a reserva com a quantidade informada, sem exigir comentário.",
+              "sources": [
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "CA-01",
+                  "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                },
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "CA-02",
+                  "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                }
+              ],
+              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+            },
+            {
+              "id": "case-2",
+              "requirementIds": [
+                "US-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "preconditions": [
+                "Conta de teste válida e autenticada.",
+                "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+              ],
+              "pathId": null,
+              "data": {
+                "quantity": 11,
+                "comment": ""
+              },
+              "techniques": [
+                {
+                  "name": "PCE",
+                  "description": "Classe inválida: inteiro fora do intervalo permitido.",
+                  "values": [
+                    11
+                  ]
+                },
+                {
+                  "name": "AVL",
+                  "description": "Limite superior 10 e vizinho inválido 11; domínio inteiro.",
+                  "values": [
+                    11
+                  ]
+                }
+              ],
+              "expected": "Mostrar “Quantidade inválida” e não criar reserva.",
+              "sources": [
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "CA-01",
+                  "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                },
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "CA-02",
+                  "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                }
+              ],
+              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+            },
+            {
+              "id": "case-3",
+              "requirementIds": [
+                "US-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "preconditions": [
+                "Conta de teste válida e autenticada.",
+                "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+              ],
+              "pathId": null,
+              "data": {
+                "quantity": 0,
+                "comment": ""
+              },
+              "techniques": [
+                {
+                  "name": "PCE",
+                  "description": "Classe inválida: inteiro fora do intervalo permitido.",
+                  "values": [
+                    0
+                  ]
+                },
+                {
+                  "name": "AVL",
+                  "description": "Limite inferior 1 e vizinho inválido 0; domínio inteiro.",
+                  "values": [
+                    0
+                  ]
+                }
+              ],
+              "expected": "Mostrar “Quantidade inválida” e não criar reserva.",
+              "sources": [
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "CA-01",
+                  "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                },
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "CA-02",
+                  "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                }
+              ],
+              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+            },
+            {
+              "id": "case-4",
+              "requirementIds": [
+                "US-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "preconditions": [
+                "Conta de teste válida e autenticada.",
+                "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+              ],
+              "pathId": null,
+              "data": {
+                "quantity": 10,
+                "comment": ""
+              },
+              "techniques": [
+                {
+                  "name": "PCE",
+                  "description": "Classe válida: inteiro entre 1 e 10.",
+                  "values": [
+                    10
+                  ]
+                },
+                {
+                  "name": "AVL",
+                  "description": "Limite superior 10 e vizinho inválido 11; domínio inteiro.",
+                  "values": [
+                    10
+                  ]
+                }
+              ],
+              "expected": "Mostrar “Reserva criada” e criar a reserva com a quantidade informada, sem exigir comentário.",
+              "sources": [
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "CA-01",
+                  "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                },
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "CA-02",
+                  "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                }
+              ],
+              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+            },
+            {
+              "id": "case-5",
+              "requirementIds": [
+                "US-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "preconditions": [
+                "Conta de teste válida e autenticada.",
+                "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+              ],
+              "pathId": null,
+              "data": {
+                "quantity": 1.5,
+                "comment": ""
+              },
+              "techniques": [
+                {
+                  "name": "PCE",
+                  "description": "Classe inválida: valor não inteiro.",
+                  "values": [
+                    1.5
+                  ]
+                }
+              ],
+              "expected": "Mostrar “Quantidade inválida” e não criar reserva.",
+              "sources": [
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "CA-01",
+                  "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                },
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "CA-02",
+                  "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                }
+              ],
+              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+            },
+            {
+              "id": "case-6",
+              "requirementIds": [
+                "US-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "preconditions": [
+                "Conta de teste válida e autenticada.",
+                "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+              ],
+              "pathId": null,
+              "data": {
+                "quantity": 2,
+                "comment": ""
+              },
+              "techniques": [
+                {
+                  "name": "PCE",
+                  "description": "Classe válida: inteiro entre 1 e 10.",
+                  "values": [
+                    2
+                  ]
+                },
+                {
+                  "name": "AVL",
+                  "description": "Vizinho válido do limite inferior 1.",
+                  "values": [
+                    2
+                  ]
+                }
+              ],
+              "expected": "Mostrar “Reserva criada”, criar a reserva com a quantidade informada, sem exigir comentário.",
+              "sources": [
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "CA-01",
+                  "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                },
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "CA-02",
+                  "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                }
+              ],
+              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+            },
+            {
+              "id": "case-7",
+              "requirementIds": [
+                "US-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "preconditions": [
+                "Conta de teste válida e autenticada.",
+                "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+              ],
+              "pathId": null,
+              "data": {
+                "quantity": 9,
+                "comment": ""
+              },
+              "techniques": [
+                {
+                  "name": "PCE",
+                  "description": "Classe válida: inteiro entre 1 e 10.",
+                  "values": [
+                    9
+                  ]
+                },
+                {
+                  "name": "AVL",
+                  "description": "Vizinho válido do limite superior 10.",
+                  "values": [
+                    9
+                  ]
+                }
+              ],
+              "expected": "Mostrar “Reserva criada”, criar a reserva com a quantidade informada, sem exigir comentário.",
+              "sources": [
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "CA-01",
+                  "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                },
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "CA-02",
+                  "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                }
+              ],
+              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+            },
+            {
+              "id": "case-8",
+              "requirementIds": [
+                "US-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "preconditions": [
+                "Conta de teste válida e autenticada.",
+                "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+              ],
+              "pathId": null,
+              "data": {
+                "quantity": 5,
+                "comment": "Reserva de demonstração"
+              },
+              "techniques": [
+                {
+                  "name": "PCE",
+                  "description": "Classe válida: inteiro entre 1 e 10.",
+                  "values": [
+                    5
+                  ]
+                }
+              ],
+              "expected": "Mostrar “Reserva criada”, criar a reserva com a quantidade informada e salvar o comentário informado.",
+              "sources": [
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "CA-01",
+                  "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                },
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "CA-02",
+                  "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                }
+              ],
+              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+            }
+          ]
+        },
+        "answerRefs": [],
+        "budgetCycleId": "budget-1"
       },
       {
         "id": "out-mapping",
@@ -82,6 +549,14 @@
         "dependsOn": [
           {
             "outputId": "out-curation",
+            "revision": 1
+          },
+          {
+            "outputId": "out-planning",
+            "revision": 1
+          },
+          {
+            "outputId": "out-case-design",
             "revision": 1
           }
         ],
@@ -129,16 +604,26 @@
               }
             ]
           }
-        }
+        },
+        "answerRefs": [],
+        "budgetCycleId": "budget-1"
       },
       {
-        "id": "out-planning",
-        "phase": "planning",
+        "id": "out-route-detail",
+        "phase": "route_detail",
         "producer": "test-designer",
         "revision": 1,
         "dependsOn": [
           {
             "outputId": "out-curation",
+            "revision": 1
+          },
+          {
+            "outputId": "out-planning",
+            "revision": 1
+          },
+          {
+            "outputId": "out-case-design",
             "revision": 1
           },
           {
@@ -195,7 +680,11 @@
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
-              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial.",
+              "approvedCaseRevision": {
+                "outputId": "out-case-design",
+                "revision": 1
+              }
             },
             {
               "id": "case-2",
@@ -244,7 +733,11 @@
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
-              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial.",
+              "approvedCaseRevision": {
+                "outputId": "out-case-design",
+                "revision": 1
+              }
             },
             {
               "id": "case-3",
@@ -293,7 +786,11 @@
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
-              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial.",
+              "approvedCaseRevision": {
+                "outputId": "out-case-design",
+                "revision": 1
+              }
             },
             {
               "id": "case-4",
@@ -342,7 +839,11 @@
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
-              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial.",
+              "approvedCaseRevision": {
+                "outputId": "out-case-design",
+                "revision": 1
+              }
             },
             {
               "id": "case-5",
@@ -384,7 +885,11 @@
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
-              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial.",
+              "approvedCaseRevision": {
+                "outputId": "out-case-design",
+                "revision": 1
+              }
             },
             {
               "id": "case-6",
@@ -433,7 +938,11 @@
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
-              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial.",
+              "approvedCaseRevision": {
+                "outputId": "out-case-design",
+                "revision": 1
+              }
             },
             {
               "id": "case-7",
@@ -482,7 +991,11 @@
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
-              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial.",
+              "approvedCaseRevision": {
+                "outputId": "out-case-design",
+                "revision": 1
+              }
             },
             {
               "id": "case-8",
@@ -524,10 +1037,16 @@
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
-              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial."
+              "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial.",
+              "approvedCaseRevision": {
+                "outputId": "out-case-design",
+                "revision": 1
+              }
             }
           ]
-        }
+        },
+        "answerRefs": [],
+        "budgetCycleId": "budget-1"
       },
       {
         "id": "out-execution",
@@ -536,7 +1055,7 @@
         "revision": 1,
         "dependsOn": [
           {
-            "outputId": "out-planning",
+            "outputId": "out-route-detail",
             "revision": 1
           }
         ],
@@ -672,7 +1191,9 @@
             }
           ],
           "evidence": []
-        }
+        },
+        "answerRefs": [],
+        "budgetCycleId": "budget-1"
       },
       {
         "id": "out-execution",
@@ -681,7 +1202,7 @@
         "revision": 2,
         "dependsOn": [
           {
-            "outputId": "out-planning",
+            "outputId": "out-route-detail",
             "revision": 1
           }
         ],
@@ -817,7 +1338,9 @@
             }
           ],
           "evidence": []
-        }
+        },
+        "answerRefs": [],
+        "budgetCycleId": "budget-1"
       },
       {
         "id": "out-report",
@@ -831,6 +1354,14 @@
           },
           {
             "outputId": "out-planning",
+            "revision": 1
+          },
+          {
+            "outputId": "out-case-design",
+            "revision": 1
+          },
+          {
+            "outputId": "out-route-detail",
             "revision": 1
           },
           {
@@ -859,7 +1390,9 @@
               "A execução ilustrativa foi interrompida; validar o relatório parcial não transforma a execução em concluída."
             ]
           }
-        }
+        },
+        "answerRefs": [],
+        "budgetCycleId": "budget-1"
       }
     ],
     "validationPolicy": {
@@ -879,6 +1412,24 @@
       },
       {
         "id": "validation-2",
+        "outputId": "out-planning",
+        "outputRevision": 1,
+        "validator": "output-validator",
+        "status": "approved",
+        "findings": [],
+        "reason": "Parecer fictício: o plano descreve cobertura e abordagem com base nas US/CA, antes do mapeamento."
+      },
+      {
+        "outputId": "out-case-design",
+        "outputRevision": 1,
+        "validator": "output-validator",
+        "status": "approved",
+        "findings": [],
+        "reason": "Parecer fictício; não houve revisão real. A saída preserva as fontes e as dependências declaradas.",
+        "id": "validation-3"
+      },
+      {
+        "id": "validation-4",
         "outputId": "out-mapping",
         "outputRevision": 1,
         "validator": "output-validator",
@@ -887,16 +1438,16 @@
         "reason": "Parecer fictício para ilustrar saída coerente com suas entradas e limitações; não houve validação real."
       },
       {
-        "id": "validation-3",
-        "outputId": "out-planning",
+        "outputId": "out-route-detail",
         "outputRevision": 1,
         "validator": "output-validator",
         "status": "approved",
         "findings": [],
-        "reason": "Parecer fictício para ilustrar saída coerente com suas entradas e limitações; não houve validação real."
+        "reason": "Parecer fictício: percurso observado acrescentado aos casos; escopo, pré-condições, preparação, dados, técnicas, expectativas e fontes permanecem iguais aos aprovados pelo usuário.",
+        "id": "validation-5"
       },
       {
-        "id": "validation-4",
+        "id": "validation-6",
         "outputId": "out-execution",
         "outputRevision": 1,
         "validator": "output-validator",
@@ -911,7 +1462,7 @@
         "reason": "Parecer fictício: devolver ao executor; não encaminhar esta revisão ao redator."
       },
       {
-        "id": "validation-5",
+        "id": "validation-7",
         "outputId": "out-execution",
         "outputRevision": 2,
         "validator": "output-validator",
@@ -920,13 +1471,56 @@
         "reason": "Parecer fictício: saída parcial registra falta de evidência e incerteza sem afirmar defeito ou aprovação sem suporte."
       },
       {
-        "id": "validation-6",
+        "id": "validation-8",
         "outputId": "out-report",
         "outputRevision": 1,
         "validator": "output-validator",
         "status": "approved",
         "findings": [],
         "reason": "Parecer fictício para ilustrar saída coerente com suas entradas e limitações; não houve validação real."
+      }
+    ],
+    "ownerId": "user-demo",
+    "questions": [],
+    "answers": [],
+    "approvals": [
+      {
+        "id": "approval-plan-1",
+        "outputId": "out-planning",
+        "outputRevision": 1,
+        "actorId": "user-demo",
+        "at": "2026-09-23T19:40:00Z",
+        "decision": "approved",
+        "comment": "Aprovação fictícia de cobertura, prioridades e exclusões."
+      },
+      {
+        "id": "approval-cases-1",
+        "outputId": "out-case-design",
+        "outputRevision": 1,
+        "actorId": "user-demo",
+        "at": "2026-09-23T19:45:00Z",
+        "decision": "approved",
+        "comment": "Aprovação fictícia de situações, dados e expectativas. O detalhamento posterior conserva esses campos."
+      }
+    ],
+    "name": "Reservas — exemplo de relatório parcial",
+    "applicationName": "Aplicação controlada de reservas",
+    "createdAt": "2026-09-23T19:35:00Z",
+    "budgetCycles": [
+      {
+        "id": "budget-1",
+        "startedAt": "2026-09-23T19:36:00Z",
+        "reason": "Ciclo inicial sintético; nenhum consumo real ocorreu.",
+        "answerRef": null,
+        "affectedCaseIds": [],
+        "limits": {
+          "maxValidationRevisions": 3,
+          "maxValidatorAttempts": 2,
+          "modelTimeoutMs": 120000,
+          "maxMappingActions": 100,
+          "maxActionsPerAttempt": 50,
+          "maxActiveTimeMs": 2700000
+        }
       }
     ]
   }

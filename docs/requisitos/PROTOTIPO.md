@@ -1,175 +1,173 @@
-# Protótipo completo em uma sprint
+# Especificação do protótipo
 
-Data de referência: 22/09/2026. Status: proposta técnica para revisão da equipe.
+Versão 1.0 · 23/09/2026 · Entrega: 26/09 às 17h, horário de Manaus.
 
-## Premissas confirmadas
+Este documento define o que implementar e como aceitar a entrega. O fluxo e os seis
+agentes refletem as decisões da equipe. As telas, os limites operacionais e os critérios
+abaixo formam a base técnica proposta pelo CTO. Ainda não são funcionalidades entregues.
 
-- Entrega em 26/09 às 17h; quatro pessoas com disponibilidade alta e equivalente.
-- O cliente do protótipo possui processo organizado e artefatos de requisitos
-  adequados. A curadoria coleta e normaliza essas informações preservando seu significado.
-- O agente recebe acesso válido à aplicação e atua pelo navegador, com visão,
-  cursor e teclado. A exploração inicial identifica telas e caminhos naturais;
-  ela não procura limites de campos por tentativa e erro.
-- Os casos usam as histórias/requisitos, partição em classes de equivalência (PCE)
-  e análise de valores-limite (AVL), quando aplicáveis. O relatório inclui vídeos
-  curtos das execuções.
-- A equipe ainda decidirá entre acompanhamento contínuo e QA por demanda.
-- A equipe decidiu incluir o sexto agente `output-validator`, responsável pela
-  qualidade das saídas dos demais especialistas. O orquestrador não faz essa avaliação.
-- A aplicação de demonstração, a conta e os artefatos ainda serão providenciados;
-  a equipe não consegue defini-los em 22/09.
-- A equipe quer escolher modelos por tarefa, priorizando qualidade e avaliando
-  custo-benefício. Provedor, credenciais utilizáveis e modelos ainda não estão definidos.
+## 1. Produto e limite da entrega
 
-## Jornada a entregar
+O usuário envia histórias de usuário (US) com critérios de aceite (CA), aprova o plano
+e os casos, acompanha testes pela interface da aplicação e recebe resultados com
+vídeos e exportação para PDF. O público inicial são times com documentação organizada.
 
-Como responsável por um teste, quero informar o acesso e os requisitos, acompanhar
-uma execução e consultar quais comportamentos foram verificados, com resultado
-esperado, resultado observado e evidências que eu consiga conferir.
+A unidade de trabalho é uma **execução**. Ela tem nome, aplicação, entradas, versões,
+aprovações, tentativas e relatório próprios. O histórico pertence à conta do usuário.
+O nome da aplicação serve para organizar a lista; não haverá um cadastro separado de
+projetos nem memória automática entre execuções.
+
+**Dentro da entrega:** cadastro/login simples, histórico, criação de execução, board de
+US/CA, duas aprovações humanas, seis agentes, navegação visual, dúvidas localizadas,
+vídeos e capturas, relatório web e PDF, cancelamento e recuperação do material salvo.
+
+**Fora desta sprint:** organizações com membros e permissões, convites, SSO, cobrança,
+integração com Jira/GitHub, OCR, planilhas, aplicativo móvel, editor de fluxogramas,
+chat geral, testes de carga, de segurança e de usabilidade, concorrência de navegadores e memória
+entre sprints. Recuperação de conta será assistida pelo operador no piloto. O cadastro
+será restrito aos participantes habilitados pela equipe; a liberação pública fica fora.
+
+<!-- ponytail: um piloto com um proprietário por execução e um trabalho de agente por vez; colaboração e filas distribuídas só quando houver uso que justifique. -->
+
+## 2. Jornada e responsabilidades
 
 ```mermaid
-flowchart LR
-    A[Usuário informa aplicação e artefatos] --> B[Curadoria preserva e estrutura requisitos]
-    B --> V1[Validador revisa curadoria]
-    V1 -->|Aprovado| C[Agente identifica telas e percursos]
-    C --> V2[Validador revisa mapa]
-    V2 -->|Aprovado| D[Planejamento cria casos com PCE e AVL]
-    D --> V3[Validador revisa plano]
-    V3 -->|Aprovado| E[Agente percorre a interface e executa os casos]
-    E --> V4[Validador revisa resultados e evidências]
-    V4 -->|Aprovado| F[Agente redige relatório]
-    F --> V5[Validador revisa relatório]
-    V5 -->|Aprovado| G[Interface publica conclusões e vídeos]
+flowchart TD
+    A[Entrar e criar execução] --> B[Enviar US e CA e configurar acesso]
+    B --> C[Curadoria validada]
+    C --> D[Plano validado]
+    D --> E[Usuário aprova plano]
+    E --> F[Casos lógicos validados]
+    F --> G[Usuário aprova casos]
+    G --> H[Confirmar acesso e mapear navegação]
+    H --> I[Validar mapa e detalhar percursos]
+    I --> J[Validar casos com percursos]
+    J --> K[Executar e validar resultados]
+    K --> L[Relatório validado com vídeos e PDF]
+    E -->|Solicitar alterações| D
+    G -->|Solicitar alterações| F
+    J -->|Mudança de escopo ou cobertura| D
+    J -->|Mudança apenas nos casos| F
+    H -->|Caminho bloqueado| Q[Solicitar orientação e seguir casos independentes]
+    Q -->|Resposta disponível| I
 ```
 
-Os cinco pontos de revisão usam o mesmo papel de validador, em tarefas separadas.
-Uma correção retorna ao produtor; um bloqueio impede a etapa dependente. A interface
-pode exibir progresso e rascunhos identificados como não validados durante o trabalho.
+O **curador** normaliza mantendo o significado. O **planejador** produz plano, casos
+lógicos e seu detalhamento após o mapa. O **executor** explora, executa e captura
+as evidências. O **redator** organiza o relatório. O **validador** revisa cada entrega.
+O **orquestrador** encaminha o trabalho e aplica os pareceres; não julga a qualidade.
 
-## Escopo funcional e aceitação
+O backend verifica estrutura, acesso, versões e transições. A aprovação do usuário
+confirma intenção e escopo; o parecer do validador confere a saída do agente. Nenhum
+deles substitui o outro. Os detalhes dos dados estão em [CONTRATOS.md](CONTRATOS.md).
 
-| ID | Comportamento | Como verificar |
+## 3. Requisitos funcionais
+
+Os IDs RF-01 a RF-09 foram preservados e detalhados. Todos os requisitos desta seção
+fazem parte da entrega; os critérios são verificações a realizar na implementação.
+
+| ID | O sistema deve | Critério de aceitação |
 | --- | --- | --- |
-| RF-01 | Receber URL inicial autorizada, referência de acesso, objetivo e artefatos | Criar uma execução identificável e preservar a versão das entradas utilizada |
-| RF-02 | Normalizar os requisitos | Para cada regra, localizar o trecho original; preservar condições, exceções, valores e obrigatoriedade |
-| RF-03 | Mapear a navegação relevante ao objetivo | Registrar telas e transições observadas, com ações que permitam repetir o percurso desde a entrada |
-| RF-04 | Planejar os casos | Vincular cada caso aos requisitos e ao percurso; explicitar pré-condições, dados, técnica e resultado esperado com origem |
-| RF-05 | Executar pela interface | Autenticar, clicar, digitar e rolar com as tools autorizadas; registrar ações e observações de cada tentativa |
-| RF-06 | Produzir evidências | Associar o vídeo curto ao caso e à tentativa; informar quando a captura faltar; distinguir execução original de reprodução |
-| RF-07 | Exibir o relatório | Mostrar casos aprovados, reprovados, bloqueados, inconclusivos e não executados, com esperado, observado e evidência |
-| RF-08 | Preservar a execução | Após recarregar a página ou reiniciar o serviço, manter entradas, plano e resultados já salvos; indicar interrupção |
-| RF-09 | Validar as saídas com agente independente | Curadoria, mapa, plano, resultados e relatório recebem parecer vinculado à revisão exata; somente aprovação libera o consumo pela etapa seguinte |
+| RF-01 | Criar uma execução com nome, identificação da aplicação, objetivo opcional e artefatos. URL, conta/perfil de teste e preparo podem ser completados depois, mas são obrigatórios antes da exploração. Aceitar texto, `.txt`, `.md` e PDF com texto selecionável. | Preservar formulário em erro; listar arquivos recebidos e recusados; informar formato/tamanho inválido ou PDF sem texto. Capturar a versão das entradas antes da curadoria. |
+| RF-02 | Extrair US/CA, normalizar seu conteúdo e registrar fonte, trecho e localização; listar dúvidas. | Pelo menos uma US com CA identificável permite iniciar planejamento. Limites, condições e exceções permanecem iguais aos originais. Informação ausente gera dúvida, nunca regra inventada. |
+| RF-03 | Confirmar acesso e mapear telas e transições relevantes depois da aprovação dos casos lógicos. | Registrar percurso observado desde a entrada, incluindo ações de navegação. Caminho não localizado gera pedido de orientação e bloqueio dos casos afetados. |
+| RF-04 | Elaborar casos usando plano aprovado e US/CA originais; depois acrescentar os percursos observados. | Cada caso contém CA, fonte, pré-condições, dados, técnica e expectativa. PCE/AVL têm justificativa. Antes do mapa, percurso pode estar pendente; antes de executar, deve estar definido e validado. |
+| RF-05 | Executar casos pela interface, conferindo o estado inicial e usando visão, cursor, teclado, rolagem e arrastes reais. | Repetir o percurso natural; registrar ações, observações e tentativas. Sem execução direta de lógica do aplicativo por API, banco ou JavaScript para substituir a interação. |
+| RF-06 | Gravar a execução e associar vídeos curtos e capturas a cada caso/tentativa. | Mostrar ação e resultado, incluindo sucessos. Vídeo reproduz no relatório e captura serve ao PDF. Falha de gravação aparece; reprodução posterior ganha outra tentativa. |
+| RF-07 | Apresentar relatório padronizado com esperado, observado, veredito, US/CA, fontes, evidências, cobertura e limitações. | Incluir aprovados, reprovados, bloqueados, inconclusivos e não executados. Conclusões publicadas vêm de saídas validadas; relatório parcial mantém a indicação de interrupção. |
+| RF-08 | Salvar entradas, versões, decisões, perguntas, tentativas e mídias ao longo da execução. | Atualizar a página mantém o estado. Reiniciar o serviço preserva registros confirmados e marca trabalho ativo como interrompido; não retoma uma ação de navegador automaticamente. |
+| RF-09 | Submeter curadoria, plano, casos, mapa, detalhamento, resultados e relatório ao validador independente. | Parecer identifica versão e motivo. Aprovação libera dependentes; correção volta ao autor; bloqueio/erro não liberam avanço. Orquestrador não sobrepõe o parecer. |
+| RF-10 | Oferecer cadastro básico, entrada, saída e edição de nome e nome opcional da equipe no primeiro acesso. | Conta do produto usa nome, e-mail e senha. Sessão protege execuções e mídias. Mostrar que a conta usada pelo agente no aplicativo é um acesso distinto. |
+| RF-11 | Listar execuções da conta, com nome, aplicação, data, etapa e situação; permitir reabrir e excluir uma execução encerrada. | Lista vazia orienta a criar a primeira execução; busca e filtro funcionam. Exclusão pede confirmação e remove seus dados conforme RNF-12. Uma conta não consulta execuções de outra. |
+| RF-12 | Exibir um board simples com histórias, critérios e cobertura. | Expandir uma US mostra seus CA, fontes, casos associados e pendências. Exibir critérios sem caso e sua justificativa. Não exigir arrastar cartões ou configurar colunas. |
+| RF-13 | Gerar um plano distinto dos casos: objetivo, cobertura por CA, prioridades, exclusões justificadas, abordagem e pré-condições conhecidas. | Mostrar plano validado para revisão humana. Artefatos necessários mas ausentes ficam identificados; o plano não depende de conhecer os cliques da interface. |
+| RF-14 | Permitir aprovar ou pedir alterações no plano e no conjunto de casos. | Aprovação registra usuário, data e versão exata. Alteração exige comentário. O próximo passo aguarda parecer válido e aprovação correspondente; clique repetido não duplica a decisão. |
+| RF-15 | Mostrar questões com motivo, itens afetados e campo de resposta; retomar trabalho após esclarecimento. | Usuário pode indicar percurso, confirmar ausência ou complementar regra. Preservar pergunta/resposta e autor; revisar os itens afetados e retomar no início do caso. Independentes continuam. |
+| RF-16 | Mostrar progresso real, próxima ação, cancelamento, encerramento com pendências e criação de nova execução a partir das entradas anteriores. | Cancelar impede novas ações e preserva registros. Sem casos independentes elegíveis, usuário pode encerrar com pendências e receber relatório revisado. Duplicar copia entradas selecionadas, confirma acesso e cria novos IDs/aprovações, sem herdar conclusões. |
+| RF-17 | Exportar a versão publicada do relatório em PDF. | A ação “Salvar em PDF” abre uma versão de impressão com capturas no lugar dos vídeos, fontes, resultados e limitações. O PDF salvo é legível, paginado e corresponde à versão exibida. |
 
-Uma mesma história pode ter casos de várias classes e limites. A quantidade de casos
-depende das regras escolhidas; não prometer cobertura total da aplicação.
+## 4. Regras de negócio
 
-## Regras de qualidade
+| ID | Regra |
+| --- | --- |
+| RN-01 | A entrada mínima é uma US com CA. RF, RN e outros documentos do cliente são complementares, sem exigência automática de envio. A cobertura declarada se limita ao que foi recebido e selecionado. |
+| RN-02 | Curadoria preserva significado e origem. A interface revela navegação e resultado observado; não estabelece o comportamento esperado. Uma suposição não sustenta aprovação/reprovação. |
+| RN-03 | Cada caso aponta para pelo menos um CA e uma expectativa rastreável. PCE/AVL se aplicam apenas quando o domínio e as regras permitem; limites ausentes não são inventados. |
+| RN-04 | Plano e casos são entregas distintas do planejador. Casos recebem o plano aprovado e os artefatos/US/CA de origem. Mapeamento ocorre depois das duas aprovações humanas. |
+| RN-05 | Aprovação humana só é aceita sobre versão aprovada pelo validador e ainda vigente. Ausência de decisão ou decisão antiga não libera trabalho dependente. |
+| RN-06 | Correções criam versões e preservam histórico. Mudar escopo/cobertura retorna à aprovação do plano e dos casos afetados. Mudar apenas pré-condições, dados, técnica, expectativa ou fonte relevante retorna à aprovação dos casos afetados. Acrescentar somente percurso exige nova validação técnica, mantendo vínculo com o conteúdo já aprovado. |
+| RN-07 | Esclarecimentos e correções podem ocorrer na mesma execução; validar novamente os dependentes afetados. Trocar a aplicação ou substituir o conjunto original de artefatos após começar requer nova execução. |
+| RN-08 | Dúvidas e impedimentos bloqueiam apenas dependentes. Bloqueio global de acesso impede todos os casos daquele acesso. Resposta humana não é prova de defeito: o executor precisa observar comportamento e o validador revisar a conclusão. |
+| RN-09 | `Aprovado` e `Reprovado` exigem suporte suficiente. Pré-condição ausente é `Bloqueado`; tentativa sem conclusão sustentada é `Inconclusivo`; ausência de tentativa sem impedimento específico é `Não executado`. |
+| RN-10 | Parecer do validador e veredito do caso são distintos. Um defeito bem documentado pode ter saída validada e teste reprovado. Falha do agente ou da captura não prova defeito do aplicativo. |
+| RN-11 | Tentativas e evidências anteriores permanecem. Reprodução bem-sucedida não apaga falha anterior sustentada; diferenças ficam explícitas no resultado consolidado. |
+| RN-12 | Uma tarefa de agente/navegador trabalha por vez no ambiente. Espera por usuário libera o recurso; dados persistidos mantêm o contexto. Ao retomar, disputar o recurso novamente e conferir pré-condições. |
+| RN-13 | Encerrar processamento não significa que o aplicativo passou. Relatório final exige revisão do validador. Erro/interrupção podem gerar relatório parcial quando a revisão for possível. Cancelamento impede chamadas novas e exibe o material já validado; sem relatório validado, mantém progresso e resultados disponíveis. |
+| RN-14 | CA planejado é aquele com caso associado; CA executado tem ao menos um caso efetivamente tentado. Mostrar também CA parcialmente cobertos, casos pendentes e exclusões. Percentual de casos aprovados não representa cobertura de requisitos. |
+| RN-15 | Histórico serve à consulta. Uma nova execução usa entradas confirmadas para ela; conclusões antigas não entram automaticamente no contexto dos agentes. |
 
-**RQ-01 — Mesma semântica.** “Entre 1 e 10, inclusive” mantém ambos os limites.
-“Opcional” não vira “obrigatório”. Condições e exceções não desaparecem durante a
-normalização. Guardar o texto original junto da interpretação torna a revisão possível.
+## 5. Requisitos não funcionais
 
-**RQ-02 — Origem da expectativa.** O requisito estabelece o que deveria acontecer.
-A interface revela como chegar e o que aconteceu. Uma mensagem observada não se
-torna uma nova regra de negócio. Uma suposição deve aparecer como tal e não sustenta
-um veredito definitivo de conformidade.
+Valores numéricos abaixo são **limites e metas iniciais de aceitação**, não medições
+nem promessas de capacidade comprovada. São conferidos no ambiente de demonstração.
 
-**RQ-03 — Dúvida localizada.** Mesmo com artefatos bons, uma ambiguidade pode surgir.
-Registrá-la e interromper somente os casos dependentes, quando os demais puderem
-continuar. Registrar um documento contraditório não exige construir nesta sprint
-um produto completo para recuperação de documentação ruim.
+| ID | Requisito e critério de verificação |
+| --- | --- |
+| RNF-01 | **Uso claro.** Cada etapa mostra situação e uma ação principal. Campos têm rótulo, obrigatoriedade e erro junto ao campo; mensagens indicam como resolver. Ações indisponíveis explicam o motivo. Sem percentual de progresso estimado pelo modelo. |
+| RNF-02 | **Acessibilidade e apresentação.** Fluxo principal utilizável por teclado, com foco visível, rótulos e estados compreensíveis sem depender só de cor. Conferir em desktop de 1366 px e leitura em 390 px; tabelas podem rolar horizontalmente em áreas delimitadas. |
+| RNF-03 | **Resposta da interface.** Mostrar retorno visual ao envio em até 1 s e progresso persistido em até 5 s durante conexão normal. Consultas de histórico/metadados respondem em até 2 s em 20 consultas no ambiente de demonstração. Tempo de modelo, upload e vídeo é indicado separadamente. |
+| RNF-04 | **Acesso e segredos.** Conferir autorização no servidor para cada execução, arquivo e mídia; senha protegida por hash próprio para senhas, sessão protegida e invalidada no logout. Credencial do alvo fica em armazenamento privado, fora de logs, respostas, fontes e prompts gerais; vídeos começam após autenticação. Testar com duas contas e um segredo fictício identificável. |
+| RNF-05 | **Isolamento do piloto.** Navegar somente em destinos habilitados pela equipe, incluindo redirecionamentos e destinos privados autorizados para desenvolvimento. Bloquear acesso a serviços internos não autorizados. Conteúdo de páginas/arquivos não amplia tools ou permissões. Exposição pública exige HTTPS; acesso local pode usar o túnel existente. |
+| RNF-06 | **Integridade e recuperação.** Validar contratos e referências no servidor e salvar decisões/resultados antes de avançar. Envios repetidos não duplicam execuções, decisões ou tentativas. Queda mantém os registros confirmados; trabalho incompleto aparece como interrompido, nunca concluído. |
+| RNF-07 | **Limites de entrada e execução.** Até 5 arquivos de 10 MiB cada, 10 US selecionadas e 30 casos por execução. Excesso pede redução de escopo, sem truncar conteúdo silenciosamente. Uma tarefa ativa por ambiente; segunda solicitação recebe “ambiente ocupado” e pode tentar depois. |
+| RNF-08 | **Limites do agente.** Até 3 revisões automáticas por saída, 2 tentativas técnicas de validação por revisão, 120 s por chamada de modelo, 100 ações na exploração e 50 por tentativa de caso. Orçamento ativo de 45 min por execução, sem contar espera humana. Ao atingir limite, salvar motivo e interromper dependentes; sem aprovação por padrão. Resposta humana pode abrir novo ciclo limitado para os itens afetados, com novo orçamento explícito. |
+| RNF-09 | **Evidência utilizável.** Vídeos e capturas identificam caso/tentativa; vídeo de demonstração mostra preparação imediata, ação e resultado em até 60 s por trecho. Caso mais longo pode ter vários trechos. Falta de captura aparece. PDF inclui texto selecionável, paginação, capturas legíveis e nenhum controle de reprodução sem função. |
+| RNF-10 | **Observação e reprodutibilidade.** Registrar horário, versão do app, papel/modelo usado, duração, chamadas, ações e consumo/custo quando disponível, sem inventar valores ausentes. Erros têm identificação que permita localizar a execução. Modelos configurados por papel no backend, sem tela avançada de configuração. |
+| RNF-11 | **Operação simples.** Reutilizar Node, Pi, navegador e publicação existentes. Persistência por execução e arquivos de mídia bastam; não introduzir microserviços ou fila distribuída. Após validação em dev, promover a mesma imagem para prod. Realizar backup e recuperação de uma execução sintética antes da entrega. |
+| RNF-12 | **Ciclo dos dados no piloto.** Manter entradas, decisões e evidências até exclusão explícita; nenhuma limpeza automática silenciosa. O proprietário pode excluir uma execução encerrada com confirmação, apagando também sua credencial e mídias locais. Informar que backups existentes exigem limpeza operacional separada. |
 
-**RQ-04 — Navegação observável.** A exploração coleta o percurso relevante ao teste.
-Durante a execução, o agente repete esse percurso. Configurar o navegador, abrir a
-entrada autorizada e capturar a tela são operações de infraestrutura; alterar o
-estado da aplicação por JavaScript, banco ou API contorna o comportamento sob teste.
+## 6. Telas e comportamento esperado
 
-**RQ-05 — Veredito sustentado.** Reprovar exige uma diferença observável contra uma
-expectativa com origem. Erro do agente, sessão expirada, falha de gravação e ausência
-de pré-condição precisam aparecer com a classificação adequada. Um número de
-“confiança” emitido pelo modelo não substitui evidência.
+São **sete vistas e quatro endereços principais**. Visão geral, plano, casos e resultados
+compartilham uma página de execução com abas, sem quatro aplicações ou fluxos separados.
 
-**RQ-06 — Tentativas separadas.** Se houver reprodução, preservar a primeira tentativa.
-Cada tentativa tem seus próprios eventos e mídias. Preparar ou restaurar dados de
-teste deve seguir um procedimento explícito, fora das ações avaliadas do agente.
-
-**RQ-07 — Validação independente.** O validador compara cada saída com as entradas,
-critérios e evidências em contexto próprio. Ele justifica aprovação, pedido de correção
-ou bloqueio. O backend confere formato e referências; o orquestrador aplica o parecer
-sem substituí-lo. Falha de validação, resposta inválida e limite de correções esgotado
-não permitem avançar. Uma nova revisão exige novo parecer; dependentes de uma saída
-alterada precisam de nova revisão. Não há autovalidação recursiva do validador.
-
-**RQ-08 — Dois resultados distintos.** O veredito do caso avalia a aplicação.
-O parecer do validador avalia o trabalho do agente. É possível aprovar a saída que
-documenta um teste reprovado ou inconclusivo, desde que ela esteja bem sustentada.
-Acrescentar um revisor de IA não garante acerto; a equipe confere também seus pareceres
-contra exemplos de referência.
-
-## Decisão técnica confirmada
-
-**DT-01 — Validador dedicado.** Decisão do grupo registrada em 22/09/2026. A arquitetura
-passa a ter orquestrador, curador, planejador, executor, redator e validador. O novo
-papel concentra a avaliação de qualidade, separada da coordenação do fluxo. As quatro
-frentes de desenvolvimento permanecem; C define a metodologia de validação e B conecta
-o validador ao fluxo. O custo e o tempo das revisões entram na medição da execução.
-
-## Decisões provisórias que destravam a implementação
-
-Estas escolhas são propostas de escopo, não decisões de negócio aprovadas.
-
-| ID | Base proposta | Motivo e ponto de revisão |
+| Tela | Conteúdo e ação principal | Estados indispensáveis |
 | --- | --- | --- |
-| D-01 | Salvar histórico por execução; iniciar cada nova execução sem conclusões herdadas | Evita decidir agora a memória entre sprints. Rever após a demonstração e entrevistas |
-| D-02 | Um navegador e uma execução ativa por ambiente | Cabe na infraestrutura atual; concorrência aguarda medição |
-| D-03 | Entrada inicial por texto/Markdown e PDF com texto selecionável | Reduz formatos sem remover a curadoria. OCR e conectores de backlog ficam para depois |
-| D-04 | Uma conta de teste e um fluxo de negócio pequeno na demonstração | Permite concluir todas as etapas com evidências; tamanho final depende da aplicação |
-| D-05 | Sem edição de requisitos no meio da execução | Correções geram nova versão das entradas e uma nova execução, preservando o que já ocorreu |
-| D-06 | Modelo configurável por papel; primeiro fluxo usa modelos disponíveis | Comparar alternativas com as mesmas entradas depois que houver execução real |
-| D-07 | Aplicação controlada como apoio à integração | Permite avançar enquanto a equipe providencia o alvo externo; limitações devem constar da apresentação |
+| TELA-01 · Acesso | Alternar cadastro/entrada; nome, e-mail e senha, nome de equipe opcional no primeiro acesso. Entrar leva ao histórico. | Conta não habilitada, credencial inválida, envio em andamento e sessão expirada. Link de ajuda para recuperação assistida. |
+| TELA-02 · Minhas execuções | Lista com busca e filtro; nome, aplicação, data e situação. “Nova execução”; menu para duplicar ou excluir uma encerrada. | Lista vazia com orientação; carregando; erro recuperável; exclusão com nome da execução e confirmação. |
+| TELA-03 · Nova execução | Formulário em duas partes na mesma página: US/CA e identificação; depois ambiente/acesso/preparo. “Preparar plano”. URL e acesso podem ser completados antes da exploração. | Arquivo inválido, extração sem texto, campo obrigatório, limite excedido e salvamento. Preservar o que foi preenchido. |
+| TELA-04 · Execução / Visão geral | Cabeçalho com etapa, situação e próxima ação. Board de US/CA; perguntas e respostas; resumo do acesso; cancelar. Sem trabalho independente elegível, oferecer “Encerrar com pendências”. | Curando, revisando, aguardando usuário, acesso bloqueado, ambiente ocupado e execução interrompida. Mostrar próxima ação útil. |
+| TELA-05 · Execução / Plano | Objetivo, CA incluídos/excluídos, prioridades, abordagem, pré-condições, origens e versão. “Aprovar plano” ou “Solicitar alterações”. | Em elaboração, em validação, correção, versão antiga e aguardando aprovação. Mostrar mudanças solicitadas e resultado da revisão. |
+| TELA-06 · Execução / Casos | Lista e detalhe lateral com CA, pré-condições, dados, técnica e expectativa; após mapa, percurso observado no mesmo detalhe. Aprovar conjunto ou pedir alterações. | Caso lógico, percurso pendente, versão aprovada, reaprovação necessária, bloqueado e em execução. Pendência liga à pergunta correspondente. |
+| TELA-07 · Execução / Resultados | Contagens reais, cobertura por CA, limitações e lista de casos; detalhe com esperado/observado, tentativas, vídeo e captura. “Salvar em PDF”. | Relatório em revisão, parcial, final, mídia indisponível e ausência de testes executados. Sem conclusão não validada apresentada como definitiva. |
 
-Histórico é o registro do que ocorreu. Memória é a seleção de informações antigas
-que influenciarão uma nova decisão do agente. Para D-01, cada execução guarda seu
-próprio contexto. Um identificador de projeto pode agrupá-las sem alimentar o modelo
-com conclusões antigas. Um produto com memória futura ainda precisará definir
-versões, validade, conflitos e quais informações recuperar.
+Endereços sugeridos: `/acesso`, `/execucoes`, `/execucoes/nova` e `/execucoes/:id`.
+As abas conservam contexto e podem ser reabertas por link. A navegação de entrada é:
+**acesso → histórico → nova execução → visão geral → plano → casos → resultados**.
+A etapa atual orienta a ação principal, mas o usuário pode consultar as anteriores.
 
-## Pendências e decisões de negócio
+O acabamento vem de consistência: mesmos rótulos, espaçamentos, botões e estados;
+confirmação de salvamento; instruções curtas; prévia dos arquivos; decisão humana
+visível; recuperação de erro sem perder trabalho. Uma lista expansível resolve o
+board. Perguntas com campo de resposta resolvem os esclarecimentos. O layout de
+impressão do navegador resolve a exportação inicial em PDF.
 
-| Tema | Impede começar hoje? | Tratamento nesta sprint |
+## 7. Aceitação da entrega completa
+
+Executar os cenários abaixo no alvo controlado, com modelo, navegador e armazenamento
+reais. Resultados simulados ajudam a construir as telas, mas não encerram a entrega.
+
+| Cenário | Evidência exigida | Requisitos cobertos |
 | --- | --- | --- |
-| ICP, preço e relação contínua ou pontual | Não | Registrar como hipótese; evitar comprometer a interface com uma promessa comercial |
-| Aplicação, acesso e artefatos externos | Não para contratos; sim para validar nesse alvo | Equipe providencia; usar exemplo e aplicação controlada para desenvolver |
-| Provedor e credencial | Não para mocks; sim para executar agentes reais | Responsável de orquestração verifica acesso assim que disponível, em configuração privada |
-| Melhor modelo de cada papel | Não | Comparar candidatos disponíveis por tarefa, mantendo uma configuração funcional |
-| Formatos, fluxo obrigatório e limites de execução | Afetam esforço | Adotar a base proposta e registrar ajustes antes de ampliar o trabalho |
+| A-01 · Entrar, enviar e organizar | Conta criada/entrada; execução salva; US/CA e origens no board; rejeição de arquivo sem suporte preserva formulário | RF-01, RF-02, RF-10, RF-11, RF-12; RNF-01, RNF-02, RNF-07 |
+| A-02 · Revisar planejamento | Plano e casos separados; pedido de alteração, nova versão e duas aprovações; tentativa com decisão antiga recusada | RF-04, RF-09, RF-13, RF-14; RN-02 a RN-06 |
+| A-03 · Explorar e testar | Mapa observado; caminho anexado; casos válidos/inválidos e limites justificados; caso correto e defeito conhecido com vídeos | RF-03, RF-04, RF-05, RF-06; RN-03, RN-09 a RN-11; RNF-09 |
+| A-04 · Esclarecer bloqueio | Uma rota bloqueada, outra independente executada, resposta registrada e retomada após revisão; em outro cenário, encerramento com pendências gera relatório | RF-15, RF-16; RN-07, RN-08, RN-12 |
+| A-05 · Recusar saída ruim | Condição perdida ou veredito sem suporte devolvido pelo validador; erro/timeout e limites sem avanço indevido | RF-09; RN-05, RN-10; RNF-08 |
+| A-06 · Encerrar e recuperar | Cancelamento sem novas ações; reinício sem perda dos resultados confirmados; duplicação sem herdar aprovações; exclusão completa | RF-08, RF-16; RN-13, RN-15; RNF-06, RNF-12 |
+| A-07 · Conferir relatório | Web e PDF com mesma versão; vídeos/capturas; cinco vereditos; relatório parcial; CA sem cobertura identificado | RF-07, RF-17; RN-01, RN-14; RNF-09 |
+| A-08 · Verificar operação | Segunda conta sem acesso aos dados da primeira; segredo ausente de logs/mídia; destino não autorizado bloqueado; medições de resposta; logs e backup restaurado | RNF-03, RNF-04, RNF-05, RNF-10, RNF-11 |
 
-Não há compromisso informado sobre quando os insumos externos chegarão. Se faltarem
-na entrega, demonstrar a aplicação controlada e declarar que a validação externa
-continua pendente. Uma execução em alvo controlado não comprova generalização.
-
-## Critério de pronto do protótipo
-
-- O usuário percorre RF-01 a RF-09 pela interface, sem transferência manual oculta
-  de dados entre etapas. O fluxo utiliza modelos e navegador reais.
-- Cada saída consumida por outra etapa tem aprovação do validador para aquela revisão.
-  Um erro inserido na saída gera correção ou bloqueio, sem aprovação pelo orquestrador.
-  Verificar também erro/timeout do validador, limite de correções e parecer de revisão antiga.
-- O relatório final só publica conclusões validadas; progresso e saídas pendentes
-  aparecem identificados. Um defeito bem documentado mantém `failed` mesmo quando
-  sua documentação recebe `approved` do validador.
-- O time confere a normalização contra os artefatos originais, incluindo uma regra
-  com limites e uma condição ou exceção.
-- O agente produz casos de classes válidas/inválidas e limites justificados, executa
-  um comportamento correto e detecta um defeito conhecido do alvo controlado.
-- Um cenário de acesso impedido aparece como bloqueado; evidência insuficiente
-  aparece como inconclusiva. O relatório inclui o que não chegou a ser executado.
-- Cada caso executado na demonstração tem vídeo acessível da tentativa correspondente.
-  Testar também a falha de captura, sem escondê-la no relatório.
-- Um reinício mantém os resultados salvos e não transforma trabalho interrompido em sucesso.
-- A versão escolhida passa nas verificações do repositório e na validação em dev;
-  produção recebe a imagem validada conforme o fluxo existente.
-- A equipe registra os modelos usados, tempo, consumo quando disponível e limitações.
-
-Inspeção de usabilidade, memória entre sprints, exploração exaustiva, colaboração
-entre usuários e suporte amplo a formatos ficam fora desta proposta de entrega regional.
+Registrar a versão testada, evidências e limitações nas tarefas. Todos os critérios
+aplicáveis precisam de evidência; checks de infraestrutura não provam o comportamento
+do produto. Usar [SPRINT.md](../SPRINT.md) para responsabilidades e dependências.
