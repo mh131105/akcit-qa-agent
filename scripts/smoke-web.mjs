@@ -206,6 +206,9 @@ try {
   assert.equal(await page.getByLabel('Histórias de usuário e critérios de aceite', { exact: true }).inputValue(), pendingText);
   await page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }).click();
   await page.waitForURL(url => /^\/execucoes\/run-/.test(url.pathname));
+  // A URL muda antes de o novo documento confirmar a sessão e carregar o detalhe.
+  // Esperar o estado renderizado antes de avançar o relógio evita expirar o boot.
+  await bodyIncludes('Material recebido. O processamento ainda não foi iniciado.');
   assert.equal(sent.length, 2);
   assert.deepEqual(sent[1], sent[0], 'Repetir exatamente a mesma chave, corpo e origem após recarregar.');
   assert.match(sent[0].key, /^[a-f\d]{8}-[a-f\d]{4}-4[a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i);
