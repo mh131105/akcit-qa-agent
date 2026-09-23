@@ -40,7 +40,7 @@ As dependências valem para concluir; começar com exemplos e integrar desde o p
 
 História técnica de suporte ao fluxo do usuário, de prioridade alta, **parte de
 [T1 · Contratos](https://github.com/mh131105/akcit-qa-agent/issues/4)**.
-Responsável: um desenvolvedor da frente B. Entrega: [PR de T1.1](https://github.com/mh131105/akcit-qa-agent/pulls?q=head%3Afeat%2Fplan-approval-gate),
+Responsável: um desenvolvedor da frente B. Entrega: [PR #17](https://github.com/mh131105/akcit-qa-agent/pull/17),
 destinado a `develop`; revisão e integração são necessárias para encerrar o card.
 
 Dependência satisfeita: especificação, contratos atuais e exemplo sintético foram
