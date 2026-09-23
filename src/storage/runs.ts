@@ -17,6 +17,7 @@ export type RunRecord = JsonObject & {
   outputs: RunOutput[]; validations: PlanApprovalState['validations'];
   approvals: PlanDecision[]; questions: JsonObject[]; answers: JsonObject[];
   validationPolicy: JsonObject; budgetCycles: JsonObject[];
+  creation?: { requestHash: string };
   interruptions?: Interruption[];
 };
 export type WorkIntent = {
@@ -27,13 +28,14 @@ export type WorkIntent = {
 export type StoredRun = { schemaVersion: 1; run: RunRecord; workIntents: WorkIntent[] };
 export type StorageErrorCode =
   | 'INVALID_RUN_ID' | 'RUN_NOT_FOUND' | 'RUN_INACCESSIBLE'
-  | 'RUN_EXISTS' | 'INVALID_RECORD' | 'AMBIGUOUS_RECORD' | 'STORAGE_FAILURE';
+  | 'RUN_EXISTS' | 'IDEMPOTENCY_CONFLICT' | 'INVALID_RECORD' | 'AMBIGUOUS_RECORD' | 'STORAGE_FAILURE';
 
 const messages: Record<StorageErrorCode, string> = {
   INVALID_RUN_ID: 'Identificador de execução inválido.',
   RUN_NOT_FOUND: 'Execução não encontrada.',
   RUN_INACCESSIBLE: 'Registro da execução inacessível.',
   RUN_EXISTS: 'A execução já existe.',
+  IDEMPOTENCY_CONFLICT: 'A chave de idempotência já foi utilizada com outro conteúdo.',
   INVALID_RECORD: 'Registro de execução inválido; os dados foram preservados.',
   AMBIGUOUS_RECORD: 'Registro com IDs concorrentes ou revisões duplicadas.',
   STORAGE_FAILURE: 'Não foi possível concluir a operação no armazenamento.',
@@ -94,6 +96,8 @@ function validate(record: unknown, runId: string): asserts record is StoredRun {
     !objects(run.approvals) || !run.approvals.every(decision =>
       strings(decision, ['id', 'outputId', 'actorId', 'at', 'decision', 'comment']) &&
       Number.isFinite(decision.outputRevision)) ||
+    (run.creation !== undefined && (!object(run.creation) ||
+      typeof run.creation.requestHash !== 'string' || !/^[a-f0-9]{64}$/.test(run.creation.requestHash))) ||
     (run.interruptions !== undefined && (!Array.isArray(run.interruptions) || !run.interruptions.every(interruption))) ||
     !objects(record.workIntents) || !record.workIntents.every(work =>
       strings(work, ['id', 'outputId']) && !!work.id && !!work.outputId &&
@@ -194,6 +198,42 @@ export class RunStore {
       await this.save(runId, record);
       return record;
     });
+  }
+
+  async createIdempotent(run: RunRecord): Promise<{ record: StoredRun; created: boolean }> {
+    const record: StoredRun = { schemaVersion: 1, run: structuredClone(run), workIntents: [] };
+    const runId = record.run.id;
+    validId(runId);
+    validate(record, runId);
+    if (!record.run.creation) throw new StorageError('INVALID_RECORD');
+    return locked(async () => {
+      let existing: StoredRun;
+      try { existing = await this.read(runId); }
+      catch (error) {
+        if (!(error instanceof StorageError) || error.code !== 'RUN_NOT_FOUND') throw error;
+        await this.save(runId, record);
+        return { record, created: true };
+      }
+      if (existing.run.ownerId !== record.run.ownerId ||
+        existing.run.creation?.requestHash !== record.run.creation?.requestHash) {
+        throw new StorageError('IDEMPOTENCY_CONFLICT');
+      }
+      return { record: existing, created: false };
+    });
+  }
+
+  async listForOwner(ownerId: string): Promise<StoredRun[]> {
+    let names: string[];
+    try { names = await fs.readdir(this.directory); }
+    catch (error) { throw ioError(error); }
+    const records: StoredRun[] = [];
+    // ponytail: leitura sequencial basta para o volume do piloto; indexar por
+    // proprietário quando o volume tornar a leitura de todos os registros cara.
+    for (const name of names.filter(name => name.endsWith('.json'))) {
+      const record = await this.read(name.slice(0, -5));
+      if (record.run.ownerId === ownerId) records.push(record);
+    }
+    return records;
   }
 
   /** Lê do disco sob a trava, aplica a mudança e só retorna após salvar.

@@ -87,7 +87,11 @@ nem retenção automática: a política de dados e evidências será definida pe
 `DATA_DIR` configura o diretório de dados (`.data` por padrão no ambiente local).
 Nos containers, ele é `/data`, no volume persistente exclusivo de cada ambiente.
 Cada execução fica em `DATA_DIR/runs/<runId>.json`, com o registro completo e o
-histórico de intenções de trabalho autorizado. Os diretórios usam modo `0700` e
+histórico de intenções de trabalho autorizado. A entrada textual de T3.3 fica em
+`run.artifacts[].text`, preservada literalmente, com referência em
+`run.input.artifactIds`; `run.creation.requestHash` permite repetir a criação.
+Esses dados usam o volume existente, sem diretório ou índice adicional.
+Os diretórios usam modo `0700` e
 os arquivos, `0600`; credenciais permanecem referências, sem segredos no JSON.
 Esses arquivos já integram o backup do volume descrito acima. Restaurar uma cópia
 deve preservar suas permissões e o proprietário usado pelo serviço.
@@ -108,6 +112,56 @@ Um arquivo inválido causa erro e não é substituído por uma execução vazia.
 Essa solução exige **um único processo escritor por ambiente**, como na
 implantação atual. Não edite os arquivos enquanto o serviço estiver ativo.
 A trava de dados não reserva o navegador; reserva e despacho cabem à orquestração.
+
+### Criar e reencontrar uma entrada textual
+
+`POST /api/runs` exige sessão, origem configurada, JSON de até 16 KiB e um
+`Idempotency-Key` UUID v4. Guarde a chave junto do corpo enviado até receber uma
+resposta conclusiva. Se houver queda de conexão ou erro de armazenamento após a
+substituição do arquivo, a execução pode já existir: repita **a mesma chave e o
+mesmo conteúdo**. `201` confirma uma nova criação; `200` confirma a execução já
+persistida, com os IDs e horário originais. Trocar a chave cria outra execução;
+trocar o conteúdo mantendo a chave retorna `409 / IDEMPOTENCY_CONFLICT`.
+
+O exemplo usa somente dados fictícios. Em um ambiente local com
+`APP_ORIGIN=http://127.0.0.1:3000`, cadastre primeiro `ana@example.invalid` conforme
+o exemplo de T3.2 nos contratos. Os arquivos temporários abaixo ficam fora do
+repositório e servem apenas à demonstração:
+
+```sh
+qa_demo_dir=$(mktemp -d)
+qa_demo_key=8258c5bd-4768-48e5-a348-c0f3a1208f43
+cat > "$qa_demo_dir/input.json" <<'JSON'
+{"name":"Reservas — exemplo fictício","applicationName":"Aplicação de demonstração","text":"  # US-01\r\nComo usuário, quero reservar itens.\nCA-01: quantidade de 1 a 10.  "}
+JSON
+
+curl -sS -c "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/auth/login \
+  -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
+  --data '{"email":"ana@example.invalid","password":"Senha ficticia de exemplo 123"}'
+curl -sS -D "$qa_demo_dir/headers" -o "$qa_demo_dir/created.json" \
+  -b "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/runs \
+  -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
+  -H "Idempotency-Key: $qa_demo_key" --data-binary "@$qa_demo_dir/input.json"
+cat "$qa_demo_dir/headers"
+qa_demo_run=$(node --input-type=module -e 'import fs from "node:fs"; console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).id)' "$qa_demo_dir/created.json")
+curl -sS -b "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/runs
+curl -sS -b "$qa_demo_dir/cookies" "http://127.0.0.1:3000/api/runs/$qa_demo_run"
+```
+
+A criação retorna `201` e `Location`; o histórico contém o rascunho e a consulta
+individual retorna `plan: null`. Para demonstrar recuperação, pare o processo
+local e inicie-o novamente com o mesmo `DATA_DIR` e configuração. Repita o comando
+de login acima para substituir o cookie invalidado pelo reinício, depois os dois
+GETs. A execução reaparece com o mesmo ID e horário. Repita também o POST acima,
+sem mudar `qa_demo_key` ou `input.json`: o cabeçalho salvo passa a indicar `200`
+e a criação original é preservada. Ao terminar, remova apenas os arquivos dessa
+demonstração com `rm -r "$qa_demo_dir"`.
+
+Falha de leitura ou registro corrompido torna o histórico indisponível com
+`503 / STORAGE_FAILURE`; não se devolve lista parcial nem caminho interno.
+Entradas e metadados da criação já integram o backup do volume. O material recebido
+ainda aguarda curadoria: criar não reconhece requisitos, inicia agentes ou consome
+modelo. Upload de arquivos, edição, exclusão e interface permanecem pendentes.
 
 ## Acesso dos participantes do piloto
 
@@ -157,8 +211,8 @@ memória, expira em oito horas e é invalidada no logout.
 
 A propriedade da execução usa o **ID interno da conta**, conferido pela sessão;
 nunca o e-mail enviado no cadastro ou login. Execuções antigas não são atribuídas
-a uma conta apenas porque alguém informou o mesmo e-mail. Este recorte não cria
-execuções pela API e não realiza migração automática de proprietários.
+a uma conta apenas porque alguém informou o mesmo e-mail. T3.3 cria rascunhos pela
+API para a conta da sessão; não realiza migração automática de proprietários.
 
 Cadastro/login compartilham limite de dez tentativas por e-mail e trinta por
 endereço de conexão em quinze minutos. O endereço é o da conexão direta, sem
@@ -170,8 +224,11 @@ A jornada e os erros estão em
 [API autenticada de revisão do plano — T3.2](requisitos/CONTRATOS.md#api-autenticada-de-revisão-do-plano--t32).
 Com Node.js 24, execute `node --import tsx --test test/authenticated-api.test.ts`
 para reproduzir a jornada HTTP com duas contas, arquivos temporários reais e
-relógio controlado. Os dados sintéticos são preparados exclusivamente no teste;
-nenhuma fixture é carregada pela aplicação.
+relógio controlado. A jornada de criação e histórico de T3.3 está em
+[CONTRATOS.md](requisitos/CONTRATOS.md#criação-e-histórico-de-execuções--t33) e é
+reproduzida por `node --import tsx --test test/run-intake-api.test.ts`, criando o
+rascunho por POST e recuperando-o após reinício e novo login. Os dados sintéticos
+são preparados exclusivamente nos testes; nenhuma fixture é carregada pela aplicação.
 
 ## Referências
 

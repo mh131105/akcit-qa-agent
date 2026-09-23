@@ -100,7 +100,10 @@ navegador e execução dos especialistas não fazem parte deste recorte; o regis
 
 História de usuário com implementação de backend, prioridade alta, **parte de
 [T3 · #6 — API, persistência e recuperação](https://github.com/mh131105/akcit-qa-agent/issues/6)**.
-Responsável: um desenvolvedor da frente B. Dependências atendidas: T1.1 e T3.1
+Responsável: um desenvolvedor da frente B. Entrega:
+[PR #19](https://github.com/mh131105/akcit-qa-agent/pull/19), **integrado em
+`develop`**, merge `e18bcec`; T3.2 está integrada.
+Dependências atendidas: T1.1 e T3.1
 integradas pelos [PRs #17](https://github.com/mh131105/akcit-qa-agent/pull/17) e
 [#18](https://github.com/mh131105/akcit-qa-agent/pull/18).
 Cobertura parcial: RF-08, RF-10, RF-14; RN-05; RNF-04 e RNF-06.
@@ -109,7 +112,7 @@ Como participante habilitado do piloto, quero entrar, consultar minha execução
 aprovar ou solicitar alterações no plano vigente e reencontrar a decisão ao
 retornar, mantendo os dados acessíveis somente à minha conta.
 
-O recorte entrega sete operações HTTP: cadastro, login, logout, sessão atual,
+T3.2 acrescentou sete operações HTTP: cadastro, login, logout, sessão atual,
 consulta de execução própria, aprovação e pedido de alteração. Usa contas
 persistidas, senha com scrypt assíncrono, sessão em memória por oito horas, cookie
 protegido, origem configurada, lista de e-mails habilitados e limites de tentativas.
@@ -120,20 +123,60 @@ silenciosa do registro. Aprovação mantém a espera, sem criar trabalho.
 CA-01 a CA-10 são verificados por jornada HTTP real com duas contas e armazenamento
 temporário: unicidade concorrente, sessão, isolamento, persistência após reinício,
 repetição/conflito, entrada protegida e ausência de campos privados. A regressão
-de T1.1 deve falhar antes da correção e passar depois; os 35 testes existentes
-permanecem. Execute com Node.js 24: `npm run check`, `npm test`, `npm run build`.
+de T1.1 falha antes da correção e passa depois; os 35 testes anteriores foram
+preservados, totalizando 46 testes na base integrada. Execute com Node.js 24:
+`npm run check`, `npm test`, `npm run build`.
 Para reproduzir somente a jornada, use
 `node --import tsx --test test/authenticated-api.test.ts`. Contrato, DTO público,
 exemplos e limites estão em
 [CONTRATOS.md](requisitos/CONTRATOS.md#api-autenticada-de-revisão-do-plano--t32);
 a configuração do piloto está em [OPERACAO.md](OPERACAO.md#acesso-dos-participantes-do-piloto).
 
-Desbloqueia a integração das telas de acesso e revisão do plano. A conclusão de
-T3.2 exige PR revisado e integrado em `develop`, com verificações registradas e
-referência a T3 #6 sem encerrá-la automaticamente. **T3 e T4 permanecem abertas.**
-Não inclui interface, upload, criação/listagem de execuções pela API, `/continue`,
-reserva real ou execução de especialistas. Dados sintéticos existem somente no
-preparo dos testes; continuidade e despacho pertencem à integração de orquestração.
+Desbloqueia a integração das telas de acesso e revisão do plano. **T3 e T4
+permanecem abertas.** Criação e histórico seguem em T3.3; interface, upload,
+`/continue`, reserva real e execução de especialistas continuam pendentes.
+Dados sintéticos existem somente no preparo dos testes; continuidade e despacho
+pertencem à integração de orquestração.
+
+### T3.3 · Criar e encontrar execuções com entrada textual
+
+História de usuário, prioridade alta, **parte de
+[T3 · #6 — API, persistência e recuperação](https://github.com/mh131105/akcit-qa-agent/issues/6)**.
+Responsável: um desenvolvedor da frente B. Dependências atendidas: armazenamento
+de T3.1 e autenticação de T3.2, integrada pelo PR #19. Implementação na branch
+`feat/run-intake-history`, a partir de `develop` contendo `e18bcec`;
+a entrega exige revisão e integração via PR para `develop`.
+Cobertura parcial: RF-01, RF-08, RF-11; RNF-04 e RNF-06.
+
+Como participante autenticado, quero salvar uma execução com nome, aplicação e
+texto original das histórias de usuário e critérios de aceite, para organizar o
+material e reencontrá-lo no meu histórico.
+
+`POST /api/runs` salva `draft/intake`, artefato original e pendências de acesso,
+sem curadoria, plano, orçamento aberto ou trabalho fictício. A chave UUID v4 e o
+hash da criação persistido permitem repetição sem duplicação, inclusive em
+concorrência, após falha de resposta e reinício. `GET /api/runs` lista somente
+resumos da conta, ordenados por data e ID, com busca por nome/aplicação e filtro
+por estado. A consulta existente abre o rascunho com `plan: null`.
+
+CA-01 a CA-09 são verificados por `test/run-intake-api.test.ts`: entrar → criar por
+POST → histórico → abrir → reiniciar → novo login → reencontrar. Os testes usam
+duas contas e diretório temporário, conferem preservação literal, isolamento,
+idempotência, entrada inválida e falhas de armazenamento. Estados variados são
+simulações somente dos testes; não há carga automática de exemplos ou chamada de
+modelo. A entrega exige os 46 testes anteriores preservados e, com Node.js 24,
+`npm run check`, `npm test` e `npm run build` aprovados. Contratos e limites estão
+em [CONTRATOS.md](requisitos/CONTRATOS.md#criação-e-histórico-de-execuções--t33);
+repetição após resposta incerta e dados no backup estão em
+[OPERACAO.md](OPERACAO.md#criar-e-reencontrar-uma-entrada-textual).
+
+Desbloqueia a entrada persistida para curadoria e a integração das telas de nova
+execução e histórico. A definição de pronto exige PR revisado e integrado em
+`develop`, com testes, jornada e limitações registrados, referenciando T3 #6 sem
+fechá-la automaticamente. **T3, curadoria (T5) e orquestração (T4) permanecem
+abertas.** RF-01 e RF-11 continuam parciais: o limite deste card é texto em JSON
+de até 16 KiB; upload de `.txt`, `.md` e PDF com limites maiores, edição, exclusão,
+interface, curadoria e execução de agentes continuam pendentes.
 
 Não criar um produto completo para servir de alvo: telas simples com dados
 restauráveis bastam. O agente recebe requisitos e acesso; o código e o gabarito dos

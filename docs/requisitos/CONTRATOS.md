@@ -461,11 +461,13 @@ ainda precisa tratar reserva, recusas, falhas e recuperação explícita do trab
 
 ## API autenticada de revisão do plano — T3.2
 
-[`src/http/api.ts`](../../src/http/api.ts) expõe sete operações sobre o servidor
-`node:http`. [`src/auth.ts`](../../src/auth.ts) fornece a identidade confiável para
-o serviço de T3.1. O recorte cobre parcialmente RF-08, RF-10, RF-14, RN-05,
-RNF-04 e RNF-06. Não cria execuções, envia arquivos, reserva navegador ou aciona
-agentes. Não há rota `/continue`; continuidade e despacho permanecem em T4.
+T3.2 acrescentou as sete operações abaixo a
+[`src/http/api.ts`](../../src/http/api.ts), sobre o servidor `node:http`.
+[`src/auth.ts`](../../src/auth.ts) fornece a identidade confiável para o serviço
+de T3.1. O recorte cobre parcialmente RF-08, RF-10, RF-14, RN-05, RNF-04 e RNF-06.
+Criação textual e histórico são acrescentados por T3.3, documentada adiante.
+Upload, reserva de navegador e agentes continuam pendentes. Não há rota
+`/continue`; continuidade e despacho permanecem em T4.
 
 ### Operações e entradas
 
@@ -649,6 +651,177 @@ execuções apenas por `RunStore` e controla o relógio para expiração. Não r
 parâmetros de senha nem chama modelos. A verificação completa é `npm run check`,
 `npm test` e `npm run build`.
 
+## Criação e histórico de execuções — T3.3
+
+[`src/application/runs.ts`](../../src/application/runs.ts) recebe a configuração
+permitida, constrói o rascunho e consulta o histórico usando `RunStore`. As duas
+rotas exigem a sessão de T3.2. O proprietário é sempre o ID interno da conta na
+sessão; não se aceita `RunRecord` completo, `ownerId` ou identidade do cliente.
+O recorte cobre parcialmente RF-01, RF-08 e RF-11; RNF-04 e RNF-06.
+
+### Criar um rascunho
+
+`POST /api/runs` exige `Origin` exatamente igual a `APP_ORIGIN`,
+`Content-Type: application/json` e um único cabeçalho `Idempotency-Key` com UUID v4.
+A rota não aceita parâmetros de consulta na URL. O corpo aceita somente:
+
+```json
+{
+  "name": "Reservas — primeira execução",
+  "applicationName": "Aplicação de reservas",
+  "objective": "Verificar as regras de quantidade.",
+  "text": "US-01: Como usuário, quero reservar itens.\nCA-01: A quantidade deve ser inteira, entre 1 e 10."
+}
+```
+
+`name` e `applicationName` são strings obrigatórias, com 1 a 120 caracteres após
+remoção dos espaços externos. `objective` é string opcional, com até 2.000
+caracteres após essa remoção; ausente ou vazio vira `""`. Os limites de caracteres
+contam pontos de código Unicode. `text` é string obrigatória e deve conter algo
+além de espaços. **O texto é preservado literalmente após a leitura do JSON**:
+`trim()` só verifica se há conteúdo, sem alterar espaços externos, Markdown,
+acentos, caracteres ou quebras de linha (`\n`, `\r\n` e `\r`). Não se identificam
+nem contam histórias ou critérios pelo formato do texto.
+
+Campos desconhecidos são recusados, incluindo `ownerId`, `id`, `status`, `phase`,
+`outputs`, `validations`, `approvals`, `credentialRef` e `fixture`. O limite
+existente de **16 KiB é do corpo JSON completo em bytes**, não apenas de `text`;
+o excesso retorna `413`, inclusive em envio por partes, sem truncamento ou registro
+parcial. JSON malformado, array, `null` ou tipo incorreto também são recusados.
+
+O servidor define `ownerId`, `id`, `createdAt` em UTC, `status: "draft"` e
+`phase: "intake"`. Cria um único artefato com ID gerado pelo servidor,
+`name: "historias-e-criterios.txt"`, `version: "1"` e o texto literal. A entrada é:
+
+```ts
+{
+  startUrl: null,
+  credentialRef: null,
+  accessProfile: null,
+  dataPreparation: null,
+  authorizedTarget: false,
+  objective: /* objetivo normalizado, ou "" */,
+  artifactIds: [/* ID do artefato criado */]
+}
+```
+
+`outputs`, `validations`, `approvals`, `questions`, `answers` e `budgetCycles`
+começam vazios. `validationPolicy` usa `{maxValidationRevisions: 3,
+maxValidatorAttempts: 2, timeoutMs: 120000}`; nenhum ciclo de orçamento é aberto.
+O envelope mantém `workIntents: []`. Falta de URL, credencial, perfil e preparo
+é permitida em `intake`. Nenhuma curadoria, plano, aprovação ou intenção é
+fabricada. Salvar o rascunho confirma o recebimento do material, **não que suas
+US/CA foram reconhecidas ou validadas**. Criar e listar não acessam o aplicativo
+alvo, reservam navegador ou chamam modelo.
+
+Criação bem-sucedida responde `201`; repetição idempotente responde `200`. Ambas
+incluem `Location: /api/runs/<id>` e somente estes seis campos:
+
+```json
+{
+  "id": "run-<sha256-de-64-caracteres>",
+  "name": "Reservas — primeira execução",
+  "applicationName": "Aplicação de reservas",
+  "createdAt": "2026-09-23T16:00:00.000Z",
+  "status": "draft",
+  "phase": "intake"
+}
+```
+
+ID e horário acima são ilustrativos. A resposta nunca inclui texto original,
+proprietário, hashes, credenciais ou metadados internos. `GET /api/runs/:id`
+reutiliza a consulta de T3.2: abre o rascunho com `plan: null` e `approvals: []`.
+Aprovar esse rascunho retorna `409 / INVALID_STATE`, sem alterar dados.
+
+### Idempotência e persistência
+
+O cabeçalho `Idempotency-Key` é obrigatório, normalizado para minúsculas e recusado
+se ausente, inválido ou duplicado, inclusive com valores iguais. Para cada conta:
+
+```ts
+id = 'run-' + sha256(JSON.stringify([userId, chaveNormalizada]));
+requestHash = sha256(JSON.stringify([name, applicationName, objective, text]));
+```
+
+Os hashes são SHA-256 em hexadecimal minúsculo. O segundo usa os nomes e objetivo
+normalizados e o texto literal, nessa ordem fixa; a ordem das propriedades do
+JSON enviado não interfere. `run.creation` guarda `{requestHash}` internamente,
+no mesmo arquivo da execução, sem índice ou arquivo adicional. Quando presente,
+esse campo é validado na leitura; registros antigos sem `creation` continuam
+legíveis.
+
+`RunStore.createIdempotent(...)` verifica existência e cria dentro da trava já
+existente, retornando o registro e se houve criação ou repetição. Reutiliza leitura
+e escrita internas; não chama `create()` nem `update()` dentro da trava, que não
+é reentrante. `create()` conserva seu comportamento anterior. Confirmação de
+sucesso só ocorre após concluir a persistência atômica.
+
+| Situação | Resultado |
+| --- | --- |
+| Conta ainda não usou a chave | `201`, cria a execução |
+| Mesma conta, chave e conteúdo normalizado | `200`, devolve a execução existente, inclusive em concorrência ou após reinício |
+| Mesma conta e chave, conteúdo diferente | `409 / IDEMPOTENCY_CONFLICT`, sem alteração |
+| Outra conta usa a mesma chave | Execução independente, com outro ID e proprietário |
+
+A comparação usa `creation.requestHash` da criação original, nunca campos que
+etapas posteriores possam ter modificado. Repetir conserva IDs, horário, artefatos
+e trabalho posterior; não recoloca a execução em `draft` nem apaga resultados.
+A confirmação da repetição reflete o estado atual salvo. Se a resposta falhar
+depois da substituição do arquivo, o registro pode existir: o cliente repete a
+**mesma chave e o mesmo conteúdo**, obtendo a criação original sem duplicação.
+
+### Consultar o histórico
+
+`GET /api/runs` não aceita corpo e responde `200` com `{"items": []}` para histórico vazio. Cada item
+contém somente os mesmos seis campos públicos da confirmação. A ordenação é por
+`createdAt` decrescente e, em empate, `id` decrescente. Há somente dois filtros
+opcionais, combináveis:
+
+| Parâmetro | Regra |
+| --- | --- |
+| `q` | Até 120 pontos de código Unicode antes de remover espaços externos; busca parcial em `name` ou `applicationName`, sem distinguir maiúsculas/minúsculas; vazio não restringe |
+| `status` | Exatamente um de `draft`, `running`, `awaiting_approval`, `awaiting_input`, `completed`, `interrupted`, `error`, `cancelled` |
+
+Exemplo: `GET /api/runs?q=reservas&status=draft`. Parâmetros desconhecidos,
+duplicados, valores inválidos ou corpo retornam `400 / INVALID_INPUT`. Não se
+aceita `ownerId` na URL ou no corpo. Primeiro são selecionados os registros do
+proprietário da sessão; só então os filtros são aplicados.
+
+`RunStore.listForOwner(...)` lê sequencialmente os registros existentes com
+`read()` e suas verificações de arquivo, ignorando temporários. Para o volume do
+piloto não há índice nem cache; indexação fica para quando o volume justificar.
+Registro corrompido ou inacessível retorna `503 / STORAGE_FAILURE`, sem lista
+parcial silenciosa e sem revelar o arquivo. Vale também para registros que não
+passariam pelos filtros: a leitura precisa identificar seu proprietário com
+segurança antes de selecioná-los.
+
+### Erros e limites do recorte
+
+As respostas usam o envelope de erro e `Cache-Control: no-store` de T3.2.
+
+| HTTP | Código e situação |
+| --- | --- |
+| `400` | `INVALID_INPUT`: campos, tipos ou filtros inválidos; `INVALID_JSON`: JSON malformado; `INVALID_IDEMPOTENCY_KEY`: chave ausente, inválida ou duplicada |
+| `401` | `INVALID_SESSION`: sessão ausente, inválida ou expirada |
+| `403` | `ORIGIN_REJECTED`: origem ausente ou diferente no POST |
+| `409` | `IDEMPOTENCY_CONFLICT`: conteúdo diferente para a mesma conta e chave |
+| `413` | `BODY_TOO_LARGE`: corpo JSON excede 16 KiB |
+| `415` | `UNSUPPORTED_MEDIA_TYPE`: conteúdo diferente de JSON |
+| `503` | `STORAGE_FAILURE`: falha de leitura, gravação ou registro corrompido/inacessível; sem confirmação falsa ou dados internos |
+
+Com Node.js 24, `node --import tsx --test test/run-intake-api.test.ts` demonstra
+**entrar → criar por POST → consultar histórico → abrir → reiniciar → entrar
+novamente → reencontrar**, com `createApp`, `fetch`, duas contas e diretório
+temporário. O teste principal não prepara a execução por `RunStore.create`.
+Estados variados usados para testar filtros são simulações exclusivas dos testes;
+a aplicação não carrega exemplos. A suíte cobre texto literal, isolamento,
+repetição, concorrência, reinício, rejeições e falhas de armazenamento.
+
+Upload de `.txt`, `.md` e PDF e seus limites maiores, edição, exclusão, interface,
+processamento/curadoria e execução dos agentes permanecem pendentes. O limite de
+16 KiB corresponde apenas à entrada textual deste card. **RF-01, RF-11 e T3
+continuam parcialmente implementados; curadoria e orquestração permanecem abertas.**
+
 ## Mapeamento, dúvidas e execução
 
 Tela: `{id, name, recognition}`. Transição: `{id, from, action, to}`. Caminho:
@@ -755,10 +928,11 @@ sem relatório. Cancelamento não dispara chamadas novas para produzir um relat�
 
 ## API mínima proposta
 
-Esta seção descreve o contrato futuro do produto. As únicas rotas disponíveis
-neste recorte são as sete de T3.2; a consulta de execução implementa apenas a
-projeção de revisão do plano documentada acima. As demais operações, inclusive
-`/continue`, aguardam a integração correspondente.
+Esta seção descreve o contrato completo proposto do produto. Estão disponíveis
+as rotas de T3.2 e a criação textual e o histórico de T3.3, nos limites documentados
+acima; a consulta individual ainda entrega somente a projeção de revisão do plano,
+incluindo `plan: null` para rascunhos. As demais operações, inclusive `/continue`,
+aguardam a integração correspondente.
 
 Cadastro e entrada permitem obter a sessão; saída a invalida. Todas as operações
 de execução abaixo exigem usuário autenticado e conferência de proprietário. Operações
