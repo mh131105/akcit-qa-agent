@@ -1,0 +1,236 @@
+import { randomUUID } from 'node:crypto';
+import { constants } from 'node:fs';
+import fs from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import type { PlanApprovalState, PlanDecision } from '../domain/plan-approval.js';
+
+type JsonObject = Record<string, unknown>;
+export type RunOutput = JsonObject & {
+  id: string; phase: string; revision: number;
+  dependsOn: { outputId: string; revision: number }[];
+  payload: JsonObject;
+};
+export type Interruption = { reason: 'service_restart'; at: string };
+export type RunRecord = JsonObject & {
+  id: string; ownerId: string; name: string; applicationName: string; createdAt: string;
+  status: string; phase: string; input: JsonObject; artifacts: JsonObject[];
+  outputs: RunOutput[]; validations: PlanApprovalState['validations'];
+  approvals: PlanDecision[]; questions: JsonObject[]; answers: JsonObject[];
+  validationPolicy: JsonObject; budgetCycles: JsonObject[];
+  interruptions?: Interruption[];
+};
+export type WorkIntent = {
+  id: string; type: 'create_cases' | 'analyze_feedback';
+  outputId: string; outputRevision: number; createdAt: string;
+  status: 'pending' | 'interrupted'; interruption?: Interruption;
+};
+export type StoredRun = { schemaVersion: 1; run: RunRecord; workIntents: WorkIntent[] };
+export type StorageErrorCode =
+  | 'INVALID_RUN_ID' | 'RUN_NOT_FOUND' | 'RUN_INACCESSIBLE'
+  | 'RUN_EXISTS' | 'INVALID_RECORD' | 'AMBIGUOUS_RECORD' | 'STORAGE_FAILURE';
+
+const messages: Record<StorageErrorCode, string> = {
+  INVALID_RUN_ID: 'Identificador de execução inválido.',
+  RUN_NOT_FOUND: 'Execução não encontrada.',
+  RUN_INACCESSIBLE: 'Registro da execução inacessível.',
+  RUN_EXISTS: 'A execução já existe.',
+  INVALID_RECORD: 'Registro de execução inválido; os dados foram preservados.',
+  AMBIGUOUS_RECORD: 'Registro com IDs concorrentes ou revisões duplicadas.',
+  STORAGE_FAILURE: 'Não foi possível concluir a operação no armazenamento.',
+};
+export class StorageError extends Error {
+  constructor(readonly code: StorageErrorCode) {
+    super(messages[code]);
+    this.name = 'StorageError';
+  }
+}
+
+// ponytail: uma trava global basta para um processo escritor; múltiplos processos
+// exigirão coordenação externa. Todas as mutações, inclusive cancelamentos, usam update.
+let pending: Promise<unknown> = Promise.resolve();
+function locked<T>(operation: () => Promise<T>): Promise<T> {
+  const result = pending.then(operation);
+  pending = result.catch(() => {});
+  return result;
+}
+
+const object = (value: unknown): value is JsonObject =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+const objects = (value: unknown): value is JsonObject[] =>
+  Array.isArray(value) && value.every(object);
+const strings = (value: JsonObject, keys: string[]) =>
+  keys.every(key => typeof value[key] === 'string');
+const utc = (value: unknown) => typeof value === 'string' &&
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(value) &&
+  Number.isFinite(Date.parse(value)) &&
+  new Date(value).toISOString() === (value.includes('.') ? value : value.replace('Z', '.000Z'));
+const interruption = (value: unknown) => object(value) &&
+  value.reason === 'service_restart' && utc(value.at);
+
+function validId(runId: string): void {
+  if (typeof runId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(runId)) {
+    throw new StorageError('INVALID_RUN_ID');
+  }
+}
+
+// Validação estrutural dos campos usados aqui; conteúdo de artefatos/payloads e
+// campos adicionais são preservados. Regras de aprovação pertencem ao domínio.
+function validate(record: unknown, runId: string): asserts record is StoredRun {
+  if (!object(record) || record.schemaVersion !== 1 || !object(record.run)) {
+    throw new StorageError('INVALID_RECORD');
+  }
+  const run = record.run;
+  if (run.id !== runId || !strings(run, ['id', 'ownerId', 'name', 'applicationName', 'createdAt', 'status', 'phase']) ||
+    !(run.ownerId as string).trim() || !utc(run.createdAt) || !object(run.input) ||
+    (run.input.credentialRef !== null && typeof run.input.credentialRef !== 'string') ||
+    !object(run.validationPolicy) ||
+    !['artifacts', 'questions', 'answers', 'budgetCycles'].every(key => objects(run[key])) ||
+    !objects(run.outputs) || !run.outputs.every(output =>
+      strings(output, ['id', 'phase']) && Number.isFinite(output.revision) &&
+      object(output.payload) && objects(output.dependsOn) && output.dependsOn.every(ref =>
+        typeof ref.outputId === 'string' && Number.isFinite(ref.revision))) ||
+    !objects(run.validations) || !run.validations.every(verdict =>
+      strings(verdict, ['outputId', 'validator', 'status']) && Number.isFinite(verdict.outputRevision)) ||
+    !objects(run.approvals) || !run.approvals.every(decision =>
+      strings(decision, ['id', 'outputId', 'actorId', 'at', 'decision', 'comment']) &&
+      Number.isFinite(decision.outputRevision)) ||
+    (run.interruptions !== undefined && (!Array.isArray(run.interruptions) || !run.interruptions.every(interruption))) ||
+    !objects(record.workIntents) || !record.workIntents.every(work =>
+      strings(work, ['id', 'outputId']) && !!work.id && !!work.outputId &&
+      Number.isSafeInteger(work.outputRevision) && (work.outputRevision as number) > 0 && utc(work.createdAt) &&
+      ['create_cases', 'analyze_feedback'].includes(work.type as string) &&
+      ((work.status === 'pending' && work.interruption === undefined) ||
+        (work.status === 'interrupted' && interruption(work.interruption)))) ||
+    new Set(record.workIntents.map(work => work.id)).size !== record.workIntents.length) {
+    throw new StorageError('INVALID_RECORD');
+  }
+}
+
+function ioError(error: unknown): StorageError {
+  if (error instanceof StorageError) return error;
+  const code = object(error) ? error.code : undefined;
+  if (code === 'ENOENT') return new StorageError('RUN_NOT_FOUND');
+  if (['EACCES', 'EPERM', 'ELOOP', 'ENOTDIR', 'EISDIR'].includes(code as string)) {
+    return new StorageError('RUN_INACCESSIBLE');
+  }
+  return new StorageError('STORAGE_FAILURE');
+}
+
+export class RunStore {
+  private readonly dataDir: string;
+  private readonly directory: string;
+
+  constructor(dataDir: string) {
+    this.dataDir = resolve(dataDir);
+    this.directory = join(this.dataDir, 'runs');
+  }
+
+  async initialize(): Promise<void> {
+    try {
+      for (const directory of [this.dataDir, this.directory]) {
+        await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+        if (!(await fs.lstat(directory)).isDirectory()) throw new StorageError('RUN_INACCESSIBLE');
+        await fs.chmod(directory, 0o700);
+      }
+    } catch (error) { throw ioError(error); }
+  }
+
+  private path(runId: string): string {
+    validId(runId);
+    return join(this.directory, `${runId}.json`);
+  }
+
+  async read(runId: string): Promise<StoredRun> {
+    const path = this.path(runId);
+    try {
+      const file = await fs.open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+      try {
+        if (!(await file.stat()).isFile()) throw new StorageError('RUN_INACCESSIBLE');
+        let record: unknown;
+        try { record = JSON.parse(await file.readFile('utf8')); }
+        catch (error) {
+          if (error instanceof SyntaxError) throw new StorageError('INVALID_RECORD');
+          throw error;
+        }
+        validate(record, runId);
+        return record;
+      } finally { await file.close(); }
+    } catch (error) { throw ioError(error); }
+  }
+
+  private async save(runId: string, record: StoredRun): Promise<void> {
+    const path = this.path(runId);
+    validate(record, runId);
+    const temporary = join(this.directory, `.${runId}-${randomUUID()}.tmp`);
+    try {
+      const file = await fs.open(temporary, 'wx', 0o600);
+      try {
+        await file.writeFile(`${JSON.stringify(record)}\n`, 'utf8');
+        await file.sync();
+      } finally { await file.close(); }
+      await fs.rename(temporary, path);
+      const directory = await fs.open(this.directory, constants.O_RDONLY);
+      try { await directory.sync(); }
+      finally { await directory.close(); }
+    } catch {
+      throw new StorageError('STORAGE_FAILURE');
+    } finally {
+      // Um temporário incompleto nunca vira registro; recuperação ignora .tmp.
+      await fs.unlink(temporary).catch(() => {});
+    }
+  }
+
+  async create(run: RunRecord): Promise<StoredRun> {
+    const record: StoredRun = { schemaVersion: 1, run: structuredClone(run), workIntents: [] };
+    const runId = record.run.id;
+    const path = this.path(runId);
+    return locked(async () => {
+      try {
+        await fs.lstat(path);
+        throw new StorageError('RUN_EXISTS');
+      } catch (error) {
+        if (!object(error) || error.code !== 'ENOENT') throw ioError(error);
+      }
+      await this.save(runId, record);
+      return record;
+    });
+  }
+
+  /** Lê do disco sob a trava, aplica a mudança e só retorna após salvar.
+   * save:false descarta mutações locais (recusa/repetição sem mudança).
+   * Não chamar update/create de dentro de change; a trava não é reentrante.
+   */
+  async update<T>(runId: string, change: (record: StoredRun) =>
+    { value: T; save: boolean } | Promise<{ value: T; save: boolean }>): Promise<T> {
+    validId(runId);
+    return locked(async () => {
+      const record = await this.read(runId);
+      const { value, save } = await change(record);
+      if (save) await this.save(runId, record);
+      return value;
+    });
+  }
+
+  async recoverInterrupted(): Promise<number> {
+    let names: string[];
+    try { names = await fs.readdir(this.directory); }
+    catch (error) { throw ioError(error); }
+    let recovered = 0;
+    for (const name of names.filter(name => name.endsWith('.json')).sort()) {
+      recovered += await this.update(name.slice(0, -5), record => {
+        if (record.run.status !== 'running') return { value: 0, save: false };
+        const event: Interruption = { reason: 'service_restart', at: new Date().toISOString() };
+        record.run.status = 'interrupted';
+        record.run.interruptions = [...(record.run.interruptions ?? []), event];
+        for (const work of record.workIntents) {
+          if (work.status === 'pending') {
+            work.status = 'interrupted';
+            work.interruption = { ...event };
+          }
+        }
+        return { value: 1, save: true };
+      });
+    }
+    return recovered;
+  }
+}

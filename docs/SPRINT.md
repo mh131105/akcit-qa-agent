@@ -41,7 +41,7 @@ As dependências valem para concluir; começar com exemplos e integrar desde o p
 História técnica de suporte ao fluxo do usuário, de prioridade alta, **parte de
 [T1 · Contratos](https://github.com/mh131105/akcit-qa-agent/issues/4)**.
 Responsável: um desenvolvedor da frente B. Entrega: [PR #17](https://github.com/mh131105/akcit-qa-agent/pull/17),
-destinado a `develop`; revisão e integração são necessárias para encerrar o card.
+**integrado em `develop`**, merge `4b00ef2`; T1.1 está integrada.
 
 Dependência satisfeita: especificação, contratos atuais e exemplo sintético foram
 integrados em `develop` pelo [PR #15](https://github.com/mh131105/akcit-qa-agent/pull/15),
@@ -58,13 +58,42 @@ erros e limites estão em [CONTRATOS.md](requisitos/CONTRATOS.md#controle-implem
 
 Os testes automatizados comprovam CA-01 a CA-08 com pareceres sintéticos, sem modelo
 ou VPS; a entrega exige `npm run check`, `npm test` e `npm run build` aprovados.
-T3 — API/persistência consumirá a função sobre estado salvo, com autenticação e
-controle de proprietário. T4 — Orquestração obterá a reserva e despachará as intenções
-persistidas, integrando especialistas, validador, Pi e navegador.
+T3.1 consome a função sobre estado salvo e confere o proprietário pelo contexto
+interno; autenticação e API continuam em T3. T4 — Orquestração obterá a reserva e
+despachará as intenções persistidas, integrando especialistas, validador, Pi e navegador.
 
 **T1 permanece aberta:** T1.1 comprova somente este controle. Persistência,
 concorrência real, orquestração e validação por IA continuam nas tarefas seguintes;
 o fluxo completo ainda precisa ser integrado e verificado.
+
+### T3.1 · Persistir decisões do plano e trabalho autorizado
+
+História técnica de suporte ao usuário, de prioridade alta, **parte de
+[T3 · #6 — API, persistência e recuperação](https://github.com/mh131105/akcit-qa-agent/issues/6)**.
+Responsável: um desenvolvedor da frente B. Dependência atendida: T1.1 integrada
+pelo [PR #17](https://github.com/mh131105/akcit-qa-agent/pull/17), merge `4b00ef2`.
+Cobertura parcial: RF-08, RF-14; RN-05, RN-06; RNF-06.
+
+O recorte salva a execução completa e suas intenções em um JSON por execução,
+reutiliza `applyPlanApprovalCommand` e separa decisão de continuidade. Aprovação
+ou pedido de alteração persistem sem reserva; continuar exige confirmação interna
+da reserva e grava estado e intenção juntos. A atualização serializa leitura,
+aplicação e gravação, preserva os demais dados e recusa revisões ambíguas. Reinício
+interrompe execuções ativas e intenções pendentes, preservando o histórico, sem
+despacho automático.
+
+CA-01 a CA-10 exigem testes com arquivos reais temporários, releitura após reabrir
+o armazenamento, repetição e conflito concorrentes, falha antes da substituição e
+recuperação idempotente. A entrega exige `npm run check`, `npm test` e
+`npm run build` aprovados, preservando os 18 testes anteriores, além de revisão e
+integração do PR em `develop`. Contrato e limites estão em
+[CONTRATOS.md](requisitos/CONTRATOS.md#persistência-da-aprovação-do-plano--t31).
+
+**T3 e T4 permanecem abertas.** T3.1 é dependência da integração de
+[T4 · #7](https://github.com/mh131105/akcit-qa-agent/issues/7), que fornecerá a
+reserva real e consumirá as intenções pelo Pi. API, autenticação, reserva do
+navegador e execução dos especialistas não fazem parte deste recorte; o registro
+único de intenção não garante execução do agente exatamente uma vez.
 
 Não criar um produto completo para servir de alvo: telas simples com dados
 restauráveis bastam. O agente recebe requisitos e acesso; o código e o gabarito dos

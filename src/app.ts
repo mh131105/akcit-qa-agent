@@ -1,10 +1,13 @@
 import { createServer } from 'node:http';
-import { access, mkdir } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import type { readConfig } from './config.js';
+import { RunStore } from './storage/runs.js';
 
 export async function createApp(config: ReturnType<typeof readConfig>) {
-  await mkdir(config.dataDir, { recursive: true });
+  const runs = new RunStore(config.dataDir);
+  await runs.initialize();
+  await runs.recoverInterrupted();
   return createServer(async (request, response) => {
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('X-Content-Type-Options', 'nosniff');
