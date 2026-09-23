@@ -70,7 +70,9 @@ o fluxo completo ainda precisa ser integrado e verificado.
 
 História técnica de suporte ao usuário, de prioridade alta, **parte de
 [T3 · #6 — API, persistência e recuperação](https://github.com/mh131105/akcit-qa-agent/issues/6)**.
-Responsável: um desenvolvedor da frente B. Dependência atendida: T1.1 integrada
+Responsável: um desenvolvedor da frente B. Entrega: [PR #18](https://github.com/mh131105/akcit-qa-agent/pull/18),
+**integrado em `develop`**, merge `31fc732`; T3.1 está integrada.
+Dependência atendida: T1.1 integrada
 pelo [PR #17](https://github.com/mh131105/akcit-qa-agent/pull/17), merge `4b00ef2`.
 Cobertura parcial: RF-08, RF-14; RN-05, RN-06; RNF-06.
 
@@ -82,11 +84,10 @@ aplicação e gravação, preserva os demais dados e recusa revisões ambíguas.
 interrompe execuções ativas e intenções pendentes, preservando o histórico, sem
 despacho automático.
 
-CA-01 a CA-10 exigem testes com arquivos reais temporários, releitura após reabrir
+Os testes de CA-01 a CA-10 usam arquivos reais temporários, releitura após reabrir
 o armazenamento, repetição e conflito concorrentes, falha antes da substituição e
-recuperação idempotente. A entrega exige `npm run check`, `npm test` e
-`npm run build` aprovados, preservando os 18 testes anteriores, além de revisão e
-integração do PR em `develop`. Contrato e limites estão em
+recuperação idempotente. O PR preservou os 18 testes anteriores e ampliou a suíte
+para 35 testes. Contrato e limites estão em
 [CONTRATOS.md](requisitos/CONTRATOS.md#persistência-da-aprovação-do-plano--t31).
 
 **T3 e T4 permanecem abertas.** T3.1 é dependência da integração de
@@ -94,6 +95,45 @@ integração do PR em `develop`. Contrato e limites estão em
 reserva real e consumirá as intenções pelo Pi. API, autenticação, reserva do
 navegador e execução dos especialistas não fazem parte deste recorte; o registro
 único de intenção não garante execução do agente exatamente uma vez.
+
+### T3.2 · Consultar e decidir sobre o plano com autenticação
+
+História de usuário com implementação de backend, prioridade alta, **parte de
+[T3 · #6 — API, persistência e recuperação](https://github.com/mh131105/akcit-qa-agent/issues/6)**.
+Responsável: um desenvolvedor da frente B. Dependências atendidas: T1.1 e T3.1
+integradas pelos [PRs #17](https://github.com/mh131105/akcit-qa-agent/pull/17) e
+[#18](https://github.com/mh131105/akcit-qa-agent/pull/18).
+Cobertura parcial: RF-08, RF-10, RF-14; RN-05; RNF-04 e RNF-06.
+
+Como participante habilitado do piloto, quero entrar, consultar minha execução,
+aprovar ou solicitar alterações no plano vigente e reencontrar a decisão ao
+retornar, mantendo os dados acessíveis somente à minha conta.
+
+O recorte entrega sete operações HTTP: cadastro, login, logout, sessão atual,
+consulta de execução própria, aprovação e pedido de alteração. Usa contas
+persistidas, senha com scrypt assíncrono, sessão em memória por oito horas, cookie
+protegido, origem configurada, lista de e-mails habilitados e limites de tentativas.
+A identidade vem da sessão; consulta e decisões reutilizam o serviço de T3.1.
+Decisão anterior inválida deixa de produzir sucesso idempotente, sem correção
+silenciosa do registro. Aprovação mantém a espera, sem criar trabalho.
+
+CA-01 a CA-10 são verificados por jornada HTTP real com duas contas e armazenamento
+temporário: unicidade concorrente, sessão, isolamento, persistência após reinício,
+repetição/conflito, entrada protegida e ausência de campos privados. A regressão
+de T1.1 deve falhar antes da correção e passar depois; os 35 testes existentes
+permanecem. Execute com Node.js 24: `npm run check`, `npm test`, `npm run build`.
+Para reproduzir somente a jornada, use
+`node --import tsx --test test/authenticated-api.test.ts`. Contrato, DTO público,
+exemplos e limites estão em
+[CONTRATOS.md](requisitos/CONTRATOS.md#api-autenticada-de-revisão-do-plano--t32);
+a configuração do piloto está em [OPERACAO.md](OPERACAO.md#acesso-dos-participantes-do-piloto).
+
+Desbloqueia a integração das telas de acesso e revisão do plano. A conclusão de
+T3.2 exige PR revisado e integrado em `develop`, com verificações registradas e
+referência a T3 #6 sem encerrá-la automaticamente. **T3 e T4 permanecem abertas.**
+Não inclui interface, upload, criação/listagem de execuções pela API, `/continue`,
+reserva real ou execução de especialistas. Dados sintéticos existem somente no
+preparo dos testes; continuidade e despacho pertencem à integração de orquestração.
 
 Não criar um produto completo para servir de alvo: telas simples com dados
 restauráveis bastam. O agente recebe requisitos e acesso; o código e o gabarito dos
