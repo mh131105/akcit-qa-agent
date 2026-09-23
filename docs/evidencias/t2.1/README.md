@@ -1,0 +1,34 @@
+# Evidências sintéticas — T2.1
+
+Jornada executada em 23/09/2026 com navegador Chromium, API HTTP e arquivos
+temporários reais. As contas, nomes, textos e planos são fictícios. Nenhuma
+sessão, senha ou informação de participante foi incluída nos artefatos.
+
+- [Resultado do smoke](web-result.json): 16 verificações aprovadas no runtime,
+  Node.js 24.21.0 e Chromium 153.0.8010.52.
+- [Histórico desktop, 1366 px](web-desktop.png).
+- [Histórico celular, 390 px](web-mobile.png).
+- [Formulário celular, 390 px](web-mobile-form.png).
+- [Consulta e revisão do plano, 1366 px](web-plan.png).
+
+O texto com aparência de HTML nas capturas é deliberado: demonstra renderização
+literal. Planos e pareceres são preparados exclusivamente no armazenamento
+temporário do teste. A execução marcada como concluída é um estado sintético
+usado para conferir que a tela não afirma espera indevida. Estas evidências não
+comprovam curadoria, geração por IA ou execução de agentes.
+
+O smoke confirma criação e reencontro, logout/login, perda de resposta depois da
+gravação, repetição com o mesmo corpo/chave sem duplicar, isolamento entre contas,
+decisões persistidas da revisão exata, conflito e revisão desatualizada. Também
+confere clique duplo, foco pelo teclado, JSON acima do limite e armazenamento
+local indisponível sem POST. A inspeção visual conferiu legibilidade nos dois
+tamanhos.
+
+Verificações adicionais aprovadas: `npm run check`, `npm test` (55 testes,
+preservando os 54 anteriores), `npm run build`, seis testes Python de deploy e
+smoke de infraestrutura no mesmo runtime (Pi CLI/SDK isolado, leitura PDF,
+Chromium com janela, clique real, captura e vídeo). Os containers usaram CPU 1,
+memória 2 GiB, sistema de arquivos somente leitura e os tmpfs dos workflows.
+
+Para reproduzir, siga os comandos de [OPERACAO.md](../../OPERACAO.md#jornada-pelo-navegador--t21).
+O workflow de CI também publica novas capturas no artefato `web-smoke`.

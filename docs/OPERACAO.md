@@ -41,7 +41,8 @@ somente o container do ambiente correspondente.
 
 ## Publicação e recuperação
 
-O workflow de desenvolvimento testa a imagem antes do envio ao GHCR. A VPS confere
+O workflow de desenvolvimento testa a imagem antes do envio ao GHCR, incluindo
+os smokes de infraestrutura e da jornada web. A VPS confere
 o evento e branch no GitHub, os identificadores de commit/árvore e labels da imagem.
 Após subir o container, executa healthcheck e teste de Pi, navegador, cursor e vídeo.
 Somente uma publicação bem-sucedida atualiza `release.json` e `current.env`.
@@ -161,7 +162,8 @@ Falha de leitura ou registro corrompido torna o histórico indisponível com
 `503 / STORAGE_FAILURE`; não se devolve lista parcial nem caminho interno.
 Entradas e metadados da criação já integram o backup do volume. O material recebido
 ainda aguarda curadoria: criar não reconhece requisitos, inicia agentes ou consome
-modelo. Upload de arquivos, edição, exclusão e interface permanecem pendentes.
+modelo. Upload de arquivos, edição e exclusão permanecem pendentes. O acesso
+pelo site está documentado em [T2.1](#jornada-pelo-navegador--t21).
 
 ## Acesso dos participantes do piloto
 
@@ -229,6 +231,104 @@ relógio controlado. A jornada de criação e histórico de T3.3 está em
 reproduzida por `node --import tsx --test test/run-intake-api.test.ts`, criando o
 rascunho por POST e recuperando-o após reinício e novo login. Os dados sintéticos
 são preparados exclusivamente nos testes; nenhuma fixture é carregada pela aplicação.
+
+## Jornada pelo navegador — T2.1
+
+Configure `APP_ORIGIN` e `PILOT_ALLOWED_EMAILS` conforme a seção anterior. Com
+Node.js 24 e dependências do `package-lock.json`, um ambiente local fictício pode
+ser iniciado assim:
+
+```sh
+npm ci
+APP_ENV=local HOST=127.0.0.1 PORT=3000 DATA_DIR=.data \
+  APP_ORIGIN=http://127.0.0.1:3000 \
+  PILOT_ALLOWED_EMAILS=ana@example.invalid,bruno@example.invalid npm run dev
+```
+
+Abra [o site local](http://127.0.0.1:3000); a raiz leva ao histórico e solicita
+entrada se necessário. Use `/acesso` para cadastrar uma das contas habilitadas,
+com nome, e-mail, senha de 15 a 128 caracteres e equipe opcional. Esta é a conta
+do produto; o acesso usado pelos agentes na aplicação testada será configurado
+separadamente. No ambiente pelo túnel, abra sua origem configurada seguida de
+`/acesso`; a porta do navegador pode diferir da porta interna do container.
+
+Em “Nova execução”, preencha nome, aplicação, objetivo opcional e texto das
+histórias de usuário e critérios de aceite. “Salvar rascunho” persiste a entrada
+e abre o detalhe. O rascunho informa que o processamento ainda não começou.
+O histórico permite busca, filtro por situação e reabertura após recarregar ou
+entrar novamente. Quando o armazenamento já contém um plano, o detalhe mostra
+conteúdo, revisão e validação; as decisões disponíveis usam essa revisão e são
+reconsultadas depois de salvas. Aprovar o plano mantém a espera.
+
+Os nomes têm limite de 120 caracteres, o objetivo de 2.000, e **todo o JSON de
+entrada** de 16 KiB UTF-8. Não há upload ou campo de credenciais neste formulário.
+Texto de US/CA é preservado como digitado. O detalhe ainda não devolve o texto
+original, board ou perguntas.
+
+Antes de enviar, a interface guarda em `sessionStorage` a chave UUID v4, o corpo
+exato e o ID da conta. Se a resposta se perder, use “Tentar confirmar salvamento”
+para recuperar a criação sem duplicá-la. A tentativa permanece **na mesma aba e
+para a mesma conta, até confirmação ou logout explícito**, inclusive após
+atualizar a página. Não é um backup entre abas ou dispositivos. Fechar a aba ou
+limpar o armazenamento do navegador pode impedir a recuperação. Se a sessão
+expirar, os dados privados saem da tela e o formulário só é restaurado após
+confirmar novamente a mesma conta. Outra conta não recebe esse conteúdo.
+O preenchimento ainda não enviado pode ser guardado ao sair da página ou quando
+a sessão é retirada, se o armazenamento estiver disponível; isso não cria uma
+execução no servidor nem representa salvamento contínuo. A interface confere a
+sessão a cada 30 segundos com a aba visível e ao voltar para ela. Durante essa
+última conferência, oculta o conteúdo; uma falha também solicita nova entrada.
+Se o navegador impedir salvar a tentativa, a página informa o problema e não
+envia um POST sem recuperação. Senha e token não são gravados pelo frontend.
+
+### Reproduzir a jornada com dados fictícios
+
+O smoke não utiliza contas nem execuções do ambiente em operação. Ele cria seu
+próprio servidor com armazenamento temporário e configura a origem para o
+endereço realmente aberto no Chromium, sem contornar a conferência de `Origin`.
+Inclui cadastro/entrada, criação, histórico, detalhe, atualização, novo login,
+resposta perdida após persistência, repetição sem duplicação, isolamento entre
+contas, texto semelhante a HTML, aprovação e pedido de alteração persistidos.
+Planos e pareceres são sintéticos e preparados somente nos dados temporários do
+teste; não há geração por IA, chamada paga ou carga automática na aplicação.
+
+Verificações locais, usando Node.js 24 e um Chromium instalado:
+
+```sh
+npm run check
+npm test
+npm run build
+CHROMIUM_PATH=/usr/bin/chromium SMOKE_ARTIFACT_DIR=artifacts/web npm run smoke:web
+```
+
+Defina `CHROMIUM_PATH` para o executável instalado quando estiver em outro
+endereço. Para conferir a imagem final nas mesmas restrições dos workflows:
+
+```sh
+docker build --target runtime -t akcit-qa:ci .
+docker run --rm --cpus=1 --memory=2g --shm-size=512m \
+  --cap-drop=ALL --security-opt=no-new-privileges --read-only \
+  --tmpfs /tmp:rw,size=512m,mode=1777 \
+  --tmpfs /home/node:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+  --tmpfs /data:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+  akcit-qa:ci node scripts/smoke-runtime.mjs
+docker run --rm --cpus=1 --memory=2g --shm-size=512m \
+  --cap-drop=ALL --security-opt=no-new-privileges --read-only \
+  --tmpfs /tmp:rw,size=512m,mode=1777 \
+  --tmpfs /home/node:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+  --tmpfs /data:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+  akcit-qa:ci node scripts/smoke-web.mjs
+```
+
+Para guardar capturas e o resultado, crie `artifacts/web` no host com permissão de
+escrita para UID 1000 e acrescente `-e SMOKE_ARTIFACT_DIR=/evidence` e
+`-v "$PWD/artifacts/web:/evidence"` ao segundo `docker run`. A saída inclui
+`web-desktop.png` (1366 px), `web-mobile.png` (390 px), `web-plan.png` e
+`web-result.json`. Esses arquivos contêm somente a demonstração sintética;
+`artifacts/` é ignorado pelo Git. Não versionar sessões, evidências privadas ou
+dados dos participantes. A CI verifica ambos os smokes na imagem de runtime;
+desenvolvimento executa os mesmos checks antes de publicar. A promoção para
+produção continua usando a imagem já validada em desenvolvimento.
 
 ## Referências
 

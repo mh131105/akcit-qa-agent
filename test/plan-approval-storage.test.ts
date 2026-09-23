@@ -425,7 +425,7 @@ test('T3.1 CA-09: recuperação persiste interrupção, conserva históricos e �
   for (const record of unchanged) assert.deepEqual(await reopen(record.run.id), record);
 });
 
-test('T3.1 CA-09/10: createApp recupera antes de servir, conserva página/health e não carrega fixture', async t => {
+test('T3.1 CA-09/10: createApp recupera antes de servir, entrega site/health e não carrega fixture', async t => {
   const { store, dataDir, reopen } = await temporaryStore(t);
   await store.create(waiting());
   success(await executePlanCommand(store, 'run-test', approve, owner));
@@ -440,9 +440,12 @@ test('T3.1 CA-09/10: createApp recupera antes de servir, conserva página/health
   const address = app.address();
   assert.ok(address && typeof address !== 'string');
   const url = `http://127.0.0.1:${address.port}`;
-  const home = await fetch(url);
-  assert.equal(home.status, 200);
-  assert.match(await home.text(), /Ambiente preparado para desenvolvimento/);
+  const home = await fetch(url, { redirect: 'manual' });
+  assert.equal(home.status, 302);
+  assert.equal(home.headers.get('location'), '/execucoes');
+  const site = await fetch(`${url}/execucoes`);
+  assert.equal(site.status, 200);
+  assert.match(await site.text(), /<script src="\/web\/app\.js" defer><\/script>/);
   assert.deepEqual(await (await fetch(`${url}/healthz`)).json(), {
     status: 'ok', environment: 'local', revision: 'local', stage: 'environment-ready',
   });

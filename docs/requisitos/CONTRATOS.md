@@ -2,8 +2,9 @@
 
 Base para implementar o [produto](PROTOTIPO.md), alinhada ao fluxo aprovado em
 23/09/2026. São contratos propostos; esta documentação não significa que as APIs ou
-agentes já estejam implementados. Frontend e backend usam o mesmo
-[exemplo sintético](exemplos/execucao-demo.json).
+agentes já estejam implementados. As seções de entregas implementadas delimitam
+o comportamento disponível. O [exemplo sintético](exemplos/execucao-demo.json)
+apoia os contratos e testes; a interface usa a API e não carrega exemplos.
 
 ## Fluxo e responsabilidades
 
@@ -817,10 +818,129 @@ Estados variados usados para testar filtros são simulações exclusivas dos tes
 a aplicação não carrega exemplos. A suíte cobre texto literal, isolamento,
 repetição, concorrência, reinício, rejeições e falhas de armazenamento.
 
-Upload de `.txt`, `.md` e PDF e seus limites maiores, edição, exclusão, interface,
+Upload de `.txt`, `.md` e PDF e seus limites maiores, edição, exclusão,
 processamento/curadoria e execução dos agentes permanecem pendentes. O limite de
 16 KiB corresponde apenas à entrada textual deste card. **RF-01, RF-11 e T3
 continuam parcialmente implementados; curadoria e orquestração permanecem abertas.**
+A interface deste recorte é documentada em T2.1 a seguir.
+
+## Interface inicial — T2.1
+
+[`src/web/index.html`](../../src/web/index.html),
+[`src/web/app.js`](../../src/web/app.js) e
+[`src/web/styles.css`](../../src/web/styles.css) implementam as páginas em HTML,
+CSS e JavaScript nativos, servidas pelo mesmo processo Node da API. Não há
+framework, roteador, servidor de frontend separado ou carga automática de dados
+sintéticos. Este recorte faz parte de [T2 #5](https://github.com/mh131105/akcit-qa-agent/issues/5),
+que permanece aberta.
+
+### Rotas e relação com as APIs
+
+| Página | Comportamento e API consumida |
+| --- | --- |
+| `/` | Redireciona para `/execucoes` |
+| `/acesso` | Consulta `GET /api/auth/me`; cadastro com nome, e-mail, senha e equipe opcional por `POST /api/auth/register`; entrada por `POST /api/auth/login` |
+| `/execucoes` | Histórico real por `GET /api/runs`, com `q` para nome/aplicação e `status` para situação; links para detalhe e nova execução |
+| `/execucoes/nova` | Identificação, objetivo opcional e US/CA textuais; “Salvar rascunho” envia `POST /api/runs` com chave idempotente e abre o ID confirmado |
+| `/execucoes/:id` | Consulta `GET /api/runs/:id`; quando há plano, exibe sua revisão e permite as decisões elegíveis por `POST /api/runs/:id/approve` e `POST /api/runs/:id/request-changes` |
+| Saída da conta | `POST /api/auth/logout` com `{}`; aceita `204` sem tentar ler JSON |
+
+As quatro páginas entregam o mesmo HTML; o endereço determina a página montada.
+Links e recarregamento funcionam diretamente. Após cadastro ou login, a pessoa
+retorna à página interna solicitada ou ao histórico. A conta do produto é
+identificada como distinta do acesso que os agentes usarão na aplicação testada.
+
+O servidor permite somente as páginas acima e `/web/app.js` e `/web/styles.css`,
+com tipos de conteúdo explícitos. Os arquivos são encontrados a partir do módulo
+do servidor, em desenvolvimento e após compilação, independentemente do diretório
+do comando. `/api`, `/healthz` e os `404` de caminhos desconhecidos são preservados.
+A política de conteúdo permite scripts, estilos e conexões da mesma origem, sem
+scripts inline; incorporação em páginas externas permanece bloqueada.
+
+### Entrada, histórico e estado verdadeiro
+
+Nome da execução e aplicação aceitam até 120 pontos de código Unicode; objetivo,
+até 2.000. O frontend confere os **bytes UTF-8 do JSON completo serializado**, com
+todos os campos, contra 16 KiB. O valor de US/CA segue sem `trim()`, reescrita ou
+truncamento. Erros mantêm os valores para correção, e confirmação depende de
+resposta bem-sucedida do servidor. A API continua sendo a validação definitiva.
+
+O histórico mostra nome, aplicação, data local, etapa e situação, e distingue
+carregamento, primeira lista vazia, filtro sem resultados e falha recuperável.
+O detalhe usa somente a projeção pública de T3.2. Um rascunho sem plano informa:
+“Material recebido. O processamento ainda não foi iniciado.” Texto original,
+board de US/CA, perguntas, percentuais e resultados não são fabricados nem
+reconstituídos a partir de exemplos.
+
+Com `plan`, são apresentados objetivo, IDs de requisitos e critérios
+referenciados, prioridades e razões, exclusões e razões, abordagem,
+pré-condições, fontes, revisão e situação da validação recebida. A consulta não
+fornece o texto das US/CA para substituir suas referências.
+
+As ações de revisão usam exatamente `plan.id` e `plan.revision` exibidos. Pedido
+de alteração exige comentário não vazio, com limite de 4.000 caracteres. O
+frontend oferece as ações conforme o estado público recebido; o servidor ainda
+confere estado, curadoria vigente, pareceres, revisão e conflitos. Após uma
+decisão, a página consulta novamente o registro e mostra decisão e revisão.
+Aprovação mantém a execução em espera: não inicia testes nem cria casos.
+
+### Recuperação da tentativa e erros
+
+Antes do primeiro envio, a página gera um UUID v4 e guarda em `sessionStorage`
+o ID interno da conta, a chave e a **string JSON exata** a enviar. Se não for
+possível guardar a tentativa, informa a falha e não faz o POST. Durante o envio,
+o botão fica desabilitado. Não se armazenam senha, token ou cookie nessa área.
+
+Queda de conexão ou resultado incerto preservam a tentativa, incluindo após
+recarregar a página. “Tentar confirmar salvamento” repete a mesma chave e o mesmo
+corpo original; o formulário não transforma silenciosamente essa tentativa em
+outro rascunho. Falhas conclusivas de preenchimento liberam correção. Sucesso
+confirmado remove o registro. Logout explícito também o remove.
+
+A recuperação dura **na mesma aba e para a mesma conta, até confirmação ou
+logout**; não é backup permanente do formulário. Depois de expiração da sessão,
+o conteúdo pendente só reaparece após `GET /api/auth/me` confirmar o mesmo ID de
+conta. Outra conta não recebe o formulário da anterior. Fechar a aba ou apagar
+seus dados locais pode perder a possibilidade de recuperar a tentativa.
+O preenchimento ainda não enviado também pode ser preservado ao sair da página
+ou ao retirar a sessão, se o armazenamento local estiver disponível. Essa cópia
+não tem chave de envio e não representa uma execução criada; sua preservação
+ocorre nesses eventos, sem promessa de salvamento contínuo a cada alteração.
+
+Credenciais inválidas, participante não habilitado, excesso de tentativas,
+configuração de origem e indisponibilidade recebem mensagens legíveis. Falhas de
+consulta oferecem nova tentativa. Sessão inválida ou expirada remove dados
+privados da tela e solicita entrada novamente. Além das respostas da API, a
+sessão é conferida a cada 30 segundos enquanto a aba está visível e ao retornar
+para a aba; nesse retorno, o conteúdo fica oculto até a conferência. Falha ao
+conferir a sessão também retira os dados e solicita entrada. Conflito de decisão ou revisão
+desatualizada explica a recusa e atualiza a consulta, sem reaplicar a decisão
+automaticamente sobre uma revisão nova. Nenhum erro confirma salvamento ou
+avanço.
+
+As chamadas `fetch` usam `/api`, mesma origem e o cookie existente; o navegador
+define `Origin`. Proprietário, autoria, aprovação do validador, estado e revisão
+vigente continuam definidos no backend. Nomes, comentários, fontes e demais
+dados recebidos são renderizados como texto por `textContent`. Formulários têm
+rótulos, mensagens junto aos campos, foco visível e estados acessíveis de
+carregamento e erro. O layout contempla 1366 px e 390 px.
+
+### Verificação e limites
+
+[`scripts/smoke-web.mjs`](../../scripts/smoke-web.mjs) usa Chromium,
+`playwright-core`, servidor real e armazenamento temporário: cadastro/entrada,
+histórico vazio, criação, detalhe, recarregamento, logout/login, recuperação de
+resposta perdida sem duplicação, isolamento entre contas, texto com aparência
+de HTML e decisões persistidas de planos. Planos e pareceres são preparados
+**somente no armazenamento temporário do teste**; o teste não comprova geração
+por IA. Capturas de desktop e celular são sintéticas. A reprodução está em
+[OPERACAO.md](../OPERACAO.md#jornada-pelo-navegador--t21).
+
+Cobertura parcial: RF-01, RF-08, RF-10, RF-11, RF-13 e RF-14; RN-05 e RN-06;
+RNF-01, RNF-02, RNF-04 e RNF-06. Upload, edição de conta/execução, exclusão,
+duplicação, board de US/CA, perguntas, início dos agentes, curadoria, geração do
+plano, casos e relatório permanecem nas tarefas correspondentes. Este recorte
+não encerra T2 nem comprova os cenários completos de aceitação do produto.
 
 ## Mapeamento, dúvidas e execução
 
@@ -957,15 +1077,18 @@ internos nem segredos. Autenticação e cadastro seguem os RF do produto.
 | `GET /api/runs/:id/report/print` | Versão de impressão do relatório publicado, final ou parcial; navegador permite salvar PDF |
 | `DELETE /api/runs/:id` | Após confirmação, excluir execução encerrada, sua credencial e mídias locais; informar tratamento separado de backups |
 
-Upload pode integrar o formulário inicial. Polling simples atualiza o progresso.
-Aprovar/responder persiste a decisão; a interface pode chamar `continue` em seguida.
-Se o recurso estiver ocupado, o usuário não perde sua resposta ou aprovação.
+Na integração futura, upload poderá integrar o formulário inicial e polling
+simples poderá atualizar o progresso. Aprovar/responder persistirá a decisão;
+quando `/continue` existir, a interface poderá solicitar a continuidade depois.
+Se o recurso estiver ocupado, o usuário não deverá perder sua resposta ou
+aprovação. T2.1 não oferece essas operações e mantém a espera após a decisão.
 
 ## Exemplo e verificação
 
 O [artefato](exemplos/artefato-demo.md) e o [JSON](exemplos/execucao-demo.json) são
-sintéticos. `fixture: true` existe somente no exemplo; a interface identifica simulação
-e o backend não o aceita como execução real. Não há mídia ou chamadas de modelo.
+sintéticos. `fixture: true` existe somente no exemplo e o backend não o aceita
+como execução real. A interface de T2.1 não carrega esse JSON. Não há mídia ou
+chamadas de modelo no exemplo.
 
 O exemplo apresenta plano e casos aprovados antes do mapa, detalhamento preservando
 os campos aprovados e uma execução devolvida por falta de evidência. Sua revisão 2

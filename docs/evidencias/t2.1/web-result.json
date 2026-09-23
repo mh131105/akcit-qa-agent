@@ -1,0 +1,25 @@
+{
+  "status": "passed",
+  "scope": "T2.1 — navegador, API e persistência reais; planos sintéticos, sem IA",
+  "checked": [
+    "cadastro → histórico vazio → criação real → detalhe → histórico; texto literal preservado",
+    "recarregamento, logout/login e reencontro da execução persistida",
+    "clique duplo bloqueado; resposta perdida após persistir → aba recarregada → mesma chave/corpo sem duplicação",
+    "tentativa guardada não aparece para outra conta após expiração; conta original recupera o mesmo corpo e chave",
+    "sessão expirada remove os dados da tela e exige login",
+    "segunda conta isolada: histórico vazio, detalhe 404 e formulário sem conteúdo da primeira",
+    "decisão histórica de execução concluída não exibe espera falsa",
+    "planos sintéticos: conteúdo, fontes literais, aprovação e alteração da revisão 1 persistidos; espera mantida",
+    "revisão desatualizada recusada, consulta atualizada e nenhuma aprovação reaplicada",
+    "decisão concorrente em outra aba: conflito recusado, decisão original preservada",
+    "busca e situação combinadas usam os parâmetros da API; filtro sem resultado",
+    "falha real de consulta503 no armazenamento temporário e recuperação pelo botão de nova tentativa",
+    "navegação por Tab entre campos com foco visível",
+    "limite do JSON em bytes bloqueia o envio e preserva o preenchimento",
+    "sessionStorage indisponível impede envio e mantém o formulário",
+    "desktop 1366px e celular 390px sem transbordamento; nenhum token ou senha no storage"
+  ],
+  "node": "24.21.0",
+  "chromium": "153.0.8010.52",
+  "durationMs": 6629
+}
