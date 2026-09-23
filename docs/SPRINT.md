@@ -189,8 +189,9 @@ branch `feat/web-intake-review`, criada de `origin/develop` atualizado contendo
 `d5e4cf2`. Dependências atendidas: T3.2 e T3.3, integradas pelos
 [PRs #19](https://github.com/mh131105/akcit-qa-agent/pull/19) e
 [#20](https://github.com/mh131105/akcit-qa-agent/pull/20).
-Entrega: PR para `develop` a registrar após abertura; revisão e integração ainda
-pendentes. O PR referencia T2 #5 sem encerrá-la automaticamente.
+Entrega: [PR #21](https://github.com/mh131105/akcit-qa-agent/pull/21), aberto para
+`develop`; revisão pela frente B e integração ainda pendentes. O PR referencia
+T2 #5 sem encerrá-la automaticamente.
 
 Como participante do piloto, quero entrar no site, salvar minhas histórias de
 usuário e critérios de aceite, reencontrar a execução e revisar seu plano quando
