@@ -9,6 +9,7 @@ export interface SpecialistModel { provider: string; model: string }
 export interface SpecialistTask {
   role: PreparationRole;
   model: SpecialistModel;
+  authPath?: string;
   prompt: string;
   signal: AbortSignal;
   timeoutMs: number;
@@ -36,15 +37,15 @@ const skillNames: Record<PreparationRole, string> = {
   'output-validator': 'validate-output',
 };
 
-function privateModelRuntime(signal?: AbortSignal) {
+function privateModelRuntime(authPath?: string, signal?: AbortSignal) {
   // O catálogo local não autoriza inferência; a chamada real ocorre em session.prompt.
-  // Credenciais só do ambiente; não reutilizar auth, modelos ou sessões pessoais do Pi.
+  // OAuth exige caminho privado explícito; nunca procurar auth ou sessões pessoais.
   return ModelRuntime.create({
-    credentials: {
+    ...(authPath ? { authPath } : { credentials: {
       read: async () => undefined, list: async () => [],
       modify: async () => { throw new Error('Credenciais devem ser configuradas no ambiente.'); },
       delete: async () => {},
-    },
+    } }),
     modelsPath: null,
     allowModelNetwork: false, refreshOnCreate: false, ...(signal ? { signal } : {}),
   });
@@ -56,13 +57,15 @@ async function checkedModel(runtime: ModelRuntime, selection: SpecialistModel, s
   if (!await runtime.getAuth(model, signal ? { signal } : {})) {
     throw new SpecialistError('CREDENTIAL_UNAVAILABLE', 'A credencial do provedor configurado não está disponível no ambiente privado.');
   }
-  return model;
+  const subscription = runtime.getProvider(selection.provider)?.auth.oauth?.isSubscription === true &&
+    (await runtime.checkAuth(selection.provider, signal ? { signal } : {}))?.type === 'oauth';
+  return { model, subscription };
 }
 
 /** Inspeciona catálogo e credenciais; não executa inferência nem troca de modelo. */
-export async function preflightSpecialists(models: Record<PreparationRole, SpecialistModel>): Promise<void> {
+export async function preflightSpecialists(models: Record<PreparationRole, SpecialistModel>, authPath?: string): Promise<void> {
   try {
-    const runtime = await privateModelRuntime();
+    const runtime = await privateModelRuntime(authPath);
     for (const model of Object.values(models)) await checkedModel(runtime, model);
   } catch (error) {
     if (error instanceof SpecialistError) throw error;
@@ -96,8 +99,8 @@ export async function executeSpecialistTask(task: SpecialistTask): Promise<Speci
       appendSystemPromptOverride: () => [],
     });
     await resourceLoader.reload();
-    const modelRuntime = await privateModelRuntime(signal);
-    const model = await checkedModel(modelRuntime, task.model, signal);
+    const modelRuntime = await privateModelRuntime(task.authPath, signal);
+    const { model, subscription } = await checkedModel(modelRuntime, task.model, signal);
     signal.throwIfAborted();
     ({ session } = await createAgentSession({
       cwd: directory, agentDir: directory, modelRuntime, model, resourceLoader, settingsManager,
@@ -121,7 +124,8 @@ export async function executeSpecialistTask(task: SpecialistTask): Promise<Speci
     if (response.usage?.totalTokens > 0) {
       const { input, output, cacheRead, cacheWrite, totalTokens } = response.usage;
       metadata.usage = { input, output, cacheRead, cacheWrite, totalTokens };
-      if (response.usage.cost.total > 0) metadata.estimatedCost = response.usage.cost.total;
+      // Tarifas do catálogo não representam cobrança por token em uma assinatura.
+      if (!subscription && response.usage.cost.total > 0) metadata.estimatedCost = response.usage.cost.total;
     }
     signal.throwIfAborted();
     if (response.stopReason !== 'stop') {

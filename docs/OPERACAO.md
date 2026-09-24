@@ -415,10 +415,38 @@ podem usar esse mesmo modelo em sessões independentes. Substituições opcionai
 
 Deixar ambos vazios herda o padrão. Definir somente metade do par recusa o início;
 não há modelo alternativo automático. Use identificadores disponíveis no catálogo
-da versão instalada do Pi. Credenciais são exclusivamente do ambiente do processo,
-por exemplo `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` ou `GEMINI_API_KEY`, conforme o
-provedor escolhido. O runtime não usa `auth.json`, sessões ou modelos pessoais do
-Pi. Nunca coloque chaves nas skills, no registro da execução ou no repositório.
+da versão instalada do Pi. Por padrão, credenciais vêm somente do ambiente do
+processo, como `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` ou `GEMINI_API_KEY`, conforme
+o provedor. Para OAuth de assinatura, `PI_AUTH_PATH` habilita explicitamente um
+`auth.json` privado desse ambiente. Sem esse caminho, nenhum arquivo pessoal do
+Pi é procurado. Sessões e modelos pessoais não são carregados. Nunca coloque
+chaves ou tokens nas skills, no registro da execução ou no repositório.
+
+Para autorizar uma assinatura OpenAI pelo fluxo nativo do Pi, na raiz do projeto:
+
+```sh
+umask 077
+mkdir -p .data/pi
+PI_CODING_AGENT_DIR="$PWD/.data/pi" npm run pi
+```
+
+No Pi, use `/login`, selecione o provedor OpenAI Codex e conclua a autorização
+no navegador com a conta pretendida. Não envie prompts durante essa configuração.
+O Pi salva e renova OAuth no `auth.json` desse diretório. Em seguida, configure
+privadamente `PI_AUTH_PATH` com o caminho absoluto para `.data/pi/auth.json`,
+`PI_PROVIDER=openai-codex` e `PI_MODEL` com o identificador explícito disponível
+no catálogo instalado. Cada substituição por papel continua exigindo par completo.
+Não copie a autenticação pessoal do Codex/Pi para completar esse fluxo.
+
+Na VPS, a autorização deve usar o diretório privado do ambiente correspondente
+(`PI_CODING_AGENT_DIR=/data/pi` dentro daquele container); configure
+`PI_AUTH_PATH=/data/pi/auth.json` somente nesse ambiente. Diretório com modo
+`0700`, arquivo com `0600`, gravável pelo usuário do serviço para renovação nativa
+dos tokens. Não monte diretórios pessoais do host nem compartilhe esse arquivo
+entre dev/prod. Se guardado no volume `/data`, o arquivo OAuth também entra no
+backup privado do volume. `PI_CODING_AGENT_DIR` configura a CLI de login;
+`PI_AUTH_PATH` é a autorização explícita para o runtime da aplicação usar o arquivo.
+Isso não habilita tools, histórico compartilhado ou escolha automática de modelo.
 
 Localmente, mantenha a configuração em `.env` ignorado, com modo `0600`, incluindo
 `DATA_DIR=.data`, origem local exata e participantes habilitados. O servidor não
@@ -478,8 +506,10 @@ respostas programadas não atendem CA-12 nem a definição de pronto de T4.1.
    Recarregar não perde a decisão; não iniciar `/continue` ou criação de casos.
 6. Preencher [evidencias/t4.1](evidencias/t4.1/README.md) com os dados sintéticos,
    revisões/pareceres, avaliação assinada pela frente C, duração e consumo
-   disponível. Custo do Pi deve ser identificado como estimativa; omitir métricas
-   ausentes. Não publicar arquivo de conta, sessão, credencial ou material privado.
+   disponível. Custo por API do Pi deve ser identificado como estimativa; com
+   assinatura OAuth, `estimatedCost` é omitido, pois a tarifa por token do catálogo
+   não representa a cobrança da assinatura. Tokens disponíveis continuam registrados.
+   Não publicar arquivo de conta, sessão, credencial ou material privado.
 
 ### Avaliação real do validador com erro conhecido
 
@@ -505,7 +535,7 @@ import { parseCuration, parseVerdict } from './dist/domain/preparation.js';
 import { executeSpecialistTask, preflightSpecialists } from './dist/runtime/pi.js';
 const config = readConfig();
 const models = resolvePreparationModels(config);
-await preflightSpecialists(models);
+await preflightSpecialists(models, config.piAuthPath);
 const { run } = await new RunStore(config.dataDir).read(process.env.QA_DEMO_RUN_ID);
 const original = run.outputs.filter(item => item.phase === 'curation').at(-1);
 if (!original) throw new Error('Curadoria real ausente.');
@@ -513,6 +543,7 @@ const altered = parseCuration(JSON.parse(await readFile(process.env.QA_NEGATIVE_
 const output = { ...original, id: randomUUID(), revision: 1, createdAt: new Date().toISOString(), payload: altered };
 const result = await executeSpecialistTask({ role: 'output-validator',
   model: models['output-validator'], signal: new AbortController().signal, timeoutMs: 120000,
+  ...(config.piAuthPath ? { authPath: config.piAuthPath } : {}),
   prompt: JSON.stringify({ task: 'validation', artifacts: run.artifacts,
     objective: run.input.objective ?? '', output, previousVerdicts: [] }) });
 await writeFile(process.env.QA_NEGATIVE_RESULT,

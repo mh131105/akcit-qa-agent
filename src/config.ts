@@ -55,6 +55,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     maxConcurrentBrowserSessions: 1,
     preparationModels,
     preparationConfigError,
+    piAuthPath: env.PI_AUTH_PATH?.trim() ? resolve(env.PI_AUTH_PATH.trim()) : undefined,
   };
 }
 

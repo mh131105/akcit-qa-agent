@@ -55,6 +55,23 @@ async function setup(t: TestContext, custom: PreparationOptions = {}, env: NodeJ
   return { dir, store, coordinator, calls, id, create, read };
 }
 
+test('T4.1: caminho OAuth privado chega ao runtime, sem entrar em prompt ou persistência', async t => {
+  const authPath = '/private/synthetic/pi/auth.json';
+  let preflight = false;
+  const h = await setup(t, {
+    modelPreflight: async (_models, path) => { assert.equal(path, authPath); preflight = true; },
+    modelCall: async task => {
+      assert.equal(task.authPath, authPath);
+      assert.equal(task.prompt.includes(authPath), false);
+      return normal(task);
+    },
+  }, { PI_AUTH_PATH: authPath });
+  await h.coordinator.start(h.id, 'owner'); await h.coordinator.settled();
+  assert.equal(preflight, true);
+  assert.equal((await h.read()).status, 'awaiting_approval');
+  assert.equal(JSON.stringify(await h.read()).includes(authPath), false);
+});
+
 test('T4.1: sequência real do coordenador, revisões exatas e aprovação humana separada', async t => {
   const h = await setup(t, { modelCall: async task => {
     const run = await h.read();

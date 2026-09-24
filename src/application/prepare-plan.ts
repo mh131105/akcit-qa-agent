@@ -75,7 +75,7 @@ export class PreparationCoordinator {
     let models: ReturnType<typeof resolvePreparationModels>;
     try { models = resolvePreparationModels(this.config); }
     catch { throw new PreparationError('MODEL_NOT_CONFIGURED', 'Configure PI_PROVIDER e PI_MODEL; substituições por papel exigem o par completo.', 503); }
-    try { await this.preflight(models); }
+    try { await this.preflight(models, this.config.piAuthPath); }
     catch (error) {
       if (error instanceof SpecialistError) throw new PreparationError(error.code, error.message, 503);
       throw new PreparationError('MODEL_UNAVAILABLE', 'Não foi possível conferir os modelos e credenciais configurados.', 503);
@@ -185,6 +185,7 @@ export class PreparationCoordinator {
     try {
       if (controller.signal.aborted) throw controller.signal.reason;
       result = await this.modelCall({ role, model: models[role], prompt: JSON.stringify(input),
+        ...(this.config.piAuthPath ? { authPath: this.config.piAuthPath } : {}),
         signal: controller.signal, timeoutMs: this.limits.timeoutMs });
       if (controller.signal.aborted) throw controller.signal.reason;
       payload = parse(result.payload);

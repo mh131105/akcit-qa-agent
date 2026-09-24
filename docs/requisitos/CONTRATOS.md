@@ -1047,6 +1047,14 @@ do ambiente, reconfere estado sob `RunStore.update()` e persiste o início. Há 
 coordenador compartilhado por aplicação e um processo escritor por ambiente, sem
 fila. Chamadas aos modelos ocorrem fora da trava de armazenamento.
 
+Credenciais vêm das variáveis privadas por padrão. `PI_AUTH_PATH` permite optar
+por um `auth.json` privado do ambiente para OAuth de assinatura, autorizado pelo
+`/login` nativo do Pi com `PI_CODING_AGENT_DIR` isolado. O caminho é configuração
+interna do servidor; não é aceito pela API nem exposto na consulta. Vazio não
+procura credenciais pessoais do Pi/Codex. O SDK renova tokens no arquivo explícito;
+essa opção não amplia tools, compartilha conversas ou altera a seleção de modelo.
+O procedimento está em [OPERACAO.md](../OPERACAO.md#modelos-e-preparação-do-plano--t41).
+
 | Recusa | HTTP / código |
 | --- | --- |
 | Outra preparação ocupa o ambiente | `409 / RESOURCE_UNAVAILABLE`; rascunho intacto |
@@ -1119,8 +1127,10 @@ decisão. Aprovar registra a decisão e mantém a espera; `/continue` não é im
 `id`, `role`, `provider`, `model`, `phase`, `attempt`, `outputRevision`, `startedAt`,
 `status`; ao terminar, `finishedAt`, `durationMs` e `errorCode` quando pertinente.
 Consumo disponível usa `usage.{input,output,cacheRead,cacheWrite,totalTokens}`;
-`estimatedCost` é **estimativa do Pi**, não cobrança confirmada. Métricas ausentes
-são omitidas. Não se persistem raciocínio interno ou resposta bruta inválida.
+`estimatedCost` é **estimativa do Pi** para API, não cobrança confirmada; é omitido
+para autenticação OAuth de assinatura, pois preço por token do catálogo não
+representa essa cobrança. Tokens disponíveis continuam registrados. Métricas
+ausentes são omitidas. Não se persistem raciocínio interno ou resposta bruta inválida.
 Pareceres acrescentam `id`, `at` e `attempt` aos vínculos/achados do contrato.
 Novos metadados são opcionais para compatibilidade com registros anteriores.
 
