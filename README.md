@@ -4,8 +4,13 @@ Base de desenvolvimento para um sistema de testes caixa preta com Pi, um
 orquestrador e cinco especialistas: curadoria, planejamento, execução, relatório e
 validação das saídas. O validador avalia o trabalho dos outros especialistas; o
 orquestrador encaminha as tarefas e aplica os pareceres, sem julgar a qualidade.
-O produto e sua metodologia ainda serão implementados conforme os requisitos,
-regras e telas em [PROTOTIPO.md](docs/requisitos/PROTOTIPO.md).
+Esta branch implementa acesso ao piloto, entrada textual, curadoria, plano com
+validação independente e revisão humana. Perguntas podem ser respondidas pelo site;
+a retomada explícita incorpora os esclarecimentos sem alterar os originais.
+US/CA, requisitos em prosa e Gherkin textual são aceitos sem formato obrigatório.
+Casos, navegação, execução e relatório ainda seguem como próximas entregas em
+[PROTOTIPO.md](docs/requisitos/PROTOTIPO.md). O estado da revisão e da integração
+está em [SPRINT.md](docs/SPRINT.md).
 
 **Equipe: comecem pelo [guia de desenvolvimento da sprint](docs/requisitos/README.md).**
 Ele reúne o escopo proposto para 26/09, os contratos, a divisão de trabalho e os
@@ -87,7 +92,7 @@ O domínio e HTTPS público serão conectados ao Traefik quando a equipe os forn
 
 ## Estrutura
 
-- `src/`: servidor inicial, configuração e fábrica de sessões do Pi.
+- `src/`: site, API, autenticação, persistência, contratos e coordenação do Pi.
 - `agents/`: diretórios de tools e skills de cada especialista.
 - `scripts/`: inicialização, verificação de runtime e integração com publicação.
 - `deploy/`: Compose da VPS e publicador com comandos restritos.
@@ -96,6 +101,9 @@ O domínio e HTTPS público serão conectados ao Traefik quando a equipe os forn
 - `docs/OPERACAO.md`: limites, dados, segredos, backup e recuperação.
 - `docs/EQUIPE.md`: convites e acesso temporário da equipe ao desenvolvimento.
 
-O runtime não inicia chamadas de LLM. A equipe definirá o provedor e o modelo e
-configurará credenciais no ambiente correspondente ao implementar os agentes.
-Os testes de infraestrutura não consomem tokens de provedores.
+Salvar um rascunho não chama modelos. **Preparar plano** e **Retomar preparação**
+fazem inferências reais com os modelos e credenciais configurados privadamente por
+ambiente; siga [OPERACAO.md](docs/OPERACAO.md#modelos-e-preparação-do-plano--t41).
+Testes automatizados substituem os modelos e os smokes de infraestrutura não
+consomem tokens de provedores. A avaliação real das skills é um comando separado,
+com resultados e limitações em [ajuste de entradas](docs/evidencias/ajuste-entradas/README.md).
