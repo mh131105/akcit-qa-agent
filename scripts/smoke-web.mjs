@@ -32,6 +32,7 @@ let releaseResponse = () => {};
 const preparationText = 'US-01: Como pessoa, quero reservar itens.\nCA-01: Quantidade inteira de 1 a 10.\nUS-02: Como pessoa, quero registrar uma observação.\nCA-02: Observação opcional com limite a definir.\nCA-03: A observação deve ser persistida; local de consulta a definir.';
 const preparationCalls = [];
 let holdPreparation = false;
+let holdCaseValidation = false;
 let releasePreparation = () => {};
 
 async function modelCall(task) {
@@ -39,7 +40,7 @@ async function modelCall(task) {
   assert.equal(input.artifacts[0].text, preparationText, 'Cada especialista recebe o material original.');
   if (task.role === 'output-validator') assert.ok(input.output, 'Validador recebe a revisão exata da saída.');
   preparationCalls.push(task.role);
-  if (holdPreparation) {
+  if (holdPreparation || (holdCaseValidation && task.role === 'output-validator' && input.output.phase === 'case_design')) {
     await new Promise(resolve => {
       releasePreparation = resolve;
       if (task.signal.aborted) resolve();
@@ -70,7 +71,17 @@ async function modelCall(task) {
           sources: [source(index + 4), ...(answer(id) ? [answerSource(answer(id))] : [])] })) },
     ],
     questions,
-  } : task.role === 'test-designer' ? { testPlan: {
+  } : task.task === 'create-test-cases' ? { testCases: ['CA-01', ...resolvedRules].map((ruleId, index) => ({
+    id: `CT-0${index + 1}`, requirementIds: [index === 0 ? 'US-01' : 'US-02'], ruleIds: [ruleId],
+    preconditions: ['Uma reserva lógica está disponível para descrever os dados.'],
+    setup: index === 0 ? '<svg data-smoke onload="globalThis.smokeInjected=true">Preparar os dados; nenhuma ação foi executada.</svg>' : 'Preparar uma observação para uma reserva.',
+    pathId: null, data: index === 0 ? { quantidade: 1 } : { observacao: 'Exemplo controlado.' },
+    techniques: [{ name: index === 0 ? 'AVL' : 'Cenário baseado no requisito',
+      description: index === 0 ? '1 é o limite inferior inclusivo do domínio inteiro informado.' : 'Exercitar a observação descrita no esclarecimento.',
+      values: index === 0 ? [1] : ['Exemplo controlado.'] }],
+    expected: index === 0 ? 'A quantidade 1 está no intervalo permitido.' : answer(`Q-0${index}`).text.trim(),
+    sources: [source(index === 0 ? 2 : index + 3), ...(index === 0 ? [] : [answerSource(answer(`Q-0${index}`))])],
+  })) } : task.role === 'test-designer' ? { testPlan: {
     objective: 'Conferir reservas segundo os comportamentos esclarecidos.',
     requirementIds: ['US-01', ...(resolvedRules.length ? ['US-02'] : [])], ruleIds: ['CA-01', ...resolvedRules],
     priorities: ['CA-01', ...resolvedRules].map(ruleId => ({ ruleId, reason: 'Conferir o comportamento documentado.' })),
@@ -566,6 +577,43 @@ async function preparationJourney(context, store, owner) {
   await visible(page.getByText('Plano aprovado · Revisão 2', { exact: true }));
   const approved = await api(context, `/api/runs/${id}`, owner.id);
   assert.equal(approved.approvals.length, 1); assert.equal(approved.approvals[0].outputRevision, 2);
+  assert.equal(preparationCalls.length, 8, 'A aprovação do plano não inicia a geração automaticamente.');
+  holdPreparation = true; holdCaseValidation = true;
+  const continuation = page.waitForResponse(response => response.url().endsWith(`/api/runs/${id}/continue`));
+  await page.getByRole('button', { name: 'Gerar casos de teste', exact: true }).click();
+  const acceptedCases = await continuation;
+  assert.equal(acceptedCases.status(), 202);
+  assert.equal(acceptedCases.request().headers()['x-expected-user-id'], owner.id);
+  assert.deepEqual(acceptedCases.request().postDataJSON(), { outputId: approved.plan.id, outputRevision: 2 });
+  await bodyIncludes('Gerando casos de teste');
+  const repeatedCases = await context.request.post(`/api/runs/${id}/continue`, { headers,
+    data: { outputId: approved.plan.id, outputRevision: 2 } });
+  assert.equal(repeatedCases.status(), 200);
+  assert.equal(preparationCalls.length, 9, 'Repetir a continuidade não duplica geração.');
+  holdPreparation = false; releasePreparation();
+  await bodyIncludes('Validando os casos de teste');
+  await bodyIncludes('Conteúdo provisório — a validação desta revisão ainda não foi aprovada.');
+  holdCaseValidation = false; releasePreparation();
+  await bodyIncludes('Conjunto validado. Disponível para revisão humana');
+  await bodyIncludes('Casos lógicos — percurso ainda não mapeado.');
+  await page.getByText('CT-01 · CA-01', { exact: true }).click();
+  await bodyIncludes('1 é o limite inferior inclusivo do domínio inteiro informado.');
+  await noMarkup();
+  const cases = await api(context, `/api/runs/${id}`, owner.id);
+  assert.equal(cases.status, 'awaiting_approval'); assert.equal(cases.phase, 'case_design');
+  assert.equal(cases.cases.revision, 1); assert.equal(cases.cases.current, true);
+  assert.equal(cases.cases.validations[0].status, 'approved');
+  assert.equal(cases.cases.payload.testCases.length, 3);
+  assert.ok(cases.cases.payload.testCases.every(item => item.pathId === null));
+  assert.equal(preparationCalls.length, 10);
+  const savedCases = (await store.read(id)).run.outputs.find(output => output.phase === 'case_design');
+  assert.deepEqual(savedCases.payload, cases.cases.payload);
+  await screenshot('web-cases.png', 1366); await screenshot('web-cases-mobile.png', 390);
+  await page.reload(); await bodyIncludes('Conjunto validado. Disponível para revisão humana');
+  assert.equal(await page.getByRole('button', { name: 'Gerar casos de teste', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: /Aprovar casos/ }).count(), 0);
+  await screenshot('web-cases-persisted.png', 1366);
+  checked.push('T6.1: aprovação separada → gerar casos 202 → repetição 200 sem duplicação → geração → casos provisórios em validação → conjunto persistido para revisão humana; sem aprovação de casos ou navegação');
   checked.push('T4.1: rascunho → iniciar 202 → curador → validador → planejador → validador → aprovação pelo site; chamada de modelo substituída explicitamente no teste');
   checked.push('T4.1: repetição não duplica chamada; pendência localizada permite plano independente; consulta periódica para na revisão e conserva comentário em edição');
   checked.push('Esclarecimentos: resposta literal preserva originais, comentário e outra resposta digitada; plano antigo não aceita aprovação e texto pendente impede retomada');
@@ -893,7 +941,7 @@ try {
   assert.deepEqual(pageErrors, [], 'Nenhum erro JavaScript na preparação e aprovação do plano.');
   }
   await regressions(origin, store, owner, other);
-  result = { status: 'passed', scope: 'T2.1/T4.1 — navegador, API, coordenador e persistência reais; chamada de modelo substituída, sem inferência paga', checked,
+  result = { status: 'passed', scope: 'T2.1/T4.1/T6.1 — navegador, API, coordenador e persistência reais; chamada de modelo substituída, sem inferência paga', checked,
     node: process.versions.node, chromium: browser.version(), durationMs: Date.now() - started };
 } catch (error) {
   result = { status: 'failed', checked, error: error.message, durationMs: Date.now() - started };

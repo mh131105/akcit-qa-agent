@@ -7,8 +7,8 @@ const limit = 16 * 1024;
 const statuses = { draft: 'Rascunho', running: 'Em andamento', awaiting_approval: 'Aguardando aprovação', awaiting_input: 'Aguardando informações', completed: 'Concluída', interrupted: 'Interrompida', error: 'Erro', cancelled: 'Cancelada' };
 const phases = { intake: 'Recebimento do material', curation: 'Curadoria', planning: 'Planejamento', case_design: 'Criação dos casos', mapping: 'Mapeamento', route_detail: 'Detalhamento dos percursos', execution: 'Execução dos testes', report: 'Relatório' };
 const validations = { approved: 'Aprovado pelo validador', changes_requested: 'Validador solicitou alterações', blocked: 'Validação bloqueada', error: 'Erro de validação' };
-const roles = { 'artifact-curator': 'Curador', 'test-designer': 'Planejador', 'output-validator': 'Validador independente' };
-const activities = { curating: 'Organizando requisitos e fontes', planning: 'Elaborando o plano de testes', validating_curation: 'Revisando a curadoria', validating_planning: 'Revisando o plano de testes' };
+const roles = { 'artifact-curator': 'Curador', 'test-designer': 'Designer de testes', 'output-validator': 'Validador independente' };
+const activities = { curating: 'Organizando requisitos e fontes', planning: 'Elaborando o plano de testes', validating_curation: 'Revisando a curadoria', validating_planning: 'Revisando o plano de testes', case_design: 'Gerando casos de teste', validating_case_design: 'Validando os casos de teste' };
 let user = null;
 let rememberForm = null;
 let sessionTimer;
@@ -83,11 +83,12 @@ function errorText(error) {
     COMMENT_REQUIRED: 'Informe um comentário para solicitar alterações.',
     STALE_VERSION: 'A revisão ou suas dependências mudaram. Consulte o plano atualizado antes de decidir novamente.',
     DECISION_CONFLICT: 'Esta revisão já possui uma decisão diferente. Consulte a decisão salva.',
+    DECISION_MISSING: 'Aprove a revisão vigente do plano antes de gerar os casos de teste.',
     INVALID_STATE: 'A execução não permite esta operação no estado atual. Consulte o estado atualizado.',
     INSUFFICIENT_VALIDATION: 'O plano e a curadoria precisam de validação aprovada. A decisão foi recusada.',
     IDEMPOTENCY_CONFLICT: 'A chave já está associada a outro conteúdo. A tentativa foi preservada; consulte o histórico e solicite ajuda à equipe.',
     RUN_NOT_FOUND: 'Execução não encontrada ou indisponível para esta conta.',
-    RESOURCE_UNAVAILABLE: 'O ambiente está ocupado com outra execução. Seu rascunho foi preservado; tente novamente após a conclusão.',
+    RESOURCE_UNAVAILABLE: 'O ambiente está ocupado com outra execução. O material e as decisões foram preservados; tente novamente após a conclusão.',
     MODEL_NOT_CONFIGURED: 'A preparação exige a configuração do provedor e modelo para curador, planejador e validador. Solicite a configuração à equipe do piloto.',
     MODEL_UNAVAILABLE: 'O modelo configurado não está disponível. Solicite à equipe a conferência da configuração.',
     CREDENTIAL_UNAVAILABLE: 'A credencial do modelo não está disponível. Solicite a configuração à equipe do piloto.',
@@ -357,6 +358,32 @@ function curationPanel(curation) {
   }
   return panel;
 }
+function casesPanel(cases) {
+  const panel = el('section', null, 'panel');
+  const verdicts = cases.validations.filter(value => value.validator === 'output-validator' && value.status !== 'error');
+  const approved = cases.current && verdicts.length === 1 && verdicts[0].status === 'approved';
+  panel.append(el('p', `Casos de teste / Revisão ${cases.revision}`, 'eyebrow'), el('h2', 'Casos de teste'),
+    el('p', 'Casos lógicos — percurso ainda não mapeado.', 'lead'),
+    message(approved ? 'Conjunto validado. Disponível para revisão humana; a aprovação dos casos será integrada na próxima etapa.'
+      : cases.current ? 'Conteúdo provisório — a validação desta revisão ainda não foi aprovada.'
+      : 'Conteúdo provisório — as dependências desta revisão foram alteradas.'));
+  for (const item of cases.payload.testCases) {
+    const detail = el('details', null, 'plan-section'); detail.append(el('summary', `${item.id} · ${item.ruleIds.join(', ')}`));
+    detail.append(planSection('Requisitos referenciados', item.requirementIds), planSection('Regras referenciadas', item.ruleIds),
+      planSection('Pré-condições', item.preconditions), el('h3', 'Preparação'), el('p', item.setup, 'text-content'),
+      planSection('Dados', Object.entries(item.data), ([key, value]) => `${key}: ${JSON.stringify(value)}`),
+      planSection('Técnicas', item.techniques, value => `${value.name} — ${value.description}\nValores: ${value.values.map(item => JSON.stringify(item)).join(', ')}`),
+      el('h3', 'Resultado esperado'), el('p', item.expected, 'text-content'), el('h3', 'Fontes'));
+    for (const source of item.sources) detail.append(el('p', `${source.artifactId} · ${source.locator}`, 'hint'), el('blockquote', source.quote, 'text-content'));
+    panel.append(detail);
+  }
+  panel.append(planSection('Situação da validação', cases.validations,
+    value => `${validations[value.status] || value.status} · Revisão ${value.outputRevision} · ${value.validator}${value.reason ? ` — ${value.reason}` : ''}`));
+  for (const verdict of cases.validations) {
+    if (verdict.findings?.length) panel.append(planSection('Achados da validação', verdict.findings, value => `${value.location} — ${value.message}`));
+  }
+  return panel;
+}
 function pendingPlanComment(run, accountId, pending) {
   const comment = document.getElementById('comment')?.value;
   return comment && run.plan ? { accountId, runId: run.id, outputId: run.plan.id, outputRevision: run.plan.revision, comment, decision: 'changes_requested' } : pending;
@@ -432,6 +459,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
     summary.append(message([roles[run.progress.activeRole] || run.progress.activeRole, activities[run.progress.activity] || run.progress.activity].filter(Boolean).join(' · ')));
   }
   if (run.stopReason) main.append(message(run.stopReason.message, ['error', 'interrupted'].includes(run.status)));
+  if (run.cases) main.append(casesPanel(run.cases));
   if (run.curation) main.append(curationPanel(run.curation));
   if (run.questions?.length) main.append(questionPanel(run, accountId, pending));
   for (const [key, draft] of answerDrafts) {
@@ -473,6 +501,18 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
       }
     }, operation === 'cancel' ? 'secondary' : '');
     summary.append(action, notice);
+  }
+  if (run.canCreateCases && run.plan) {
+    const notice = message(); const generate = button('Gerar casos de teste', async () => {
+      generate.disabled = true; tell(notice, 'Solicitando a geração dos casos de teste…');
+      try {
+        await sameAccount(accountId); if (user?.id !== accountId) return;
+        await api(`/runs/${encodeURIComponent(id)}/continue`, { accountId, method: 'POST',
+          body: JSON.stringify({ outputId: run.plan.id, outputRevision: run.plan.revision }) });
+        await detailPage('Geração aceita. Acompanhe a produção e a validação independente dos casos.');
+      } catch (error) { if (user?.id === accountId) await detailPage(errorText(error), true); }
+    });
+    summary.append(generate, notice);
   }
   if (run.status === 'running') {
     // ponytail: consulta simples durante o trabalho; a revisão humana não reconstrói formulários.

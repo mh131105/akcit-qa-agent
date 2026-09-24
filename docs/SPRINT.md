@@ -1,6 +1,6 @@
 # Sprint única: entrega em 26/09 às 17h
 
-Atualizado em 23/09/2026. Horário de Manaus. A equipe mantém quatro frentes, com
+Atualizado em 24/09/2026. Horário de Manaus. A equipe mantém quatro frentes, com
 responsáveis a escolher. A [especificação](requisitos/PROTOTIPO.md) define a entrega;
 as tarefas abaixo implementam seus requisitos, sem uma segunda sprint no plano.
 
@@ -284,9 +284,10 @@ pela frente C e integração por outro desenvolvedor. Recorte de
 [T6 #9](https://github.com/mh131105/akcit-qa-agent/issues/9) e
 [T10 #14](https://github.com/mh131105/akcit-qa-agent/issues/14), sem encerrá-las.
 Branch `feat/prepare-validated-plan`, a partir de `origin/develop` contendo
-`04f8b01`. [PR #22](https://github.com/mh131105/akcit-qa-agent/pull/22) para revisão em `develop`.
-**Recorte original implementado e demonstrado; decisão humana e revisão/merge pendentes.
-O ajuste de 24/09 está documentado ao final desta seção.**
+`04f8b01`. [PR #22](https://github.com/mh131105/akcit-qa-agent/pull/22)
+**integrado em `develop` em 24/09/2026, merge `71781a2`**, incluindo o ajuste de
+entradas/esclarecimentos abaixo. As demonstrações históricas não passam a representar
+aprovação humana ou capacidades de casos por causa desse merge.
 
 O site permite salvar rascunho, preparar plano, acompanhar fase/papel e cancelar.
 O coordenador persiste trabalho/orçamento antes do aceite HTTP, executa curador,
@@ -319,12 +320,12 @@ limite 10→11 e comentário opcional→obrigatório com os originais limpos.
 O conservadorismo do validador sobre a sequência metodológica permaneceu registrado.
 Check, 87/87 testes e build passaram novamente após a limpeza do artefato/fixture.
 
-O plano permanece em `awaiting_approval/planning`, sem decisão humana fabricada.
-Faltam avaliação da frente C, aprovação pelo site, revisão de integração por outro
-desenvolvedor e merge em `develop`. Evidências dessa demonstração e limitações:
+O plano daquela demonstração permanece em `awaiting_approval/planning`, sem decisão
+humana fabricada. A avaliação da frente C e a aprovação daquele plano não são
+comprovadas pelo merge do código. Evidências dessa demonstração e limitações:
 [evidencias/t4.1](evidencias/t4.1/README.md).
 
-Limite do recorte: termina na revisão humana do plano; `/continue`, criação de
+Limite histórico de T4.1: termina na revisão humana do plano; `/continue`, criação de
 casos, mapeamento, navegação, execução, vídeos, relatório e upload permanecem nas
 tarefas correspondentes. O ajuste abaixo acrescenta `/answer` e `/resume` somente
 à preparação. A decisão humana não dispara casos.
@@ -355,8 +356,49 @@ Código, verificações e comparação das skills pertencem a esta revisão do P
 resultados anteriores de T4.1 acima são históricos. Consulte
 [evidências do ajuste](evidencias/ajuste-entradas/README.md) para o que efetivamente
 foi executado, modelos, limites e pendências. Esta seção não registra aprovação
-humana nem encerra T4, T5, T6 ou T10. Revisão de integração e merge em `develop`
-continuam necessários para cumprir a definição de pronto.
+humana nem encerra T4, T5, T6 ou T10. O código foi integrado pelo PR #22 em
+`71781a2`; as pendências de avaliação registradas nas evidências permanecem explícitas.
+
+### T6.1 · Gerar e validar casos do plano aprovado
+
+História técnica de prioridade alta, um desenvolvedor com atuação backend/agentes;
+revisão de integração pela frente B e conferência metodológica pela frente C.
+Recorte de [T6 #9](https://github.com/mh131105/akcit-qa-agent/issues/9), sobre
+`origin/develop` em `71781a2`, branch `feat/validated-test-cases`. Avança RF-04/RF-09;
+**não conclui T6 nem TELA-06**.
+
+A página da execução permite aprovar o plano e, separadamente, acionar **Gerar casos
+de teste**. `/continue` reconfere revisão, curadoria, pareceres, aprovação humana,
+originais, respostas, orçamento e reserva antes de inferir. O designer carrega
+somente `create-test-cases`; o validador independente confere a revisão exata com
+contexto completo. Correção mantém ID/histórico; bloqueio e limites interrompem
+com motivo. Persistência coordena intenção e início, encerra intenções e protege
+contra repetição, concorrência, cancelamento, resposta tardia e reinício.
+
+Casos têm dados concretos, técnicas justificadas quando aplicáveis, fontes e
+`pathId: null`. O site apresenta detalhes expansíveis, revisão, conteúdo provisório
+e pareceres, com o aviso de percurso ainda não mapeado. O resultado aprovado fica
+em `awaiting_approval/case_design`. **Aprovação humana dos casos, mapeamento,
+navegação, vídeos e relatório ainda serão implementados.**
+
+Critérios CA-01 a CA-09: autorização exata, continuidade pelo site, fidelidade/escopo,
+técnicas coerentes, sessões independentes, rastreabilidade, limites cumulativos,
+consistência e consulta sem alegação de execução. CA-10 acrescenta demonstração real
+com prosa (quantidade inteira 1–10), exemplo pontual Gherkin e erro conhecido no
+validador, avaliados contra expectativas escritas antes das chamadas. Não se usa
+gabarito nos prompts nem se modifica evidência anterior.
+
+Verificações exigidas: `npm run check`, `npm test`, `npm run build` e
+`npm run smoke:web` em Node 24. Os testes substituem respostas dos modelos; o smoke
+usa site, API e persistência reais. Comandos executados, commit, modelos, revisões,
+resultados e limitações ficam em [evidencias/t6.1](evidencias/t6.1/README.md).
+Contrato em [CONTRATOS.md](requisitos/CONTRATOS.md#casos-lógicos-a-partir-do-plano-aprovado--t61)
+e roteiro em [OPERACAO.md](OPERACAO.md#gerar-e-consultar-casos-lógicos--t61).
+
+Definição de pronto: novo PR para `develop`, CI aprovada, revisão B, conferência C,
+ajustes e merge. Aprovação de testes ou avaliação por agente não substitui as
+revisões humanas. T6 #9 permanece aberta; o estado dessas pendências será registrado
+no PR e nas evidências.
 
 ## Marcos propostos a partir de agora
 

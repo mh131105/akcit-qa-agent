@@ -17,6 +17,15 @@ export type PlanPayload = { testPlan: {
   exclusions: { description: string; reason: string }[];
   approach: string[]; preconditions: string[]; sources: Source[];
 } };
+export type CaseValue = string | number | boolean | null;
+export type TestCase = {
+  id: string; requirementIds: string[]; ruleIds: string[];
+  preconditions: string[]; setup: string; pathId: null;
+  data: Record<string, CaseValue>;
+  techniques: { name: string; description: string; values: CaseValue[] }[];
+  expected: string; sources: Source[];
+};
+export type TestCasesPayload = { testCases: TestCase[] };
 export type Verdict = {
   status: 'approved' | 'changes_requested' | 'blocked';
   findings: { code: string; message: string; location: string | null }[];
@@ -24,8 +33,10 @@ export type Verdict = {
 };
 
 export class InvalidPreparationOutput extends Error {
-  constructor(readonly code: 'INVALID_MODEL_OUTPUT' | 'INPUT_LIMIT' = 'INVALID_MODEL_OUTPUT') {
-    super(code === 'INPUT_LIMIT'
+  constructor(readonly code: 'INVALID_MODEL_OUTPUT' | 'INPUT_LIMIT' | 'CASE_LIMIT' = 'INVALID_MODEL_OUTPUT') {
+    super(code === 'CASE_LIMIT'
+      ? 'O conjunto excede o limite de 30 casos. Reduza o escopo em um novo plano; nenhum caso foi cortado.'
+      : code === 'INPUT_LIMIT'
       ? 'O material excede o limite de dez histórias ou requisitos. Reduza o escopo em um novo rascunho.'
       : 'A resposta do especialista não atende à estrutura, às referências ou às fontes exigidas.');
     this.name = 'InvalidPreparationOutput';
@@ -177,6 +188,52 @@ export function parsePlan(value: unknown, artifacts: readonly Artifact[], curati
     approach: array(plan.approach, 1).map(item => text(item)),
     preconditions: array(plan.preconditions).map(item => text(item)), sources: sources(plan.sources, artifacts),
   } };
+}
+
+function caseValue(value: unknown): CaseValue {
+  if (value === null || typeof value === 'boolean' ||
+    (typeof value === 'number' && Number.isFinite(value)) ||
+    (typeof value === 'string' && value.length <= 20_000)) return value;
+  return fail();
+}
+
+export function parseTestCases(value: unknown, artifacts: readonly Artifact[], curation: CurationPayload,
+  approvedPlan: PlanPayload): TestCasesPayload {
+  const root = object(value, ['testCases']);
+  if (Array.isArray(root.testCases) && root.testCases.length > 30) throw new InvalidPreparationOutput('CASE_LIMIT');
+  payload(root);
+  const plan = parsePlan(approvedPlan, artifacts, curation).testPlan;
+  const seen = new Set<string>();
+  const covered = new Set<string>();
+  const testCases = array(root.testCases, 1).map(raw => {
+    const item = object(raw, ['id', 'requirementIds', 'ruleIds', 'preconditions', 'setup', 'pathId',
+      'data', 'techniques', 'expected', 'sources']);
+    if (item.pathId !== null) return fail();
+    const requirementIds = ids(item.requirementIds, new Set(plan.requirementIds), 1);
+    const selected = curation.requirements.filter(requirement => requirementIds.includes(requirement.id));
+    const permittedRules = new Set(selected.flatMap(requirement => requirement.rules
+      .filter(rule => plan.ruleIds.includes(rule.id)).map(rule => rule.id)));
+    const ruleIds = ids(item.ruleIds, permittedRules, 1);
+    if (selected.some(requirement => !requirement.rules.some(rule => ruleIds.includes(rule.id)))) return fail();
+    ruleIds.forEach(ruleId => covered.add(ruleId));
+    if (!item.data || typeof item.data !== 'object' || Array.isArray(item.data)) return fail();
+    const entries = Object.entries(item.data);
+    if (entries.length > 300) return fail();
+    const data = Object.fromEntries(entries.map(([key, value]) => [text(key, 128), caseValue(value)]));
+    const techniques = array(item.techniques, 1).map(rawTechnique => {
+      const technique = object(rawTechnique, ['name', 'description', 'values']);
+      return { name: text(technique.name, 128), description: text(technique.description),
+        values: array(technique.values).map(caseValue) };
+    });
+    return {
+      id: unique(id(item.id), seen), requirementIds, ruleIds,
+      preconditions: array(item.preconditions).map(value => text(value)), setup: text(item.setup), pathId: null,
+      data, techniques, expected: text(item.expected), sources: sources(item.sources, artifacts),
+    };
+  });
+  // Cobertura por IDs é estrutural; fidelidade dos dados/expectativas cabe ao validador.
+  if (plan.ruleIds.some(ruleId => !covered.has(ruleId))) return fail();
+  return { testCases };
 }
 
 export function parseVerdict(value: unknown): Verdict {

@@ -312,8 +312,11 @@ type WorkIntent = {
   outputId: string;
   outputRevision: number;
   createdAt: string; // UTC, YYYY-MM-DDTHH:mm:ss.sssZ.
-  status: 'pending' | 'interrupted';
-  interruption?: { reason: 'service_restart'; at: string }; // Obrigatório se interrupted.
+  status: 'pending' | 'completed' | 'interrupted' | 'cancelled';
+  processingId?: string; // Vínculo com o processamento efetivo, acrescentado em T6.1.
+  finishedAt?: string;
+  reason?: { code: string; message: string };
+  interruption?: { reason: 'service_restart'; at: string }; // Forma histórica preservada.
 };
 ```
 
@@ -472,8 +475,8 @@ T3.2 acrescentou as sete operações abaixo a
 [`src/auth.ts`](../../src/auth.ts) fornece a identidade confiável para o serviço
 de T3.1. O recorte cobre parcialmente RF-08, RF-10, RF-14, RN-05, RNF-04 e RNF-06.
 Criação textual e histórico são acrescentados por T3.3, documentada adiante.
-Upload, reserva de navegador e agentes continuam pendentes. Não há rota
-`/continue`; continuidade e despacho permanecem em T4.
+Upload e reserva de navegador continuam pendentes. T4.1 acrescentou a preparação
+com agentes; T6.1 acrescenta `/continue` exclusivamente para casos do plano aprovado.
 
 ### Operações e entradas
 
@@ -1141,7 +1144,8 @@ de avançar e mantém IDs/histórico nas correções. O plano depende exatamente
 `{outputId, revision}` da curadoria vigente e aprovada, reconferida antes de salvar.
 As regras existentes de aprovação humana permanecem: somente plano e dependência
 vigentes, com um parecer de qualidade aprovado para cada revisão, autorizam a
-decisão. Aprovar registra a decisão e mantém a espera; `/continue` não é implementado.
+decisão. Aprovar registra a decisão e mantém a espera; T6.1 acrescenta `/continue`
+como ação separada, descrita abaixo.
 
 `run.preparation` registra `id`, `budgetCycleId`, `startedAt`, `finishedAt`,
 `activeRole`, `activity`, `stopReason`, `limits` e `calls`; o ajuste de retomada
@@ -1187,7 +1191,7 @@ execuções interrompidas/canceladas nem abre ciclo adicional.
 
 São operações implementadas para a preparação, com sessão, proprietário,
 `X-Expected-User-Id`, `Origin` e JSON nas mesmas condições das demais mutações.
-Não iniciam casos nem substituem o futuro `/continue`.
+Não iniciam casos nem substituem `/continue`, implementado em T6.1.
 
 | Operação | Entrada e efeito |
 | --- | --- |
@@ -1255,7 +1259,8 @@ answers: { id: string; revision: number; outputId: string; outputRevision: numbe
 canResume: boolean;
 ```
 
-Atividades são `curating`, `validating_curation`, `planning`, `validating_planning`.
+Atividades da preparação são `curating`, `validating_curation`, `planning`,
+`validating_planning`; T6.1 acrescenta `case_design` e `validating_case_design`.
 A projeção não devolve registro interno, credenciais, prompts, chamadas, orçamento
 ou originais completos. `plan` pode existir provisoriamente durante validação;
 isso não autoriza decisão. A interface mostra fase, papel/atividade, motivo e
@@ -1268,6 +1273,127 @@ um repasse do registro privado. Perguntas mostram o escopo e permitem salvar a
 resposta; uma ação separada retoma quando `canResume` for verdadeiro. A consulta
 mostra respostas salvas e revisões, sem aplicar texto antigo a outra pergunta ou
 revisão. Aprovar um plano continua sem iniciar casos.
+
+## Casos lógicos a partir do plano aprovado — T6.1
+
+Este recorte de T6 #9 implementa geração, validação independente, persistência e
+consulta. Avança RF-04/RF-09; não conclui T6 nem TELA-06. Casos ficam disponíveis
+para revisão; **aprovação humana dos casos e navegação ainda serão implementadas**.
+
+### Continuidade autenticada
+
+`POST /api/runs/:id/continue` recebe exclusivamente
+`{outputId: string, outputRevision: number}`, com revisão inteira positiva,
+`Content-Type: application/json`, sessão, `Origin` exata e `X-Expected-User-Id`.
+A identidade vem da sessão. Campos extras, inclusive `resourceReserved`, modelo,
+caminho de skill, identidade ou aprovação, são recusados. Consulta na URL não é aceita.
+
+O coordenador reconfere proprietário, revisão vigente do plano e sua curadoria,
+pareceres aprovados, decisão humana `approved` da revisão exata, fontes preservadas,
+respostas consideradas e tempo ativo restante **antes de inferir**. Reutiliza
+`applyPlanApprovalCommand` e aceita somente a intenção `create_cases`; pedido
+humano de alteração não despacha `analyze_feedback` neste recorte.
+
+| Situação | Resposta / efeito |
+| --- | --- |
+| Primeiro aceite | `202`, projeção pública atualizada; reserva e persistência coordenadas antes de despachar |
+| Mesma referência já aceita | `200`, processamento existente, sem nova intenção/chamada, inclusive após encerramento |
+| Plano/curadoria desatualizados, sem aprovação ou estado incompatível | `409`, código/motivo legível; nenhuma alteração na execução |
+| Ambiente ocupado | `409 / RESOURCE_UNAVAILABLE`; plano aprovado preservado para nova tentativa |
+| Outra conta ou execução ausente | `404 / RUN_NOT_FOUND` |
+| Corpo inválido ou campos extras | `400 / INVALID_INPUT` |
+| Configuração/modelo/credencial indisponível | `503`, códigos existentes da preparação; sem início |
+
+Reserva, reconferência, transição `running/case_design`, processamento e intenção
+são coordenados pelo mesmo serviço e gravação serializada. Solicitações concorrentes
+não criam dois trabalhos. Falha de persistência não autoriza despacho presumido.
+Aprovar plano continua sendo operação separada que não chama especialistas.
+
+### Payload e verificações estruturais
+
+```ts
+type CaseValue = string | number | boolean | null;
+type TestCasesPayload = {
+  testCases: {
+    id: string;
+    requirementIds: string[];
+    ruleIds: string[];
+    preconditions: string[];
+    setup: string;
+    pathId: null;
+    data: Record<string, CaseValue>;
+    techniques: { name: string; description: string; values: CaseValue[] }[];
+    expected: string;
+    sources: { artifactId: string; locator: string; quote: string }[];
+  }[];
+};
+```
+
+O parser aceita entre **1 e 30 casos**, IDs únicos, campos exatos e números finitos.
+Requisito/regra devem existir, estar relacionados e pertencer ao plano aprovado;
+toda regra planejada deve aparecer no conjunto. Fontes seguem o contrato literal
+`Lx`/`Lx-Ly`, com artefato preservado. Dados não recebem objetos/listas aninhadas.
+`pathId` só aceita `null`; ID da saída, revisão, produtor, datas, dependências e
+orçamento pertencem ao backend e não entram no payload do especialista.
+Mais de 30 casos causa `CASE_LIMIT`, interrompe e pede redução de escopo, sem corte.
+
+Cobertura por IDs não prova cobertura semântica. O validador recebe originais,
+respostas/fontes, curadoria validada, plano validado/aprovado e revisão exata dos
+casos. Confere expectativas, condições/exceções, dados versus técnicas declaradas,
+cobertura efetiva, generalização de exemplos e navegação inventada. PCE/AVL exigem
+justificativa quando cabíveis; não são obrigatórias em todo caso. Vizinhos de
+limites seguem o domínio (inteiro, moeda, data). Falta de URL/credencial é pendência
+de acesso e não impede casos lógicos para comportamentos claros.
+
+### Skills, revisões, orçamento e recuperação
+
+O backend seleciona tarefas permitidas explicitamente: `test-designer` com
+`create-test-plan` no planejamento e `create-test-cases` nos casos. Somente uma skill
+é carregada. `artifact-curator/curate-artifacts` e
+`output-validator/validate-output` completam a lista fechada. Não há caminho
+arbitrário, configuração nova de modelo, ferramentas de navegador ou histórico
+compartilhado; cada produção e validação abre sessão Pi independente.
+
+Saídas registram `phase: case_design`, `producer: test-designer`, revisão crescente,
+ID estável nas correções, `answerRefs` e dependências exatas de **curadoria e plano**.
+Casos correspondentes conservam IDs quando apenas corrigidos. Dependências são
+reconferidas antes de salvar a saída e antes de disponibilizá-la como validada.
+Parecer se vincula ao ID/revisão; o validador emite e o coordenador aplica.
+
+| Parecer/evento | Resultado |
+| --- | --- |
+| `approved` | `awaiting_approval/case_design`, conjunto validado consultável, ambiente liberado |
+| `changes_requested` | Nova revisão do mesmo conjunto, com saída anterior e achados para o designer |
+| `blocked` | `interrupted`, motivo apresentado, sem avanço |
+| Parecer inválido/erro técnico | Falha registrada e limites existentes; nunca aprovação por ausência |
+| Cancelamento | `cancelled`, aborta processamento; resposta tardia não publica casos nem restaura estado |
+| Reinício com trabalho pendente | `interrupted`, preserva revisões/pareceres confirmados, sem reinferência automática |
+
+Continuam três produções por saída/ciclo, duas tentativas técnicas de validação por
+revisão, 120 segundos por chamada e **45 minutos ativos acumulados por execução**.
+A entrada em casos conserva o tempo anterior e o histórico de chamadas; espera
+humana não consome tempo ativo. `PreparationCall.phase` aceita `case_design`.
+`WorkIntent` recebe `processingId` e termina com `completed`, `interrupted` ou
+`cancelled`, horário e motivo quando pertinente. O leitor aceita esses novos registros
+e os antigos `pending`/`interrupted` com `interruption: {reason: service_restart, at}`;
+o schema permanece `1`. Falhas não apagam intenções nem saídas confirmadas.
+
+### Projeção pública e página da execução
+
+A consulta acrescenta `canCreateCases: boolean` e `cases: null | {id, revision,
+current, dependsOn, answerRefs, payload: TestCasesPayload, validations}`. `current`
+indica se as dependências/respostas ainda correspondem às vigentes. Os pareceres do conjunto incluem situação,
+motivo e achados vinculados à revisão exata; registros privados não são repassados.
+`canCreateCases` reflete elegibilidade da execução; disponibilidade do ambiente é
+reconferida no POST. Progresso informa geração/validação dos casos.
+
+O site oferece **Gerar casos de teste**, polling existente durante `running`,
+lista expansível com dados, pré-condições, preparação, técnicas, expectativa,
+fontes, revisão e validação. Exibe **Casos lógicos — percurso ainda não mapeado.**
+Conteúdo aguardando parecer é provisório; interrupções mostram o motivo. Não há
+botão de aprovação dos casos neste recorte. Conta, origem e renderização como texto
+mantêm os controles existentes. Testes simulados e demonstração real estão
+separados em [evidencias/t6.1](../evidencias/t6.1/README.md).
 
 ## Mapeamento, dúvidas e execução
 
@@ -1377,11 +1503,11 @@ sem relatório. Cancelamento não dispara chamadas novas para produzir um relat�
 ## API mínima proposta
 
 Esta seção descreve o contrato completo proposto do produto. Estão disponíveis
-as rotas de T3.2, criação/histórico de T3.3, início/cancelamento de T4.1 e
-resposta/retomada da preparação de 24/09, nos limites documentados acima. A consulta
-individual entrega projeção de plano, progresso,
-motivo e perguntas, incluindo `plan: null` para rascunhos. As demais operações, inclusive `/continue`,
-aguardam a integração correspondente.
+as rotas de T3.2, criação/histórico de T3.3, início/cancelamento de T4.1,
+resposta/retomada da preparação de 24/09 e continuidade para casos de T6.1, nos
+limites documentados acima. A consulta individual entrega plano, casos, progresso,
+motivo e perguntas, incluindo `plan: null` e `cases: null` quando ausentes.
+As demais operações aguardam a integração correspondente.
 
 Cadastro e entrada permitem obter a sessão; saída a invalida. Todas as operações
 de execução abaixo exigem usuário autenticado, `X-Expected-User-Id` e conferência
@@ -1400,7 +1526,7 @@ internos nem segredos. Autenticação e cadastro seguem os RF do produto.
 | `POST /api/runs/:id/request-changes` | Registrar decisão sobre revisão exata e comentário; análise do pedido aguarda continuidade com recurso reservado |
 | `POST /api/runs/:id/answer` | Implementado para questão da revisão atual da curadoria; demais etapas aguardam integração |
 | `POST /api/runs/:id/resume` | Implementado para reprocessar preparação com respostas novas, reserva e orçamento acumulado |
-| `POST /api/runs/:id/continue` | Retomar trabalho autorizado/clarificado, se recurso disponível |
+| `POST /api/runs/:id/continue` | Implementado somente para gerar casos do plano validado e aprovado; recebe `{outputId, outputRevision}`, reserva e preserva orçamento |
 | `POST /api/runs/:id/finish-with-pending` | Após casos elegíveis, registrar encerramento das pendências e gerar relatório sujeito à validação |
 | `POST /api/runs/:id/cancel` | Cancelar preservando os dados existentes |
 | `POST /api/runs/:id/duplicate` | Criar novo rascunho com cópia explícita de entradas |
@@ -1410,8 +1536,8 @@ internos nem segredos. Autenticação e cadastro seguem os RF do produto.
 
 Upload e respostas de etapas posteriores à preparação aguardam integração. T4.1
 consulta progresso e o ajuste de 24/09 permite responder e retomar a preparação;
-aprovar já persiste a decisão humana sem iniciar casos;
-quando `/continue` existir, a interface poderá solicitar a continuidade depois.
+aprovar persiste a decisão humana sem iniciar casos; T6.1 permite solicitar
+a continuidade depois, pelo botão **Gerar casos de teste**.
 Se o recurso estiver ocupado, o usuário não deverá perder sua resposta ou
 aprovação. A revisão humana do plano mantém a espera após a decisão.
 

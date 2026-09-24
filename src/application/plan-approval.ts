@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { canResumePreparation, preparationAnswers } from './prepare-plan.js';
+import { canCreateCases, canResumePreparation, caseDependencies, preparationAnswers } from './prepare-plan.js';
+import type { TestCase } from '../domain/preparation.js';
 import {
   applyPlanApprovalCommand, type PlanApprovalCommand, type PlanApprovalErrorCode,
   type PlanApprovalState, type PlanDecision,
@@ -24,6 +25,12 @@ export type PlanReview = {
     startedAt: string | null; finishedAt: string | null };
   stopReason: { code: string; message: string } | null;
   canResume: boolean;
+  canCreateCases: boolean;
+  cases: { id: string; revision: number; current: boolean;
+    dependsOn: RunOutput['dependsOn']; answerRefs: NonNullable<RunOutput['answerRefs']>;
+    payload: { testCases: TestCase[] };
+    validations: (PlanApprovalState['validations'][number] & { reason: string;
+      findings: { code: string; message: string; location: string | null }[] })[] } | null;
   answers: PreparationAnswer[];
   curation: { id: string; revision: number; payload: ReturnType<typeof publicCuration>;
     validations: PlanApprovalState['validations'] } | null;
@@ -52,19 +59,19 @@ export function publicPlanDecisions(approvals: readonly PlanDecision[]): PlanDec
 }
 
 // O armazenamento preserva payloads extensíveis; a API publica somente o contrato.
+const object = (item: unknown): Record<string, unknown> => {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) throw new StorageError('INVALID_RECORD');
+  return item as Record<string, unknown>;
+};
+const text = (item: unknown): string => {
+  if (typeof item !== 'string') throw new StorageError('INVALID_RECORD');
+  return item;
+};
+const list = (item: unknown): unknown[] => {
+  if (!Array.isArray(item)) throw new StorageError('INVALID_RECORD');
+  return item;
+};
 function publicTestPlan(value: unknown) {
-  const object = (item: unknown): Record<string, unknown> => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) throw new StorageError('INVALID_RECORD');
-    return item as Record<string, unknown>;
-  };
-  const text = (item: unknown): string => {
-    if (typeof item !== 'string') throw new StorageError('INVALID_RECORD');
-    return item;
-  };
-  const list = (item: unknown): unknown[] => {
-    if (!Array.isArray(item)) throw new StorageError('INVALID_RECORD');
-    return item;
-  };
   const plan = object(value);
   return {
     objective: text(plan.objective),
@@ -92,6 +99,27 @@ const publicSources = (value: unknown) => Array.isArray(value) ? value.map(item 
   return { artifactId: String(source.artifactId ?? ''), locator: String(source.locator ?? ''), quote: String(source.quote ?? '') };
 }) : [];
 const publicIds = (value: unknown): string[] => Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+function publicTestCases(payload: Record<string, unknown>): TestCase[] {
+  const scalar = (value: unknown): string | number | boolean | null => {
+    if (value === null || typeof value === 'string' || typeof value === 'boolean' ||
+      typeof value === 'number' && Number.isFinite(value)) return value;
+    throw new StorageError('INVALID_RECORD');
+  };
+  return list(payload.testCases).map(raw => {
+    const item = object(raw);
+    if (item.pathId !== null) throw new StorageError('INVALID_RECORD');
+    return { id: text(item.id), requirementIds: list(item.requirementIds).map(text),
+      ruleIds: list(item.ruleIds).map(text), preconditions: list(item.preconditions).map(text), setup: text(item.setup), pathId: null,
+      data: Object.fromEntries(Object.entries(object(item.data)).map(([key, value]) => [key, scalar(value)])),
+      techniques: list(item.techniques).map(rawTechnique => {
+        const technique = object(rawTechnique);
+        return { name: text(technique.name), description: text(technique.description), values: list(technique.values).map(scalar) };
+      }), expected: text(item.expected), sources: list(item.sources).map(rawSource => {
+        const source = object(rawSource);
+        return { artifactId: text(source.artifactId), locator: text(source.locator), quote: text(source.quote) };
+      }) };
+  });
+}
 function publicQuestion(question: Record<string, unknown>) {
   return { id: String(question.id ?? ''), description: String(question.description ?? ''),
     requirementIds: publicIds(question.requirementIds), ruleIds: publicIds(question.ruleIds), caseIds: publicIds(question.caseIds),
@@ -138,6 +166,16 @@ export async function getPlanReview(
     }
     const plan = current(run.outputs, 'planning');
     const curation = current(run.outputs, 'curation');
+    const cases = current(run.outputs, 'case_design');
+    let currentCases = false;
+    if (cases && plan) {
+      try {
+        const dependencies = caseDependencies(run, { outputId: plan.id, outputRevision: plan.revision }, false);
+        currentCases = cases.dependsOn.length === 2 && [dependencies.curation, dependencies.plan].every(output =>
+          cases.dependsOn.some(ref => ref.outputId === output.id && ref.revision === output.revision)) &&
+          JSON.stringify(cases.answerRefs ?? []) === JSON.stringify(plan.answerRefs ?? []);
+      } catch { /* O histórico continua consultável, sem autorizar avanço. */ }
+    }
     const answers = preparationAnswers(run).map(answer => ({ id: answer.id, revision: answer.revision,
       outputId: answer.outputId, outputRevision: answer.outputRevision, questionId: answer.questionId,
       text: answer.text, artifactId: answer.artifactId, actorId: answer.actorId, at: answer.at }));
@@ -154,7 +192,16 @@ export async function getPlanReview(
       stopReason: run.preparation?.stopReason ? { code: run.preparation.stopReason.code, message: run.preparation.stopReason.message }
         : run.status === 'interrupted' && run.interruptions?.length ? { code: 'SERVICE_RESTART', message: 'O serviço reiniciou. O trabalho foi interrompido.' }
         : run.status === 'cancelled' ? { code: 'CANCELLED', message: 'Execução cancelada pelo usuário.' } : null,
-      canResume: canResumePreparation(run), answers,
+      canResume: canResumePreparation(run), canCreateCases: canCreateCases(run), answers,
+      cases: cases ? { id: cases.id, revision: cases.revision, current: currentCases,
+        dependsOn: cases.dependsOn.map(ref => ({ outputId: ref.outputId, revision: ref.revision })),
+        answerRefs: (cases.answerRefs ?? []).map(ref => ({ questionId: ref.questionId, revision: ref.revision,
+          ...(ref.answerId ? { answerId: ref.answerId } : {}) })), payload: { testCases: publicTestCases(cases.payload) },
+        validations: run.validations.filter(item => item.outputId === cases.id && item.outputRevision === cases.revision)
+          .map(item => ({ outputId: item.outputId, outputRevision: item.outputRevision,
+            validator: item.validator, status: item.status, reason: item.reason ?? '',
+            findings: (item.findings ?? []).map(finding => ({ code: finding.code, message: finding.message, location: finding.location })) })),
+      } : null,
       curation: curation ? { id: curation.id, revision: curation.revision,
         payload: publicCuration(curation.payload), validations: validations(curation) } : null,
       questions: run.questions.map(question => ({ ...publicQuestion(question),

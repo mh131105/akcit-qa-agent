@@ -5,9 +5,11 @@ import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager
 import type { AgentRole } from '../agents/registry.js';
 
 export type PreparationRole = 'artifact-curator' | 'test-designer' | 'output-validator';
+export type PreparationTask = 'curate-artifacts' | 'create-test-plan' | 'create-test-cases' | 'validate-output';
 export interface SpecialistModel { provider: string; model: string }
 export interface SpecialistTask {
   role: PreparationRole;
+  task: PreparationTask;
   model: SpecialistModel;
   authPath?: string;
   prompt: string;
@@ -24,17 +26,17 @@ export interface SpecialistResult {
 }
 export class SpecialistError extends Error {
   constructor(
-    readonly code: 'MODEL_UNAVAILABLE' | 'CREDENTIAL_UNAVAILABLE' | 'MODEL_ERROR' | 'INVALID_OUTPUT' | 'TIMEOUT' | 'CANCELLED',
+    readonly code: 'MODEL_UNAVAILABLE' | 'CREDENTIAL_UNAVAILABLE' | 'MODEL_ERROR' | 'INVALID_OUTPUT' | 'INVALID_TASK' | 'TIMEOUT' | 'CANCELLED',
     message: string,
     readonly metadata?: SpecialistResult['metadata'],
   ) { super(message); }
 }
 
 const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
-const skillNames: Record<PreparationRole, string> = {
-  'artifact-curator': 'curate-artifacts',
-  'test-designer': 'create-test-plan',
-  'output-validator': 'validate-output',
+const permittedTasks: Record<PreparationRole, readonly PreparationTask[]> = {
+  'artifact-curator': ['curate-artifacts'],
+  'test-designer': ['create-test-plan', 'create-test-cases'],
+  'output-validator': ['validate-output'],
 };
 
 function privateModelRuntime(authPath?: string, signal?: AbortSignal) {
@@ -85,8 +87,11 @@ export async function executeSpecialistTask(task: SpecialistTask): Promise<Speci
   let metadata: SpecialistResult['metadata'] = { ...task.model, durationMs: 0 };
   try {
     signal.throwIfAborted();
+    if (!Object.hasOwn(permittedTasks, task.role) || !permittedTasks[task.role].includes(task.task)) {
+      throw new SpecialistError('INVALID_TASK', 'A combinação de papel e tarefa não está autorizada.');
+    }
     const directory = join(projectRoot, 'agents', task.role);
-    const skill = await readFile(join(directory, 'skills', skillNames[task.role], 'SKILL.md'), { encoding: 'utf8', signal });
+    const skill = await readFile(join(directory, 'skills', task.task, 'SKILL.md'), { encoding: 'utf8', signal });
     const settingsManager = SettingsManager.inMemory({
       compaction: { enabled: false },
       retry: { enabled: false, maxRetries: 0, provider: { maxRetries: 0, timeoutMs: task.timeoutMs } },

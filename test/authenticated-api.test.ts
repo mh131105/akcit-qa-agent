@@ -8,6 +8,7 @@ import test, { type TestContext } from 'node:test';
 import { createApp } from '../src/app.js';
 import { readConfig } from '../src/config.js';
 import { RunStore, type RunRecord } from '../src/storage/runs.js';
+import type { PreparationOptions } from '../src/application/prepare-plan.js';
 
 // Somente preparo de testes: nenhuma fixture é carregada pela aplicação.
 const origin = 'http://localhost:3000';
@@ -44,12 +45,12 @@ function waiting(id: string, ownerId: string): RunRecord {
   };
 }
 
-async function harness(t: TestContext, env: NodeJS.ProcessEnv = {}) {
+async function harness(t: TestContext, env: NodeJS.ProcessEnv = {}, preparation: PreparationOptions = {}) {
   const dataDir = await fs.mkdtemp(join(tmpdir(), 'akcit-http-'));
   const config = readConfig({ DATA_DIR: dataDir, APP_ORIGIN: origin,
     PILOT_ALLOWED_EMAILS: ' ONE@example.test , two@example.test ', ...env });
   let time = Date.parse('2026-09-23T12:00:00Z');
-  let app = await createApp(config, { now: () => time });
+  let app = await createApp(config, { now: () => time, ...preparation });
   let base = '';
   async function listen() {
     app.listen(0, '127.0.0.1');
@@ -91,7 +92,7 @@ async function harness(t: TestContext, env: NodeJS.ProcessEnv = {}) {
   }
   return { dataDir, store, request, register, get base() { return base; },
     advance: (ms: number) => { time += ms; },
-    restart: async () => { await close(); app = await createApp(config, { now: () => time }); await listen(); },
+    restart: async () => { await close(); app = await createApp(config, { now: () => time, ...preparation }); await listen(); },
   };
 }
 function error(result: { status: number; body: any }, status: number, code: string) {
@@ -123,6 +124,7 @@ test('BUG-T2.1-01: consulta, decisões e logout exigem uma única identidade esp
     ['/api/runs/expected-user', undefined],
     ['/api/runs/expected-user/approve', reference],
     ['/api/runs/expected-user/request-changes', { ...reference, comment: '  Rever literalmente.  ' }],
+    ['/api/runs/expected-user/continue', reference],
     ['/api/auth/logout', {}],
   ] as const;
   for (const [path, body] of routes) {
@@ -151,7 +153,7 @@ test('BUG-T2.1-01: identidade divergente bloqueia consulta, decisões e logout a
   const reads = t.mock.method(RunStore.prototype, 'read');
   const updates = t.mock.method(RunStore.prototype, 'update');
   for (const id of ['account-a', 'account-b', 'missing']) {
-    for (const suffix of ['', '/approve', '/request-changes']) {
+    for (const suffix of ['', '/approve', '/request-changes', '/continue']) {
       const body = suffix ? { ...reference, ...(suffix.includes('changes') ? { comment: '  Conta A.  ' } : {}) } : undefined;
       const denied = await h.request(`/api/runs/${id}${suffix}`, body, other.cookie,
         { headers: { 'X-Expected-User-Id': owner.user.id } });
@@ -185,7 +187,7 @@ test('T3.2: cadastro, consulta própria, aprovação idempotente, logout e retor
   assert.deepEqual((await h.request('/api/auth/me', undefined, owner.cookie)).body, { user: owner.user });
   await h.store.create(waiting('run-own', owner.user.id));
   const review = await h.request('/api/runs/run-own', undefined, owner.cookie);
-  assert.deepEqual(Object.keys(review.body).sort(), ['id', 'name', 'applicationName', 'createdAt', 'status', 'phase', 'plan', 'curation', 'answers', 'canResume', 'approvals', 'progress', 'stopReason', 'questions'].sort());
+  assert.deepEqual(Object.keys(review.body).sort(), ['id', 'name', 'applicationName', 'createdAt', 'status', 'phase', 'plan', 'curation', 'cases', 'canCreateCases', 'answers', 'canResume', 'approvals', 'progress', 'stopReason', 'questions'].sort());
   assert.equal(review.body.plan.revision, 1);
   assert.equal(review.body.plan.payload.testPlan.objective, 'Verificar o exemplo.');
   assert.equal(review.body.plan.validations[0].status, 'approved');
@@ -224,7 +226,7 @@ test('T3.2: duas contas isoladas, comentário obrigatório e campos forjados rec
   const owner = await h.register();
   const other = await h.register(second as typeof account);
   await h.store.create(waiting('run-changes', owner.user.id));
-  for (const suffix of ['', '/approve', '/request-changes']) {
+  for (const suffix of ['', '/approve', '/request-changes', '/continue']) {
     const payload = suffix ? { ...reference, ...(suffix.includes('changes') ? { comment: 'Rever.' } : {}) } : undefined;
     const denied = await h.request(`/api/runs/run-changes${suffix}`, payload, other.cookie);
     const missing = await h.request(`/api/runs/missing${suffix}`, payload, other.cookie);
@@ -250,7 +252,76 @@ test('T3.2: duas contas isoladas, comentário obrigatório e campos forjados rec
   assert.deepEqual(saved.workIntents, []);
   assert.equal(saved.run.approvals.at(-1)!.actorId, owner.user.id);
   assert.deepEqual((await h.request('/api/runs/run-changes', undefined, owner.cookie)).body.approvals, result.body.approvals);
-  error(await h.request('/api/runs/run-changes/continue', reference, owner.cookie), 404, 'NOT_FOUND');
+  error(await h.request('/api/runs/run-changes/continue', reference, owner.cookie), 409, 'INVALID_STATE');
+});
+
+test('T6.1: continue exige autorização e revisão exata, recusa campos forjados e repete sem duplicar', async t => {
+  const original = 'US-01: Reservar itens. CA-01: Aceitar quantidades inteiras de 1 a 10 e rejeitar as demais.';
+  const calls: string[] = [];
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const h = await harness(t, { PI_PROVIDER: 'test-provider', PI_MODEL: 'test-model' }, {
+    modelPreflight: async () => {},
+    modelCall: async task => {
+      calls.push(task.task);
+      const input = JSON.parse(task.prompt);
+      const sources = [{ artifactId: input.artifacts[0].id, locator: 'L1', quote: original }];
+      if (task.task === 'create-test-cases') await gate;
+      const payload = task.role === 'artifact-curator' ? { requirements: [{ id: 'US-01', statement: 'Reservar itens.', sources,
+        rules: [{ id: 'CA-01', statement: 'Aceitar inteiros de 1 a 10 e rejeitar os demais.', sources }] }], questions: [] }
+        : task.task === 'create-test-plan' ? { testPlan: { objective: 'Conferir quantidades.', requirementIds: ['US-01'], ruleIds: ['CA-01'],
+          priorities: [{ ruleId: 'CA-01', reason: 'Faixa documentada.' }], exclusions: [], approach: ['Limites inteiros.'], preconditions: [], sources } }
+        : task.task === 'create-test-cases' ? { testCases: [{ id: 'CT-01', requirementIds: ['US-01'], ruleIds: ['CA-01'],
+          preconditions: [], setup: 'Preparar quantidade 1.', pathId: null, data: { quantidade: 1 },
+          techniques: [{ name: 'AVL', description: 'Limite inferior inclusivo inteiro.', values: [1] }], expected: 'Aceitar a quantidade 1.', sources }] }
+        : { status: 'approved', reason: 'Escopo e fontes conferidos.', findings: [] };
+      return { payload, metadata: { provider: task.model.provider, model: task.model.model, durationMs: 1 } };
+    },
+  });
+  t.after(release);
+  const owner = await h.register(); const other = await h.register(second as typeof account);
+  const created = await h.request('/api/runs', { name: 'Casos pelo site', applicationName: 'Alvo controlado', text: original }, owner.cookie,
+    { headers: { 'Idempotency-Key': 'ad98b748-d193-471b-8e99-8e0b225f6c98' } });
+  assert.equal(created.status, 201);
+  const id = created.body.id; const endpoint = `/api/runs/${id}`;
+  assert.equal((await h.request(`${endpoint}/start`, {}, owner.cookie)).status, 202);
+  const completed = async () => {
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const run = (await h.store.read(id)).run;
+      if (run.status !== 'running') return run;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.fail('O processamento simulado não terminou.');
+  };
+  const planned = await completed(); assert.equal(planned.phase, 'planning'); assert.equal(planned.status, 'awaiting_approval');
+  const plan = planned.outputs.find(output => output.phase === 'planning')!;
+  const body = { outputId: plan.id, outputRevision: plan.revision };
+  const snapshot = await fs.readFile(join(h.dataDir, `runs/${id}.json`), 'utf8');
+  error(await h.request(`${endpoint}/continue`, body, other.cookie), 404, 'RUN_NOT_FOUND');
+  error(await h.request(`${endpoint}/continue`, body, owner.cookie), 409, 'DECISION_MISSING');
+  error(await h.request(`${endpoint}/continue`, { ...body, outputRevision: 2 }, owner.cookie), 409, 'STALE_VERSION');
+  error(await h.request(`${endpoint}/continue`, body, owner.cookie, { headers: { Origin: 'https://other.example.test' } }), 403, 'ORIGIN_REJECTED');
+  for (const field of ['resourceReserved', 'userId', 'model', 'skillPath', 'approval']) {
+    error(await h.request(`${endpoint}/continue`, { ...body, [field]: true }, owner.cookie), 400, 'INVALID_INPUT');
+  }
+  for (const outputRevision of [0, '1', 1.5, null]) error(await h.request(`${endpoint}/continue`, { ...body, outputRevision }, owner.cookie), 400, 'INVALID_INPUT');
+  error(await h.request(`${endpoint}/continue?resourceReserved=true`, body, owner.cookie), 400, 'INVALID_INPUT');
+  assert.equal(await fs.readFile(join(h.dataDir, `runs/${id}.json`), 'utf8'), snapshot);
+  assert.equal(calls.length, 4);
+  assert.equal((await h.request(`${endpoint}/approve`, body, owner.cookie)).status, 200);
+  assert.equal(calls.length, 4, 'Aprovar não inicia inferência.');
+  assert.equal((await h.request(endpoint, undefined, owner.cookie)).body.canCreateCases, true);
+  const accepted = await Promise.all([1, 2].map(() => h.request(`${endpoint}/continue`, body, owner.cookie)));
+  assert.deepEqual(accepted.map(value => value.status).sort(), [200, 202]);
+  assert.ok(accepted.every(value => value.body.phase === 'case_design' && value.body.status === 'running'));
+  assert.equal((await h.store.read(id)).workIntents.filter(intent => intent.type === 'create_cases').length, 1);
+  release();
+  const generated = await completed(); assert.equal(generated.status, 'awaiting_approval'); assert.equal(generated.phase, 'case_design');
+  assert.deepEqual(calls.slice(4), ['create-test-cases', 'validate-output']);
+  const repeated = await h.request(`${endpoint}/continue`, body, owner.cookie);
+  assert.equal(repeated.status, 200); assert.equal(repeated.body.cases.revision, 1);
+  assert.equal(repeated.body.cases.validations[0].status, 'approved'); assert.equal(repeated.body.canCreateCases, false);
+  assert.equal(calls.length, 6);
 });
 
 test('T3.2: origem, conteúdo, JSON, tamanho em partes e sessão têm respostas controladas', async t => {

@@ -511,7 +511,8 @@ Testes com respostas programadas não atendem CA-12 nem a definição de pronto.
    percurso foi fornecido; não deve haver navegação presumida ou casos detalhados.
 5. A pessoa revisora aprova pelo botão **Aprovar plano**. Reconsultar e confirmar
    autor, horário e revisão da decisão, mantendo `awaiting_approval/planning`.
-   Recarregar não perde a decisão; não iniciar `/continue` ou criação de casos.
+   Recarregar não perde a decisão. Esse roteiro histórico de T4.1 termina aqui;
+   para continuar na versão atual, siga [T6.1](#gerar-e-consultar-casos-lógicos--t61).
 6. Preencher [evidencias/t4.1](evidencias/t4.1/README.md) com os dados sintéticos,
    revisões/pareceres, avaliação assinada pela frente C, duração e consumo
    disponível. Custo por API do Pi deve ser identificado como estimativa; com
@@ -549,7 +550,7 @@ const original = run.outputs.filter(item => item.phase === 'curation').at(-1);
 if (!original) throw new Error('Curadoria real ausente.');
 const altered = parseCuration(JSON.parse(await readFile(process.env.QA_NEGATIVE_PAYLOAD, 'utf8')), run.artifacts);
 const output = { ...original, id: randomUUID(), revision: 1, createdAt: new Date().toISOString(), payload: altered };
-const result = await executeSpecialistTask({ role: 'output-validator',
+const result = await executeSpecialistTask({ role: 'output-validator', task: 'validate-output',
   model: models['output-validator'], signal: new AbortController().signal, timeoutMs: 120000,
   ...(config.piAuthPath ? { authPath: config.piAuthPath } : {}),
   prompt: JSON.stringify({ task: 'validation', artifacts: run.artifacts,
@@ -582,7 +583,8 @@ cada ciclo, duas tentativas técnicas do validador por revisão e 120 segundos p
 chamada. Os **45 minutos ativos são cumulativos na execução**, sem espera humana.
 Perguntas podem bloquear apenas uma regra da mesma história; o restante
 independente continua. Sem trabalho elegível, a execução aguarda informação e
-libera o ambiente. Criação de casos, navegador e relatório permanecem pendentes.
+libera o ambiente. Casos estão disponíveis pelo roteiro T6.1 abaixo; navegador e
+relatório permanecem pendentes.
 Os comandos de container e o fluxo de publicação anteriores continuam aplicáveis.
 
 ### Responder e retomar a preparação
@@ -612,12 +614,95 @@ mesmos IDs e revisões crescentes. Não zera os 45 minutos acumulados; esgotado 
 limite, a retomada é recusada. O estado persistido informa o motivo.
 
 Não há requisito de Gherkin: faltando esse formato, os agentes trabalham com o
-comportamento descrito. Cenários novos pertencem à etapa futura de casos. Não há
+comportamento descrito. Cenários novos são gerados na etapa T6.1 de casos. Não há
 upload, parser completo de `.feature` nem executor Cucumber neste ajuste.
 A avaliação das skills e seus limites estão em
 [ajuste de entradas](evidencias/ajuste-entradas/README.md); a demonstração limpa
 anterior de [T4.1](evidencias/t4.1/README.md) permanece como registro histórico,
 sem comprovar por si só a versão atual das skills.
+
+## Gerar e consultar casos lógicos — T6.1
+
+Reutilize Node 24, pares `PI_PROVIDER`/`PI_MODEL` e substituições `PI_PLANNER_*` e
+`PI_VALIDATOR_*` já configurados. Não há dependência, serviço, fila, credencial ou
+modelo adicional. `test-designer` usa `create-test-plan` para o plano e
+`create-test-cases` para os casos, escolhido internamente pelo backend. Cada tarefa
+e validação abre sessão própria, sem ferramentas de navegador.
+
+1. No detalhe da execução, confira curadoria e plano atuais aprovados pelo
+   validador. Compare o plano com os originais e aprove a revisão exata. Essa
+   decisão permanece salva sem iniciar inferência.
+2. Clique em **Gerar casos de teste**. A interface envia somente `{outputId,
+   outputRevision}` para `POST /api/runs/:id/continue`, com os controles existentes
+   de sessão, `Origin` e identidade esperada. Primeiro aceite retorna `202`;
+   repetição consulta o mesmo trabalho (`200`). Ambiente ocupado preserva a
+   aprovação e permite tentar novamente; versão antiga exige reconsulta.
+3. Acompanhe geração e validação no progresso. O conjunto exibido antes do parecer
+   é **provisório**. Correções produzem nova revisão, conservando histórico e ID.
+4. Expanda os casos para consultar referências, pré-condições, preparação, dados,
+   técnicas, expectativa e fontes. Confira o aviso **Casos lógicos — percurso ainda
+   não mapeado.** Não houve acesso à aplicação nem execução dos casos.
+5. Após parecer `approved`, o estado é `awaiting_approval/case_design`. Recarregue
+   para conferir persistência, revisão e parecer. Nesta entrega, os casos ficam
+   disponíveis para revisão: **aprovação dos casos e navegação serão implementadas
+   depois**. Não há botão que prometa essa operação.
+
+O plano e sua curadoria precisam continuar vigentes, validados e com os originais
+preservados. Respostas novas invalidam as revisões anteriores; refaça a preparação
+e a aprovação antes de solicitar casos. Pedido de alteração no plano não inicia
+casos; `analyze_feedback` permanece fora do recorte. Falta de URL/credenciais do
+alvo não impede elaborar comportamentos lógicos claros.
+
+### Interrupções e limites dos casos
+
+O máximo é 30 casos, três produções por saída/ciclo, duas tentativas técnicas do
+validador por revisão e 120 s por chamada. Lista maior que 30 interrompe com pedido
+de redução de escopo; nada é truncado. Os **45 minutos ativos da execução incluem
+o tempo já usado em curadoria/plano**. Espera humana libera a reserva e não consome
+esse tempo. Não há reinício automático de orçamento ou chamadas após falha.
+
+Bloqueio e esgotamento apresentam motivo; parecer ausente ou inválido não aprova.
+Cancelar aborta o processamento e conserva o que já foi confirmado. Resposta tardia
+não publica casos nem restaura a execução cancelada. Reinício marca trabalho e
+intenções pendentes como interrompidos, preserva histórico e não reinfere. Não edite
+JSON persistido para forçar retomada ou aprovação. As intenções `create_cases`
+conservam o vínculo do processamento e seu encerramento (`completed`, `interrupted`
+ou `cancelled`). O regime de um escritor por ambiente continua aplicável.
+
+### Verificação e demonstração controlada
+
+Execute na raiz, com Node 24 no `PATH`:
+
+```sh
+npm run check
+npm test
+npm run build
+CHROMIUM_PATH='<executável Chromium local>' npm run smoke:web
+```
+
+Use o procedimento de [smoke web](#jornada-pelo-navegador--t21) para o executável do
+ambiente. O smoke agora percorre aprovação do plano → geração → progresso →
+consulta de casos persistidos com respostas **simuladas**. Não faz chamada paga e
+não comprova qualidade semântica do modelo.
+
+Para inferência real, use as duas entradas públicas em
+[evidencias/t6.1](evidencias/t6.1/README.md), em execuções separadas, e escreva/registre
+as expectativas antes das chamadas. Cole somente a entrada, com objetivo vazio;
+mantenha gabarito, resultados simulados e descrições de navegação fora do contexto.
+Avalie depois as saídas da prosa e do Gherkin contra as fontes, incluindo dados e
+justificativas de técnicas. Registre modelos, commit, revisões, pareceres e consumo
+disponível. Identifique qualquer aprovação automatizada usada no ensaio; ela não
+comprova revisão humana da frente C.
+
+Faça ainda um ensaio independente do validador: copie o payload real de casos e
+inverta uma expectativa material. Preserve os originais, respostas/fontes,
+curadoria, plano e a revisão exata da cópia; use `role: output-validator`,
+`task: validate-output`, a configuração existente e contexto completo da etapa.
+O parser estrutural deve aceitar a cópia antes da chamada. Não envie a explicação
+do defeito ao modelo. Registre o parecer efetivo, mesmo se aprovar indevidamente;
+o ensaio não modifica o conjunto persistido da execução. Sanitização exclui
+credenciais, cookies, contas, caminhos privados e sessões. Avaliação por agente e
+inferência real devem ser distinguidas de revisão humana e testes simulados.
 
 ## Referências
 

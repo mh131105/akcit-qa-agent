@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  eligibleRequirements, InvalidPreparationOutput, parseCuration, parsePlan, parseVerdict,
-  type CurationPayload, type PlanPayload,
+  eligibleRequirements, InvalidPreparationOutput, parseCuration, parsePlan, parseTestCases, parseVerdict,
+  type CurationPayload, type PlanPayload, type TestCasesPayload,
 } from '../src/domain/preparation.js';
 
 const artifacts = [{ id: 'artifact-1', name: 'Sintético', version: '1', text:
@@ -25,6 +25,14 @@ const plan = (): PlanPayload => ({ testPlan: {
   approach: ['Partições e valores limite conforme CA-01; comentário ausente e presente conforme CA-02'],
   preconditions: ['Acesso autenticado antes da execução'], sources: [source(1), source(2), source(3)],
 } });
+const cases = (): TestCasesPayload => ({ testCases: [{
+  id: 'CASE-01', requirementIds: ['US-01'], ruleIds: ['CA-01', 'CA-02'],
+  preconditions: [], setup: 'Preparar uma reserva antes da execução; acesso ainda pendente.', pathId: null,
+  data: { quantity: 1, comment: '' }, techniques: [
+    { name: 'PCE', description: 'CA-01: inteiro válido entre 1 e 10; CA-02: comentário vazio.', values: [1, ''] },
+    { name: 'AVL', description: 'CA-01: limite inferior inclusivo no domínio inteiro.', values: [1] },
+  ], expected: 'A quantidade 1 está no intervalo permitido e comentário não é obrigatório.', sources: [source(2), source(3)],
+}] });
 
 test('preparação confere citações e referências, mantendo requisitos independentes elegíveis', () => {
   const parsed = parseCuration(curation(), artifacts);
@@ -140,4 +148,76 @@ test('exemplos recebidos preservam condições e ordem sem serem confundidos com
   const invalidOptional = structuredClone(input);
   Object.assign(invalidOptional.requirements[0]!.rules[0]!, { examples: null });
   assert.throws(() => parseCuration(invalidOptional, [exampleArtifact]), InvalidPreparationOutput);
+});
+
+test('casos lógicos aceitam dados concretos e técnica adequada sem exigir PCE ou AVL', () => {
+  assert.deepEqual(parseTestCases(cases(), artifacts, curation(), plan()), cases());
+  const condition = cases();
+  condition.testCases[0]!.techniques = [{ name: 'Condição opcional', description: 'Exercitar comentário não informado, conforme CA-02.', values: [] }];
+  condition.testCases[0]!.data = { comment: null, enabled: false, label: '' };
+  assert.deepEqual(parseTestCases(condition, artifacts, curation(), plan()), condition);
+  // O parser não substitui o validador: a interpretação da expectativa é semântica.
+  condition.testCases[0]!.expected = 'Comentário obrigatório.';
+  assert.equal(parseTestCases(condition, artifacts, curation(), plan()).testCases[0]!.expected, 'Comentário obrigatório.');
+});
+
+test('casos rejeitam referências inexistentes, incompatíveis e fora do plano', () => {
+  const unknown = cases();
+  unknown.testCases[0]!.ruleIds.push('CA-missing');
+  assert.throws(() => parseTestCases(unknown, artifacts, curation(), plan()), InvalidPreparationOutput);
+  const expandedCuration = curation();
+  expandedCuration.requirements[1]!.rules = [{ id: 'CA-03', statement: 'Exportar reservas.', sources: [source(4)] }];
+  expandedCuration.questions = [];
+  const expandedPlan = plan();
+  expandedPlan.testPlan.requirementIds.push('US-02');
+  expandedPlan.testPlan.ruleIds.push('CA-03');
+  const incompatible = cases();
+  incompatible.testCases[0]!.ruleIds.push('CA-03');
+  assert.throws(() => parseTestCases(incompatible, artifacts, expandedCuration, expandedPlan), InvalidPreparationOutput);
+  incompatible.testCases[0]!.requirementIds.push('US-02');
+  assert.deepEqual(parseTestCases(incompatible, artifacts, expandedCuration, expandedPlan), incompatible);
+  assert.throws(() => parseTestCases(incompatible, artifacts, expandedCuration, plan()), InvalidPreparationOutput);
+  const unrelatedRequirement = cases();
+  unrelatedRequirement.testCases[0]!.requirementIds.push('US-02');
+  assert.throws(() => parseTestCases(unrelatedRequirement, artifacts, expandedCuration, expandedPlan), InvalidPreparationOutput);
+});
+
+test('casos exigem fontes literais válidas, pathId null e campos exclusivamente do contrato', () => {
+  for (const change of [
+    (item: Record<string, unknown>) => { item.pathId = 'path-observed'; },
+    (item: Record<string, unknown>) => { item.revision = 1; },
+    (item: Record<string, unknown>) => { item.setup = []; },
+    (item: Record<string, unknown>) => { item.data = { quantity: { value: 1 } }; },
+    (item: Record<string, unknown>) => { item.data = { quantity: Infinity }; },
+    (item: Record<string, unknown>) => { item.techniques = [{ name: 'PCE', description: 'Classe válida', values: [1], verified: true }]; },
+    (item: Record<string, unknown>) => { item.sources = [{ ...source(2), quote: 'Quantidade de 1 a 11' }]; },
+    (item: Record<string, unknown>) => { item.sources = [{ ...source(2), artifactId: 'absent' }]; },
+    (item: Record<string, unknown>) => { item.sources = [{ ...source(2), locator: 'L3' }]; },
+    (item: Record<string, unknown>) => { item.sources = []; },
+  ]) {
+    const changed = cases();
+    change(changed.testCases[0]!);
+    assert.throws(() => parseTestCases(changed, artifacts, curation(), plan()), InvalidPreparationOutput);
+  }
+  assert.throws(() => parseTestCases({ ...cases(), outputId: 'forbidden' }, artifacts, curation(), plan()), InvalidPreparationOutput);
+});
+
+test('casos não omitem regras planejadas, não duplicam IDs e não truncam acima do limite', () => {
+  const omitted = cases();
+  omitted.testCases[0]!.ruleIds = ['CA-01'];
+  assert.throws(() => parseTestCases(omitted, artifacts, curation(), plan()), InvalidPreparationOutput);
+  const duplicate = cases();
+  duplicate.testCases.push(structuredClone(duplicate.testCases[0]!));
+  assert.throws(() => parseTestCases(duplicate, artifacts, curation(), plan()), InvalidPreparationOutput);
+  assert.throws(() => parseTestCases({ testCases: [] }, artifacts, curation(), plan()), InvalidPreparationOutput);
+  const boundary = { testCases: Array.from({ length: 30 }, (_, index) => ({ ...cases().testCases[0]!, id: `CASE-${index}` })) };
+  assert.equal(parseTestCases(boundary, artifacts, curation(), plan()).testCases.length, 30);
+  const excess = { testCases: Array.from({ length: 40 }, (_, index) => ({ ...cases().testCases[0]!, id: `CASE-${index}` })) };
+  assert.throws(() => parseTestCases(excess, artifacts, curation(), plan()), (error: unknown) => {
+    assert.ok(error instanceof InvalidPreparationOutput);
+    assert.equal(error.code, 'CASE_LIMIT');
+    assert.match(error.message, /Reduza o escopo/);
+    return true;
+  });
+  assert.equal(excess.testCases.length, 40);
 });
