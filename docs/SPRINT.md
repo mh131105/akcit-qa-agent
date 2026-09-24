@@ -189,9 +189,9 @@ branch `feat/web-intake-review`, criada de `origin/develop` atualizado contendo
 `d5e4cf2`. Dependências atendidas: T3.2 e T3.3, integradas pelos
 [PRs #19](https://github.com/mh131105/akcit-qa-agent/pull/19) e
 [#20](https://github.com/mh131105/akcit-qa-agent/pull/20).
-Entrega: [PR #21](https://github.com/mh131105/akcit-qa-agent/pull/21), aberto para
-`develop`; revisão pela frente B e integração ainda pendentes. O PR referencia
-T2 #5 sem encerrá-la automaticamente.
+Entrega: [PR #21](https://github.com/mh131105/akcit-qa-agent/pull/21), **integrado
+em `develop`**, merge `04f8b01`. T2.1 e a correção abaixo estão integradas;
+T2 #5 permanece aberta.
 
 Como participante do piloto, quero entrar no site, salvar minhas histórias de
 usuário e critérios de aceite, reencontrar a execução e revisar seu plano quando
@@ -259,20 +259,64 @@ de publicação passaram. A imagem final local, com Node.js 24.21.0 e Chromium
 web**, incluindo os três cenários de regressão, com API e persistência reais,
 sem modelo pago. [Evidências e limites](evidencias/t2.1/README.md).
 
-**T2.1 permanece pendente de nova revisão da frente B e merge em `develop`.**
-A CI deve aprovar o commit enviado; os resultados locais e a revisão técnica da
-correção não substituem a revisão da frente B. **T2 #5 permanece aberta.**
+**T2.1 e BUG-T2.1-01 foram integradas pelo PR #21, merge `04f8b01`.**
+O merge é a base de T4.1; os resultados acima descrevem a entrega anterior.
+**T2 #5 permanece aberta.**
 Design definitivo e implementação de agentes estão fora deste card.
 
 **T2 continua aberta.** Upload, edição, exclusão, duplicação, board de US/CA,
-perguntas, início dos agentes, curadoria, geração do plano, casos e relatório
-permanecem nas tarefas correspondentes. T2.1 implementa entrada textual e
+resposta/retomada de perguntas, casos e relatório permanecem nas tarefas
+correspondentes. T4.1 acrescenta preparação e exibição de pendências; T2.1 implementa entrada textual e
 operações disponíveis; não conclui as sete vistas nem a aceitação completa do
 produto. Não há credenciais, sessões ou documentos privados versionados.
 
 Não criar um produto completo para servir de alvo: telas simples com dados
 restauráveis bastam. O agente recebe requisitos e acesso; o código e o gabarito dos
 defeitos ficam fora de seu contexto.
+
+### T4.1 · Preparar um plano real com curadoria e validação independente
+
+História de usuário, prioridade alta. Responsável: frente B; revisão de metodologia
+pela frente C e integração por outro desenvolvedor. Recorte de
+[T4 #7](https://github.com/mh131105/akcit-qa-agent/issues/7),
+[T5 #8](https://github.com/mh131105/akcit-qa-agent/issues/8),
+[T6 #9](https://github.com/mh131105/akcit-qa-agent/issues/9) e
+[T10 #14](https://github.com/mh131105/akcit-qa-agent/issues/14), sem encerrá-las.
+Branch `feat/prepare-validated-plan`, a partir de `origin/develop` contendo
+`04f8b01`. **Implementação em revisão; entrega não concluída.**
+
+O site permite salvar rascunho, preparar plano, acompanhar fase/papel e cancelar.
+O coordenador persiste trabalho/orçamento antes do aceite HTTP, executa curador,
+validador, planejador e validador, com sessões Pi independentes, revisões limitadas,
+originais e fontes literais. Só a revisão vigente aprovada pelo validador chega
+aos controles humanos existentes. Repetição, ambiente ocupado, perguntas
+localizadas, timeout, cancelamento e recuperação preservam registros e limites.
+Não há chamada extra de modelo para encaminhar as etapas, fallback de modelo ou
+ferramentas de terminal/navegador nesses especialistas.
+
+Cobertura pretendida: CA-01 a CA-12 do card; RF-02, RF-08, RF-09, RF-13, RF-14
+e partes de RF-15/RF-16; RN-01, RN-02, RN-05, RN-06, RN-08, RN-12 e RN-15;
+RNF-04, RNF-06, RNF-07, RNF-08 e RNF-10. Os testes automáticos substituem a chamada
+de modelo e não comprovam CA-12. Código `be5aad2`: check/build aprovados,
+**84/84 testes** (59 anteriores preservados), seis testes operacionais e ambos os
+smokes aprovados no container final. O smoke web passou em 24 verificações com
+Node.js 24.21.0 e Chromium 153.0.8010.52. Resultados e limites estão em
+[evidencias/t4.1](evidencias/t4.1/README.md).
+
+**Dependência aberta em T0 #3:** o responsável ainda precisa disponibilizar
+credencial real, confirmar provedor/modelos e orçamento no ambiente privado.
+Nenhuma inferência paga foi executada nesta implementação. A demonstração real
+com o artefato sintético, as duas validações e aprovação pelo site permanece
+pendente, assim como avaliação humana da frente C de limites, comentário
+opcional, fontes/cobertura e ensaio do validador com saída deliberadamente errada.
+O gabarito humano fica fora do contexto do agente. Revisão de integração, PR
+aprovado e merge em `develop` também são necessários para a definição de pronto.
+
+Limite do recorte: termina na revisão humana do plano; `/continue`, criação de
+casos, mapeamento, navegação, execução, vídeos, relatório, upload e `/answer`
+permanecem nas tarefas correspondentes. A decisão humana não dispara casos.
+Contratos em [CONTRATOS.md](requisitos/CONTRATOS.md#preparação-do-plano-com-especialistas--t41);
+configuração e roteiro real em [OPERACAO.md](OPERACAO.md#modelos-e-preparação-do-plano--t41).
 
 ## Marcos propostos a partir de agora
 

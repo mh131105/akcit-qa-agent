@@ -1015,8 +1015,163 @@ por IA. Capturas de desktop e celular são sintéticas. A reprodução está em
 Cobertura parcial: RF-01, RF-08, RF-10, RF-11, RF-13 e RF-14; RN-05 e RN-06;
 RNF-01, RNF-02, RNF-04 e RNF-06. Upload, edição de conta/execução, exclusão,
 duplicação, board de US/CA, perguntas, início dos agentes, curadoria, geração do
-plano, casos e relatório permanecem nas tarefas correspondentes. Este recorte
+plano, casos e relatório não fazem parte de T2.1. T4.1 abaixo acrescenta preparação
+e consulta de perguntas; resposta/retomada, casos e relatório continuam pendentes. Este recorte
 não encerra T2 nem comprova os cenários completos de aceitação do produto.
+
+## Preparação do plano com especialistas — T4.1
+
+Recorte implementado de T4 #7, T5 #8, T6 #9 e T10 #14: rascunho textual →
+curadoria → validação independente → plano → validação independente → revisão
+humana existente. A integração usa Pi **0.87.0**. A demonstração com inferência
+real e a avaliação humana da frente C ainda dependem de credencial em T0; o estado
+da verificação está em [evidencias/t4.1](../evidencias/t4.1/README.md).
+
+### Início, repetição e cancelamento
+
+Ambas as operações exigem sessão, `Origin` exata, um único `X-Expected-User-Id`
+conferido contra a sessão e propriedade da execução. Recebem somente `{}`, com
+`Content-Type: application/json`, sem parâmetros de consulta. Não recebem modelo,
+credencial, limites, produtor, estado ou opção de simulação pelo cliente.
+
+| Operação | Resposta e efeito |
+| --- | --- |
+| `POST /api/runs/:id/start` | Primeiro aceite: `202` com a projeção pública da execução. Persiste processamento, orçamento e `running/curation` antes de despachar; HTTP não aguarda os modelos |
+| Repetição de `/start` já aceito | `200`, projeção do mesmo processamento, inclusive após cancelamento, erro ou interrupção; nenhum novo orçamento ou chamada |
+| `POST /api/runs/:id/cancel` | `200`, cancelamento persistido. Aceita `draft`, `running`, `awaiting_input` e `awaiting_approval`; repetir `cancelled` é idempotente |
+
+Antes do primeiro aceite, o coordenador confere `draft/intake`, ausência de saídas
+e orçamento anterior, originais textuais preservados e suas referências; resolve
+os três pares provedor/modelo e confere catálogo/credencial. Obtém reserva exclusiva
+do ambiente, reconfere estado sob `RunStore.update()` e persiste o início. Há um
+coordenador compartilhado por aplicação e um processo escritor por ambiente, sem
+fila. Chamadas aos modelos ocorrem fora da trava de armazenamento.
+
+| Recusa | HTTP / código |
+| --- | --- |
+| Outra preparação ocupa o ambiente | `409 / RESOURCE_UNAVAILABLE`; rascunho intacto |
+| Par padrão ausente ou substituição incompleta | `503 / MODEL_NOT_CONFIGURED`; sem início |
+| Modelo não existe no catálogo | `503 / MODEL_UNAVAILABLE`; sem fallback |
+| Credencial não está disponível no ambiente privado | `503 / CREDENTIAL_UNAVAILABLE`; sem início |
+| Estado não permite primeiro início/cancelamento | `409 / INVALID_STATE` |
+| Material original inválido | `400 / INVALID_INPUT` |
+| Execução ausente ou de outra conta | `404 / RUN_NOT_FOUND` |
+
+Erros de sessão, identidade esperada, origem, JSON e armazenamento mantêm os
+controles existentes. A API devolve mensagens sanitizadas; exceções brutas do Pi
+ou provedor não são expostas. Cancelar persiste primeiro, impede novas chamadas e
+aciona `session.abort()` na sessão ativa. Respostas tardias podem completar seu
+registro técnico, mas não salvam saída nem avançam a execução. A reserva só é
+liberada depois do encerramento da tarefa. Um cancelamento não desfaz registros.
+
+### Conteúdo dos especialistas e fontes
+
+Cada tarefa/tentativa usa sessão Pi nova, skill explícita do arquivo do papel,
+originais da execução e nenhuma conversa de outro produtor ou execução. Terminal,
+escrita, navegador, extensões, repetição automática e compactação do SDK ficam
+desabilitados. A sequência das quatro tarefas é código; a qualidade é julgada pelo
+`output-validator`, sem chamada adicional para escolher a próxima etapa.
+
+| Produtor | Conteúdo JSON aceito |
+| --- | --- |
+| `artifact-curator` | `{requirements: [{id, statement, rules: [{id, statement, sources}], sources}], questions: [{id, description, requirementIds, caseIds: [], blocking, sources}]}` |
+| `test-designer` | `{testPlan: {objective, requirementIds, ruleIds, priorities: [{ruleId, reason}], exclusions: [{description, reason}], approach: string[], preconditions: string[], sources}}` |
+| `output-validator` | `{status: approved \| changes_requested \| blocked, findings: [{code, message, location: string \| null}], reason}` |
+
+O backend recusa campos extras, inclusive metadados de saída definidos pelo modelo.
+IDs têm até 128 caracteres, começam por letra/número e usam letras, números,
+`_`, `.`, `:`, `-`. Requisitos, critérios e perguntas têm IDs únicos na curadoria;
+referências precisam existir. Há até dez US; excesso interrompe sem truncamento.
+Cada fonte exige `artifactId` existente, `locator` **`Lx` ou `Lx-Ly`**, com linhas
+do `artifact.text` contadas desde 1, e `quote` não vazio, literal, contido nas
+linhas indicadas. Cada requisito, critério, pergunta e plano precisa de fontes.
+O parser limita o JSON serializado a 200 mil caracteres, listas a 300 itens e
+textos individuais a 20 mil caracteres. Rejeição estrutural consome tentativa.
+
+Pergunta sempre identifica os requisitos afetados. Se não há US identificável,
+`requirements: []` exige pergunta bloqueante com `requirementIds: []` e fonte;
+uma US sem CA exige pergunta bloqueante localizada. Não se inventa US ou critério
+para preencher o contrato. Requisitos com CA e sem questão bloqueante são
+elegíveis; dúvidas em outros requisitos não impedem seu planejamento. O plano
+somente referencia requisitos elegíveis e critérios pertencentes a eles. Exclusões
+e pendências precisam aparecer com justificativa, conferida pelo validador.
+
+Curador preserva condições, valores, exceções e opcionalidade. Planejador recebe
+originais **e** a curadoria aprovada; não cria casos detalhados ou navegação
+presumida. O validador recebe a saída exata com ID/revisão e documentos pertinentes
+em sessão própria. Confere semântica, completude, fontes e cobertura. Justificativa
+é sempre obrigatória; correção/bloqueio exige achados. O backend registra falha
+técnica como `error`, não delega esse estado ao modelo. Validação estrutural não
+prova que um limite ou campo opcional foi preservado.
+
+### Persistência, limites e transições
+
+O backend define ID da saída, `producer`, `revision`, `createdAt`, `budgetCycleId`,
+`dependsOn` e `answerRefs`. Salva a revisão antes de validar, salva o parecer antes
+de avançar e mantém IDs/histórico nas correções. O plano depende exatamente de
+`{outputId, revision}` da curadoria vigente e aprovada, reconferida antes de salvar.
+As regras existentes de aprovação humana permanecem: somente plano e dependência
+vigentes, com um parecer de qualidade aprovado para cada revisão, autorizam a
+decisão. Aprovar registra a decisão e mantém a espera; `/continue` não é implementado.
+
+`run.preparation` registra `id`, `budgetCycleId`, `startedAt`, `finishedAt`,
+`activeRole`, `activity`, `stopReason`, `limits` e `calls`. Cada chamada registra
+`id`, `role`, `provider`, `model`, `phase`, `attempt`, `outputRevision`, `startedAt`,
+`status`; ao terminar, `finishedAt`, `durationMs` e `errorCode` quando pertinente.
+Consumo disponível usa `usage.{input,output,cacheRead,cacheWrite,totalTokens}`;
+`estimatedCost` é **estimativa do Pi**, não cobrança confirmada. Métricas ausentes
+são omitidas. Não se persistem raciocínio interno ou resposta bruta inválida.
+Pareceres acrescentam `id`, `at` e `attempt` aos vínculos/achados do contrato.
+Novos metadados são opcionais para compatibilidade com registros anteriores.
+
+O ciclo inicial é único: `reason: initial_preparation`, `answerRef: null`,
+`affectedCaseIds: []` e os limites aplicados. Até três tentativas de produção por
+saída, incluindo revisões e respostas inválidas; até duas tentativas técnicas do
+validador por revisão, incluindo a inicial; 120 segundos por chamada e 45 minutos
+de processamento ativo. Não se reinicia orçamento após erro. Parecer válido
+`changes_requested` retorna ao produtor; o coordenador não corrige o conteúdo.
+
+| Evento | Estado persistido |
+| --- | --- |
+| Início aceito | `running/curation` |
+| Curadoria aprovada com requisito elegível | `running/planning` |
+| Validação em andamento | Mantém a fase da saída; `activeRole: output-validator` |
+| Plano aprovado pelo validador | `awaiting_approval/planning`; libera ambiente |
+| Correção solicitada | Permanece na fase, nova revisão dentro do limite |
+| Material insuficiente sem independente elegível | `awaiting_input`, perguntas/motivo preservados |
+| Limite de US, revisões, tentativas inválidas de validação ou tempo ativo excedido | `interrupted`, motivo preservado |
+| Validador bloqueia saída com material elegível | `interrupted`, sem aprovação ou avanço |
+| Falha técnica sem recuperação, inclusive timeout após tentativas permitidas | `error`, motivo preservado |
+| Cancelamento confirmado | `cancelled`; nenhum novo trabalho |
+| Reinício durante `running` | `interrupted`, chamadas ativas interrompidas e `SERVICE_RESTART`; sem retomada automática |
+
+O timeout cancela a sessão e aguarda seu encerramento; não usa apenas uma corrida
+de promessas. Espera humana não consome orçamento ativo. `/start` não retoma
+execuções interrompidas/canceladas nem abre ciclo adicional.
+
+### Projeção pública e interface
+
+`GET /api/runs/:id`, `/start` e `/cancel` retornam a projeção de revisão existente
+(`id`, `name`, `applicationName`, `createdAt`, `status`, `phase`, `plan`, `approvals`)
+acrescida de:
+
+```ts
+progress: { processingId: string | null; activeRole: string | null;
+  activity: string | null; startedAt: string | null; finishedAt: string | null };
+stopReason: { code: string; message: string } | null;
+questions: { id: string; description: string; requirementIds: string[];
+  blocking: boolean; sources: { artifactId: string; locator: string; quote: string }[] }[];
+```
+
+Atividades são `curating`, `validating_curation`, `planning`, `validating_planning`.
+A projeção não devolve registro interno, credenciais, prompts, chamadas, orçamento
+ou originais completos. `plan` pode existir provisoriamente durante validação;
+isso não autoriza decisão. A interface mostra fase, papel/atividade, motivo e
+pendências; oferece “Preparar plano” no rascunho e “Cancelar preparação” durante
+o trabalho. Consulta a cada dois segundos enquanto `running`, preservando a
+identidade capturada pelo helper HTTP. Em `awaiting_approval/planning`, encerra
+polling e usa os controles existentes sem reconstruir o comentário. Perguntas
+não têm campo de resposta sem função: `/answer` e retomada continuam pendentes.
 
 ## Mapeamento, dúvidas e execução
 
@@ -1125,9 +1280,9 @@ sem relatório. Cancelamento não dispara chamadas novas para produzir um relat�
 ## API mínima proposta
 
 Esta seção descreve o contrato completo proposto do produto. Estão disponíveis
-as rotas de T3.2 e a criação textual e o histórico de T3.3, nos limites documentados
-acima; a consulta individual ainda entrega somente a projeção de revisão do plano,
-incluindo `plan: null` para rascunhos. As demais operações, inclusive `/continue`,
+as rotas de T3.2, criação/histórico de T3.3 e início/cancelamento de T4.1, nos limites
+documentados acima. A consulta individual entrega projeção de plano, progresso,
+motivo e perguntas, incluindo `plan: null` para rascunhos. As demais operações, inclusive `/continue`,
 aguardam a integração correspondente.
 
 Cadastro e entrada permitem obter a sessão; saída a invalida. Todas as operações
@@ -1154,11 +1309,11 @@ internos nem segredos. Autenticação e cadastro seguem os RF do produto.
 | `GET /api/runs/:id/report/print` | Versão de impressão do relatório publicado, final ou parcial; navegador permite salvar PDF |
 | `DELETE /api/runs/:id` | Após confirmação, excluir execução encerrada, sua credencial e mídias locais; informar tratamento separado de backups |
 
-Na integração futura, upload poderá integrar o formulário inicial e polling
-simples poderá atualizar o progresso. Aprovar/responder persistirá a decisão;
+Upload e resposta a perguntas aguardam integração. T4.1 consulta o progresso
+durante a preparação; aprovar já persiste a decisão humana sem iniciar casos;
 quando `/continue` existir, a interface poderá solicitar a continuidade depois.
 Se o recurso estiver ocupado, o usuário não deverá perder sua resposta ou
-aprovação. T2.1 não oferece essas operações e mantém a espera após a decisão.
+aprovação. A revisão humana do plano mantém a espera após a decisão.
 
 ## Exemplo e verificação
 

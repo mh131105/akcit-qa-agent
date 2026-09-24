@@ -106,7 +106,7 @@ trabalho é executado ou reenviado automaticamente. Como o backup existente para
 e reinicia o container, seu reinício também segue essa recuperação.
 
 A atualização protege a sequência de leitura, mudança e gravação com uma trava
-compartilhada pelo processo, inclusive para futuras operações de cancelamento.
+compartilhada pelo processo, inclusive para o cancelamento de T4.1.
 O registro completo é escrito e sincronizado em arquivo temporário no mesmo
 diretório antes da renomeação; falhas anteriores preservam o arquivo definitivo.
 Um arquivo inválido causa erro e não é substituído por uma execução vazia.
@@ -281,8 +281,8 @@ reconsultadas depois de salvas. Aprovar o plano mantém a espera.
 
 Os nomes têm limite de 120 caracteres, o objetivo de 2.000, e **todo o JSON de
 entrada** de 16 KiB UTF-8. Não há upload ou campo de credenciais neste formulário.
-Texto de US/CA é preservado como digitado. O detalhe ainda não devolve o texto
-original, board ou perguntas.
+Texto de US/CA é preservado como digitado. O detalhe não devolve originais completos
+ou board; T4.1 acrescenta as perguntas, progresso e preparação descritos abaixo.
 
 Antes de enviar, a interface guarda em `sessionStorage` a chave UUID v4, o corpo
 exato e o ID da conta. Se a resposta se perder, use “Tentar confirmar salvamento”
@@ -333,8 +333,10 @@ endereço realmente aberto no Chromium, sem contornar a conferência de `Origin`
 Inclui cadastro/entrada, criação, histórico, detalhe, atualização, novo login,
 resposta perdida após persistência, repetição sem duplicação, isolamento entre
 contas, texto semelhante a HTML, aprovação e pedido de alteração persistidos.
-Planos e pareceres são sintéticos e preparados somente nos dados temporários do
-teste; não há geração por IA, chamada paga ou carga automática na aplicação.
+Planos e pareceres são sintéticos. Em T4.1, o smoke também percorre “Preparar
+plano”, polling, pendências e cancelamento pelo coordenador real, substituindo
+explicitamente a chamada de modelo apenas na criação do servidor de teste.
+Não há geração por IA, chamada paga ou carga automática na aplicação.
 
 As regressões de BUG-T2.1-01 são reproduzidas no mesmo smoke, com navegador,
 API e arquivos de persistência reais:
@@ -398,6 +400,149 @@ escrita para UID 1000 e acrescente `-e SMOKE_ARTIFACT_DIR=/evidence` e
 dados dos participantes. A CI verifica ambos os smokes na imagem de runtime;
 desenvolvimento executa os mesmos checks antes de publicar. A promoção para
 produção continua usando a imagem já validada em desenvolvimento.
+
+## Modelos e preparação do plano — T4.1
+
+Use Node.js 24, `package-lock.json` e Pi 0.87.0. Cada ambiente tem sua própria
+configuração privada; o padrão é o par `PI_PROVIDER` / `PI_MODEL`. Os três papéis
+podem usar esse mesmo modelo em sessões independentes. Substituições opcionais:
+
+| Papel | Par completo de substituição |
+| --- | --- |
+| Curador | `PI_CURATOR_PROVIDER` / `PI_CURATOR_MODEL` |
+| Planejador | `PI_PLANNER_PROVIDER` / `PI_PLANNER_MODEL` |
+| Validador | `PI_VALIDATOR_PROVIDER` / `PI_VALIDATOR_MODEL` |
+
+Deixar ambos vazios herda o padrão. Definir somente metade do par recusa o início;
+não há modelo alternativo automático. Use identificadores disponíveis no catálogo
+da versão instalada do Pi. Credenciais são exclusivamente do ambiente do processo,
+por exemplo `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` ou `GEMINI_API_KEY`, conforme o
+provedor escolhido. O runtime não usa `auth.json`, sessões ou modelos pessoais do
+Pi. Nunca coloque chaves nas skills, no registro da execução ou no repositório.
+
+Localmente, mantenha a configuração em `.env` ignorado, com modo `0600`, incluindo
+`DATA_DIR=.data`, origem local exata e participantes habilitados. O servidor não
+lê `.env` sozinho: carregue-o explicitamente pelo Node ou injete as variáveis no
+processo. Após preencher privadamente os pares e a credencial:
+
+```sh
+npm ci
+npm run check
+npm test
+npm run build
+node --env-file=.env dist/server.js
+```
+
+Na VPS, use o `development/runtime.env` ou `production/runtime.env` correspondente,
+com modo `0600`; recrie somente aquele container. Não altere outros serviços.
+Promova para produção a mesma imagem já validada em dev pelo procedimento existente;
+mudança de credencial/configuração é separada da promoção da imagem.
+
+Salvar rascunho continua possível sem modelo configurado. “Preparar plano” confere
+configuração, modelo no catálogo e credencial antes do aceite. Mensagens legíveis
+`MODEL_NOT_CONFIGURED`, `MODEL_UNAVAILABLE` e `CREDENTIAL_UNAVAILABLE` preservam o
+rascunho; exceções do provedor são sanitizadas. Credencial presente não garante
+aceitação pelo serviço remoto: uma recusa na inferência fica como falha técnica.
+
+`allowModelNetwork: false` impede atualização do catálogo, **não impede inferência
+paga**. Os testes substituem explicitamente `modelCall`/`modelPreflight` na montagem
+interna; não existe opção de simulação na API, no site ou no ambiente de produção.
+O smoke de runtime continua criando sessão sem inferência. Os testes de runtime
+substituem execução/autenticação deliberadamente para não chamar provedores.
+
+### Demonstração com modelo real pelo site
+
+**Dependência T0:** no ambiente desta implementação não havia credencial real
+disponível para demonstrar inferência. O responsável deve provisionar o par e a
+credencial privada, confirmar orçamento e executar o roteiro abaixo. Testes com
+respostas programadas não atendem CA-12 nem a definição de pronto de T4.1.
+
+1. Registrar commit/imagem e os pares usados, sem chaves. Abrir o site na origem
+   configurada e entrar com participante habilitado. Criar execução sintética e
+   colar integralmente [artefato-demo.md](requisitos/exemplos/artefato-demo.md).
+   Objetivo é opcional; não exigir URL/credencial da aplicação testada.
+2. Salvar rascunho e clicar **Preparar plano**. Conferir aceite `202`, atualização
+   de fase/papel e registro do processamento. Curador, validador da curadoria,
+   planejador e validador do plano fazem chamadas reais; correções podem ampliar
+   essa sequência dentro dos limites.
+3. Em `awaiting_approval/planning`, a frente C compara plano e revisões com os
+   originais e confere as duas validações. O registro privado em
+   `DATA_DIR/runs/<id>.json` permite auditar revisões, pareceres, dependência exata
+   e `preparation.calls`; a consulta HTTP devolve somente a projeção pública.
+4. Conferir quantidade **inteira de 1 a 10 inclusive**, sucesso e rejeição sem
+   reserva conforme CA-01, **comentário opcional** e persistido quando informado
+   conforme CA-02, fontes literais, cobertura e exclusões justificadas. Navegação
+   sugerida não equivale a observação; não deve haver casos detalhados.
+5. A pessoa revisora aprova pelo botão **Aprovar plano**. Reconsultar e confirmar
+   autor, horário e revisão da decisão, mantendo `awaiting_approval/planning`.
+   Recarregar não perde a decisão; não iniciar `/continue` ou criação de casos.
+6. Preencher [evidencias/t4.1](evidencias/t4.1/README.md) com os dados sintéticos,
+   revisões/pareceres, avaliação assinada pela frente C, duração e consumo
+   disponível. Custo do Pi deve ser identificado como estimativa; omitir métricas
+   ausentes. Não publicar arquivo de conta, sessão, credencial ou material privado.
+
+### Avaliação real do validador com erro conhecido
+
+A frente C mantém seu gabarito fora do contexto do agente. Em diretório privado,
+copie **somente o payload** de uma curadoria real e altere deliberadamente um
+enunciado: limite superior de 10 para 11 ou comentário opcional para obrigatório.
+Mantenha IDs, fontes e originais intactos; não envie o motivo da adulteração,
+resultado esperado ou notas do avaliador. O ensaio não modifica a execução nem
+suas aprovações. Execute uma tarefa real independente de `output-validator` com
+envelope `{task: 'validation', artifacts, objective, output, previousVerdicts: []}`:
+
+```sh
+# Caminhos privados e ID da execução sintética; nunca usar documento de participante.
+export QA_DEMO_RUN_ID='<id-da-execucao-sintetica>'
+export QA_NEGATIVE_PAYLOAD='<caminho-absoluto-do-payload-alterado.json>'
+export QA_NEGATIVE_RESULT='<caminho-absoluto-do-parecer.json>'
+node --env-file=.env --input-type=module <<'JS'
+import { randomUUID } from 'node:crypto';
+import { readFile, writeFile } from 'node:fs/promises';
+import { readConfig, resolvePreparationModels } from './dist/config.js';
+import { RunStore } from './dist/storage/runs.js';
+import { parseCuration, parseVerdict } from './dist/domain/preparation.js';
+import { executeSpecialistTask, preflightSpecialists } from './dist/runtime/pi.js';
+const config = readConfig();
+const models = resolvePreparationModels(config);
+await preflightSpecialists(models);
+const { run } = await new RunStore(config.dataDir).read(process.env.QA_DEMO_RUN_ID);
+const original = run.outputs.filter(item => item.phase === 'curation').at(-1);
+if (!original) throw new Error('Curadoria real ausente.');
+const altered = parseCuration(JSON.parse(await readFile(process.env.QA_NEGATIVE_PAYLOAD, 'utf8')), run.artifacts);
+const output = { ...original, id: randomUUID(), revision: 1, createdAt: new Date().toISOString(), payload: altered };
+const result = await executeSpecialistTask({ role: 'output-validator',
+  model: models['output-validator'], signal: new AbortController().signal, timeoutMs: 120000,
+  prompt: JSON.stringify({ task: 'validation', artifacts: run.artifacts,
+    objective: run.input.objective ?? '', output, previousVerdicts: [] }) });
+await writeFile(process.env.QA_NEGATIVE_RESULT,
+  JSON.stringify({ output, verdict: parseVerdict(result.payload), metadata: result.metadata }, null, 2),
+  { mode: 0o600, flag: 'wx' });
+JS
+```
+
+O parser aceitar o payload adulterado comprova apenas estrutura/fontes válidas.
+O resultado esperado pela pessoa avaliadora é um parecer que detecte e localize a
+alteração sem aprová-la. Registrar o parecer efetivo, inclusive eventual falsa
+aprovação; uma resposta programada ou esta expectativa escrita não comprovam o
+validador. Comparar depois da chamada, fora do contexto do modelo. Este ensaio e
+a avaliação humana permanecem pendentes até a credencial ser disponibilizada.
+
+### Cancelamento, limites e recuperação da preparação
+
+Durante `running`, “Cancelar preparação” persiste o cancelamento e aborta a sessão
+ativa. Não apaga saídas/pareceres e não permite avanço por resposta tardia. Outro
+rascunho só começa após o encerramento liberar o ambiente; não há fila. Repetir
+`/start` retorna o processamento existente, sem reiniciar execução encerrada ou
+seu orçamento. Após reinício, trabalho ativo fica interrompido, sem retomada.
+
+Até dez US, três produções/revisões automáticas por saída, duas tentativas técnicas
+do validador por revisão, 120 segundos por chamada e 45 minutos ativos. Perguntas
+bloqueiam seus dependentes; requisitos independentes podem compor o plano. Sem
+trabalho elegível, a execução aguarda informação e libera o ambiente. Resposta e
+retomada de perguntas, criação de casos, navegador e relatório não fazem parte
+de T4.1. Testes e smokes reproduzem limites e recusas sem inferência paga; os
+comandos de container e o fluxo de publicação anteriores permanecem aplicáveis.
 
 ## Referências
 
