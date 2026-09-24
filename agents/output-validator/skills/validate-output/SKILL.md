@@ -35,6 +35,14 @@ abordagem e pré-condições. Todo critério não coberto e pergunta pendente de
 identificado e justificado nas exclusões/limitações. Não aceitar cobertura de US
 bloqueada sem esclarecimento. Confirmar que trabalho independente continua.
 
+Distinguir regras do alvo de regras metodológicas: comportamento esperado da
+aplicação exige fonte nos artefatos; controles deste fluxo vêm da metodologia.
+A sequência obrigatória é validar e aprovar humanamente o plano, criar/validar e
+aprovar humanamente os casos, e só então observar/mapear a navegação antes de
+executar (RN-04). Menções a essas aprovações e à observação posterior são
+pré-condições metodológicas legítimas, mesmo ausentes dos artefatos do usuário;
+não solicitar sua remoção por falta de fonte nesses artefatos.
+
 Verificar fidelidade de limites, condições e campos opcionais; pertinência das
 técnicas de partição/limite ao domínio. Recusar passos/dados detalhados de casos,
 percurso inventado, afirmação de observação ou execução inexistente, e novos
