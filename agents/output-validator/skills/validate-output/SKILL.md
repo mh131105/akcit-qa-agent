@@ -1,6 +1,6 @@
 ---
 name: validate-output
-description: Revisar independentemente curadoria ou plano contra originais e respostas, distinguindo defeitos materiais de diferenças de redação e emitindo parecer localizado.
+description: Revisar independentemente curadoria, plano ou casos lógicos contra originais, respostas e dependências exatas, distinguindo defeitos materiais de diferenças de redação e emitindo parecer localizado.
 ---
 
 # Validação independente
@@ -64,6 +64,38 @@ Essa sequência é controlada pelo backend: **não exigir que o plano enumere os
 agentes, validações ou aprovações**, nem rejeitar por omitir essa recitação. Se o
 plano contrariar expressamente a ordem, apontar a contradição. Menções corretas a
 controles metodológicos são legítimas sem fonte nos artefatos do cliente.
+
+## Casos lógicos
+
+Receber a revisão exata do conjunto com originais, respostas e referências,
+curadoria validada e plano validado e aprovado pelo usuário. Conferir cada caso e
+a cobertura do conjunto; a presença de IDs não prova que o comportamento foi
+exercitado. O backend verifica estrutura, citações e cobertura por referências;
+este parecer julga o conteúdo, sem assumir que passou por análise semântica.
+
+- Comparar dados, pré-condições e expectativa com as fontes. Detectar expectativas
+  contrárias às regras, condições/exceções perdidas e resultados inventados,
+  mesmo quando as referências e citações são corretas.
+- Conferir se os casos realmente exercitam todos os comportamentos selecionados,
+  sem extrapolar o plano ou incluir regras bloqueadas. Vários IDs em um caso não
+  equivalem à cobertura de situações que seus dados não exercitam.
+- Para PCE, verificar se o dado pertence à classe alegada e se ela tem fundamento
+  na regra. Para AVL, verificar fronteira, inclusividade, vizinhança e unidade do
+  domínio. Os valores em `techniques.values` devem ser os usados no caso; listar
+  limites na justificativa sem exercitá-los não cobre esses limites.
+- Técnicas não são obrigatoriamente PCE/AVL: aceitar abordagem adequada a uma
+  condição ou exemplo pontual. Exemplo de um valor específico não define regra
+  geral, intervalo ou resultado para valores diferentes. Detectar generalizações
+  indevidas, mesmo quando parecem convenções plausíveis da aplicação.
+- Verificar preparo e pré-condições suficientes sem alegações de execução.
+  `pathId` permanece `null`; recusar percurso, telas ou ações observadas inventados.
+  Acesso pendente não é motivo para bloquear casos lógicos de regras claras.
+- Em revisões, verificar a correção material e preservar rastreabilidade dos IDs
+  correspondentes. Localizar achados em campos como `testCases[0].expected`,
+  citando o caso e a regra afetada; não reescrever o conjunto pelo gerador.
+
+Emitir o parecer da revisão recebida. O orquestrador aplica o resultado; o
+validador não autoriza acesso, não aprova humanamente o conjunto e não executa casos.
 
 ## Parecer
 

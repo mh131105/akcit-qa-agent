@@ -14,7 +14,7 @@ export type RunOutput = JsonObject & {
 };
 export type PreparationCall = {
   id: string; role: 'artifact-curator' | 'test-designer' | 'output-validator';
-  provider: string; model: string; phase: 'curation' | 'planning'; attempt: number;
+  provider: string; model: string; phase: 'curation' | 'planning' | 'case_design'; attempt: number;
   outputRevision: number; startedAt: string; finishedAt?: string; durationMs?: number;
   status: 'running' | 'completed' | 'invalid' | 'error' | 'cancelled' | 'interrupted';
   budgetCycleId?: string; errorCode?: string; usage?: Record<string, number>; estimatedCost?: number;
@@ -53,7 +53,8 @@ export type RunRecord = JsonObject & {
 export type WorkIntent = {
   id: string; type: 'create_cases' | 'analyze_feedback';
   outputId: string; outputRevision: number; createdAt: string;
-  status: 'pending' | 'interrupted'; interruption?: Interruption;
+  status: 'pending' | 'completed' | 'interrupted' | 'cancelled'; interruption?: Interruption;
+  processingId?: string; finishedAt?: string; reason?: { code: string; message: string };
 };
 export type StoredRun = { schemaVersion: 1; run: RunRecord; workIntents: WorkIntent[] };
 export type StorageErrorCode =
@@ -118,7 +119,7 @@ function validPreparation(value: unknown): boolean {
   return new Set(value.calls.map(call => call.id)).size === value.calls.length && value.calls.every(call =>
     strings(call, ['id', 'provider', 'model']) && !!call.id && !!call.provider && !!call.model &&
     ['artifact-curator', 'test-designer', 'output-validator'].includes(call.role as string) &&
-    ['curation', 'planning'].includes(call.phase as string) && positive(call.attempt) && positive(call.outputRevision) &&
+    ['curation', 'planning', 'case_design'].includes(call.phase as string) && positive(call.attempt) && positive(call.outputRevision) &&
     utc(call.startedAt) && (call.finishedAt === undefined || utc(call.finishedAt)) &&
     (call.durationMs === undefined || nonnegative(call.durationMs)) &&
     ['running', 'completed', 'invalid', 'error', 'cancelled', 'interrupted'].includes(call.status as string) &&
@@ -195,8 +196,12 @@ function validate(record: unknown, runId: string): asserts record is StoredRun {
       strings(work, ['id', 'outputId']) && !!work.id && !!work.outputId &&
       Number.isSafeInteger(work.outputRevision) && (work.outputRevision as number) > 0 && utc(work.createdAt) &&
       ['create_cases', 'analyze_feedback'].includes(work.type as string) &&
-      ((work.status === 'pending' && work.interruption === undefined) ||
-        (work.status === 'interrupted' && interruption(work.interruption)))) ||
+      (work.processingId === undefined || (typeof work.processingId === 'string' && !!work.processingId)) &&
+      (work.finishedAt === undefined || utc(work.finishedAt)) &&
+      (work.reason === undefined || (object(work.reason) && strings(work.reason, ['code', 'message']) && !!work.reason.code && !!work.reason.message)) &&
+      ((work.status === 'pending' && work.interruption === undefined && work.finishedAt === undefined && work.reason === undefined) ||
+        (['completed', 'cancelled'].includes(work.status as string) && utc(work.finishedAt) && work.interruption === undefined) ||
+        (work.status === 'interrupted' && (work.interruption === undefined ? utc(work.finishedAt) && work.reason !== undefined : interruption(work.interruption))))) ||
     new Set(record.workIntents.map(work => work.id)).size !== record.workIntents.length) {
     throw new StorageError('INVALID_RECORD');
   }
@@ -374,6 +379,8 @@ export class RunStore {
           if (work.status === 'pending') {
             work.status = 'interrupted';
             work.interruption = { ...event };
+            work.finishedAt = event.at;
+            work.reason = { code: 'SERVICE_RESTART', message: 'O serviço reiniciou; trabalho interrompido sem retomada automática.' };
           }
         }
         return { value: 1, save: true };

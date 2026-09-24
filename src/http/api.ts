@@ -66,7 +66,7 @@ export async function handleApi(
     const path = url.pathname;
     const collection = path === '/api/runs';
     const account = /^\/api\/auth\/(register|login|logout|me)$/.exec(path)?.[1];
-    const run = /^\/api\/runs\/([^/]+)(?:\/(approve|request-changes|start|cancel|answer|resume))?$/.exec(path);
+    const run = /^\/api\/runs\/([^/]+)(?:\/(approve|request-changes|start|cancel|answer|resume|continue))?$/.exec(path);
     if (!account && !run && !collection) throw new HttpError(404, 'NOT_FOUND', 'Rota não encontrada.');
     const methods = collection ? ['GET', 'POST'] : [account === 'me' || (run && !run[2]) ? 'GET' : 'POST'];
     if (!methods.includes(request.method!)) {
@@ -153,6 +153,17 @@ export async function handleApi(
       const result = await getPlanReview(runs, runId, { userId: session.userId });
       if (!result.ok) serviceError(result.error);
       json(response, 200, result.review);
+      return;
+    }
+    if (run![2] === 'continue') {
+      fields(body, ['outputId', 'outputRevision']);
+      if (url.search || !Number.isSafeInteger(body.outputRevision) || (body.outputRevision as number) < 1) throw invalid();
+      const { accepted } = await preparation.continue(runId, session.userId, {
+        outputId: string(body, 'outputId', 1, 128), outputRevision: body.outputRevision as number,
+      });
+      const result = await getPlanReview(runs, runId, { userId: session.userId });
+      if (!result.ok) serviceError(result.error);
+      json(response, accepted ? 202 : 200, result.review);
       return;
     }
     const changes = run![2] === 'request-changes';

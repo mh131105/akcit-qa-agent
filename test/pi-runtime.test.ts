@@ -10,7 +10,7 @@ import { executeSpecialistTask, preflightSpecialists, type SpecialistTask } from
 const selection = { provider: 'openai', model: 'gpt-4o' };
 const models = { 'artifact-curator': selection, 'test-designer': selection, 'output-validator': selection };
 const task = (signal = new AbortController().signal, timeoutMs = 1000): SpecialistTask => ({
-  role: 'artifact-curator', model: selection, prompt: 'entrada sintética', signal, timeoutMs,
+  role: 'artifact-curator', task: 'curate-artifacts', model: selection, prompt: 'entrada sintética', signal, timeoutMs,
 });
 
 function answer(session: AgentSession, text: string, stopReason = 'stop') {
@@ -63,7 +63,8 @@ test('runtime usa sessão própria sem tools, histórico, retries ou compactaç�
     answer(this, '{"requirements":[],"questions":[]}');
   });
   for (let i = 0; i < 2; i++) {
-    const result = await executeSpecialistTask({ ...task(), role: i === 0 ? 'artifact-curator' : 'output-validator' });
+    const result = await executeSpecialistTask({ ...task(), role: i === 0 ? 'artifact-curator' : 'output-validator',
+      task: i === 0 ? 'curate-artifacts' : 'validate-output' });
     assert.deepEqual(result.payload, { requirements: [], questions: [] });
     assert.deepEqual(result.metadata.usage, { input: 10, output: 20, cacheRead: 0, cacheWrite: 0, totalTokens: 30 });
     assert.equal(result.metadata.estimatedCost, 0.003);
@@ -73,6 +74,44 @@ test('runtime usa sessão própria sem tools, histórico, retries ou compactaç�
   assert.equal(new Set(sessions).size, 2);
   assert.equal(prompt.mock.callCount(), 2);
   assert.equal(dispose.mock.callCount(), 2);
+});
+
+test('tarefas de plano, casos e validação carregam uma única skill em sessões separadas', async t => {
+  t.mock.method(ModelRuntime.prototype, 'getAuth', async () => ({ auth: { apiKey: 'fake-never-sent' } }));
+  const sessions: string[] = [];
+  const expectedSkills = ['create-test-plan', 'create-test-cases', 'validate-output'];
+  t.mock.method(AgentSession.prototype, 'prompt', async function (this: AgentSession) {
+    const selected = expectedSkills[sessions.length]!;
+    sessions.push(this.sessionId);
+    assert.match(this.systemPrompt, new RegExp(`name: ${selected}\\n`));
+    for (const other of expectedSkills.filter(name => name !== selected)) {
+      assert.doesNotMatch(this.systemPrompt, new RegExp(`name: ${other}\\n`));
+    }
+    assert.deepEqual(this.messages, []);
+    assert.deepEqual(this.getActiveToolNames(), []);
+    assert.equal(this.model?.id, selection.model);
+    answer(this, '{"synthetic":true}');
+  });
+  await executeSpecialistTask({ ...task(), role: 'test-designer', task: 'create-test-plan' });
+  await executeSpecialistTask({ ...task(), role: 'test-designer', task: 'create-test-cases' });
+  await executeSpecialistTask({ ...task(), role: 'output-validator', task: 'validate-output' });
+  assert.equal(new Set(sessions).size, 3);
+});
+
+test('runtime recusa tarefa incompatível, ausente ou caminho arbitrário antes de acessar modelos', async t => {
+  const auth = t.mock.method(ModelRuntime.prototype, 'getAuth', async () => ({ auth: { apiKey: 'fake-never-sent' } }));
+  const prompt = t.mock.method(AgentSession.prototype, 'prompt', async () => { throw new Error('inferência não autorizada no teste'); });
+  for (const input of [
+    { ...task(), role: 'test-designer', task: 'validate-output' },
+    { ...task(), role: 'output-validator', task: 'create-test-cases' },
+    { ...task(), task: '../../../private/SKILL.md' },
+    { ...task(), task: undefined },
+    { ...task(), role: '__proto__' },
+  ]) {
+    await assert.rejects(executeSpecialistTask(input as SpecialistTask), { code: 'INVALID_TASK' });
+  }
+  assert.equal(auth.mock.callCount(), 0);
+  assert.equal(prompt.mock.callCount(), 0);
 });
 
 test('JSON inválido e falha do provedor não repetem chamadas nem expõem mensagens privadas', async t => {

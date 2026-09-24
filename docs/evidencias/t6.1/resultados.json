@@ -1,0 +1,1922 @@
+{
+  "formatVersion": 1,
+  "testedCommit": "c17a58554867c2a542f493dac3e633d48a77e714",
+  "startedAt": "2026-09-24T23:11:35.077Z",
+  "node": "24.21.0",
+  "pi": "0.87.0",
+  "models": {
+    "artifact-curator": {
+      "provider": "openai-codex",
+      "model": "gpt-6-astra"
+    },
+    "test-designer": {
+      "provider": "openai-codex",
+      "model": "gpt-6-astra"
+    },
+    "output-validator": {
+      "provider": "openai-codex",
+      "model": "gpt-6-astra"
+    }
+  },
+  "expectations": {
+    "writtenBeforeInferenceAt": "2026-09-24T23:02:08Z",
+    "sha256": "9a0cf5b2fa27982980e4b1d7bc2530bafd66574d4a60d3133c45842a2bb2cdc0",
+    "sentToModels": false
+  },
+  "method": "API HTTP, coordenador, armazenamento e inferência Pi reais; conta controlada; aprovação do plano automatizada autorizada para o ensaio, sem revisão humana B/C.",
+  "runs": [
+    {
+      "inputFile": "entrada-prosa.txt",
+      "inputSha256": "cfdbfa5b3f052a608f31643545e3c04e20478c213e9fa7701f62ab755d1b7a21",
+      "inputText": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive.\nPara uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\".\nPara uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\".\n",
+      "state": {
+        "status": "awaiting_approval",
+        "phase": "case_design"
+      },
+      "events": [
+        {
+          "operation": "start",
+          "httpStatus": 202
+        },
+        {
+          "operation": "approve",
+          "httpStatus": 200,
+          "actorKind": "controlled-demo-automation"
+        },
+        {
+          "operation": "continue",
+          "httpStatus": 202
+        },
+        {
+          "operation": "continue-repeated-running",
+          "httpStatus": 200
+        },
+        {
+          "operation": "continue-repeated-finished",
+          "httpStatus": 200
+        }
+      ],
+      "outputs": [
+        {
+          "id": "3ae97f8b-5ddf-4f56-b78c-db50c0913281",
+          "phase": "curation",
+          "revision": 1,
+          "producer": "artifact-curator",
+          "createdAt": "2026-09-24T23:11:57.774Z",
+          "budgetCycleId": "dcebe99d-9d6f-47cb-b80a-fdcef0556403",
+          "dependsOn": [],
+          "answerRefs": [],
+          "payload": {
+            "requirements": [
+              {
+                "id": "RF-01",
+                "statement": "Validar a quantidade solicitada na reserva de itens e registrar ou rejeitar a reserva conforme sua validade.",
+                "sources": [
+                  {
+                    "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                    "locator": "L1-L3",
+                    "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive.\nPara uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\".\nPara uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\"."
+                  }
+                ],
+                "rules": [
+                  {
+                    "id": "CA-01",
+                    "statement": "A quantidade solicitada deve ser um número inteiro de 1 a 10, inclusive.",
+                    "sources": [
+                      {
+                        "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                        "locator": "L1",
+                        "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive."
+                      }
+                    ],
+                    "kind": "rule"
+                  },
+                  {
+                    "id": "CA-02",
+                    "statement": "Para uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\".",
+                    "sources": [
+                      {
+                        "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                        "locator": "L2",
+                        "quote": "Para uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\"."
+                      }
+                    ],
+                    "kind": "rule"
+                  },
+                  {
+                    "id": "CA-03",
+                    "statement": "Para uma quantidade fora do intervalo de 1 a 10, inclusive, ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\".",
+                    "sources": [
+                      {
+                        "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                        "locator": "L1",
+                        "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive."
+                      },
+                      {
+                        "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                        "locator": "L3",
+                        "quote": "Para uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\"."
+                      }
+                    ],
+                    "kind": "rule"
+                  }
+                ]
+              }
+            ],
+            "questions": []
+          }
+        },
+        {
+          "id": "536339cb-9096-4bff-96e2-d2cefff456c8",
+          "phase": "planning",
+          "revision": 1,
+          "producer": "test-designer",
+          "createdAt": "2026-09-24T23:12:21.784Z",
+          "budgetCycleId": "dcebe99d-9d6f-47cb-b80a-fdcef0556403",
+          "dependsOn": [
+            {
+              "outputId": "3ae97f8b-5ddf-4f56-b78c-db50c0913281",
+              "revision": 1
+            }
+          ],
+          "answerRefs": [],
+          "payload": {
+            "testPlan": {
+              "objective": "Verificar a validação da quantidade na solicitação de reserva, o registro correto para quantidades válidas e a rejeição sem registro para quantidades inválidas.",
+              "requirementIds": [
+                "RF-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02",
+                "CA-03"
+              ],
+              "priorities": [
+                {
+                  "ruleId": "CA-01",
+                  "reason": "A integralidade e os limites inclusivos determinam quais solicitações podem ser aceitas."
+                },
+                {
+                  "ruleId": "CA-03",
+                  "reason": "Impedir registros inválidos preserva a integridade das reservas."
+                },
+                {
+                  "ruleId": "CA-02",
+                  "reason": "Garantir que a reserva registrada corresponda à quantidade solicitada e que a confirmação seja informada."
+                }
+              ],
+              "exclusions": [],
+              "approach": [
+                "CA-01: aplicar particionamento de equivalência para inteiros dentro do intervalo, inteiros abaixo e acima do intervalo e valores não inteiros.",
+                "CA-01 e CA-03: aplicar análise de valores limite nas extremidades inclusivas de 1 a 10 e nos inteiros imediatamente externos, verificando aceitação ou rejeição conforme a regra.",
+                "CA-02: nas quantidades válidas, verificar o registro da reserva com a quantidade solicitada e a mensagem literal \"Reserva confirmada\".",
+                "CA-03: nas partições inválidas, verificar conjuntamente a ausência de registro de reserva e a mensagem literal \"Quantidade inválida\"."
+              ],
+              "preconditions": [
+                "Dispor de um ambiente que permita solicitar reservas e consultar os registros correspondentes para verificar sua criação ou ausência."
+              ],
+              "sources": [
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L1",
+                  "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive."
+                },
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L2",
+                  "quote": "Para uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\"."
+                },
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L3",
+                  "quote": "Para uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\"."
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "374c358b-87db-443d-972b-c3a104bf53c7",
+          "phase": "case_design",
+          "revision": 1,
+          "producer": "test-designer",
+          "createdAt": "2026-09-24T23:13:18.320Z",
+          "budgetCycleId": "dcebe99d-9d6f-47cb-b80a-fdcef0556403",
+          "dependsOn": [
+            {
+              "outputId": "3ae97f8b-5ddf-4f56-b78c-db50c0913281",
+              "revision": 1
+            },
+            {
+              "outputId": "536339cb-9096-4bff-96e2-d2cefff456c8",
+              "revision": 1
+            }
+          ],
+          "answerRefs": [],
+          "payload": {
+            "testCases": [
+              {
+                "id": "CT-01",
+                "requirementIds": [
+                  "RF-01"
+                ],
+                "ruleIds": [
+                  "CA-01",
+                  "CA-02"
+                ],
+                "preconditions": [
+                  "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+                ],
+                "setup": "Identificar os registros existentes para distinguir a reserva a ser solicitada.",
+                "pathId": null,
+                "data": {
+                  "quantidade": 5
+                },
+                "techniques": [
+                  {
+                    "name": "Particionamento de equivalência",
+                    "description": "CA-01 e CA-02: 5 representa a classe válida de inteiros entre 1 e 10, afastado das fronteiras.",
+                    "values": [
+                      5
+                    ]
+                  }
+                ],
+                "expected": "Ao solicitar a reserva com quantidade 5, o sistema registra uma reserva com quantidade 5 e informa \"Reserva confirmada\".",
+                "sources": [
+                  {
+                    "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                    "locator": "L1-L2",
+                    "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive.\nPara uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\"."
+                  }
+                ]
+              },
+              {
+                "id": "CT-02",
+                "requirementIds": [
+                  "RF-01"
+                ],
+                "ruleIds": [
+                  "CA-01",
+                  "CA-02"
+                ],
+                "preconditions": [
+                  "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+                ],
+                "setup": "Identificar os registros existentes para distinguir a reserva a ser solicitada.",
+                "pathId": null,
+                "data": {
+                  "quantidade": 1
+                },
+                "techniques": [
+                  {
+                    "name": "Análise de valores limite",
+                    "description": "CA-01 e CA-02: 1 exercita o limite inferior inclusivo do domínio inteiro válido.",
+                    "values": [
+                      1
+                    ]
+                  }
+                ],
+                "expected": "Ao solicitar a reserva com quantidade 1, o sistema registra uma reserva com quantidade 1 e informa \"Reserva confirmada\".",
+                "sources": [
+                  {
+                    "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                    "locator": "L1-L2",
+                    "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive.\nPara uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\"."
+                  }
+                ]
+              },
+              {
+                "id": "CT-03",
+                "requirementIds": [
+                  "RF-01"
+                ],
+                "ruleIds": [
+                  "CA-01",
+                  "CA-02"
+                ],
+                "preconditions": [
+                  "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+                ],
+                "setup": "Identificar os registros existentes para distinguir a reserva a ser solicitada.",
+                "pathId": null,
+                "data": {
+                  "quantidade": 10
+                },
+                "techniques": [
+                  {
+                    "name": "Análise de valores limite",
+                    "description": "CA-01 e CA-02: 10 exercita o limite superior inclusivo do domínio inteiro válido.",
+                    "values": [
+                      10
+                    ]
+                  }
+                ],
+                "expected": "Ao solicitar a reserva com quantidade 10, o sistema registra uma reserva com quantidade 10 e informa \"Reserva confirmada\".",
+                "sources": [
+                  {
+                    "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                    "locator": "L1-L2",
+                    "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive.\nPara uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\"."
+                  }
+                ]
+              },
+              {
+                "id": "CT-04",
+                "requirementIds": [
+                  "RF-01"
+                ],
+                "ruleIds": [
+                  "CA-01",
+                  "CA-03"
+                ],
+                "preconditions": [
+                  "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+                ],
+                "setup": "Identificar os registros existentes para verificar a ausência de nova reserva correspondente à solicitação.",
+                "pathId": null,
+                "data": {
+                  "quantidade": 0
+                },
+                "techniques": [
+                  {
+                    "name": "Análise de valores limite",
+                    "description": "CA-01 e CA-03: 0 é o inteiro imediatamente abaixo do mínimo 1, usando passo unitário do domínio inteiro.",
+                    "values": [
+                      0
+                    ]
+                  },
+                  {
+                    "name": "Particionamento de equivalência",
+                    "description": "CA-01 e CA-03: 0 representa a classe inválida de inteiros menores que 1.",
+                    "values": [
+                      0
+                    ]
+                  }
+                ],
+                "expected": "Ao solicitar a reserva com quantidade 0, o sistema não registra reserva para a solicitação e informa \"Quantidade inválida\".",
+                "sources": [
+                  {
+                    "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                    "locator": "L1",
+                    "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive."
+                  },
+                  {
+                    "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                    "locator": "L3",
+                    "quote": "Para uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\"."
+                  }
+                ]
+              },
+              {
+                "id": "CT-05",
+                "requirementIds": [
+                  "RF-01"
+                ],
+                "ruleIds": [
+                  "CA-01",
+                  "CA-03"
+                ],
+                "preconditions": [
+                  "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+                ],
+                "setup": "Identificar os registros existentes para verificar a ausência de nova reserva correspondente à solicitação.",
+                "pathId": null,
+                "data": {
+                  "quantidade": 11
+                },
+                "techniques": [
+                  {
+                    "name": "Análise de valores limite",
+                    "description": "CA-01 e CA-03: 11 é o inteiro imediatamente acima do máximo 10, usando passo unitário do domínio inteiro.",
+                    "values": [
+                      11
+                    ]
+                  },
+                  {
+                    "name": "Particionamento de equivalência",
+                    "description": "CA-01 e CA-03: 11 representa a classe inválida de inteiros maiores que 10.",
+                    "values": [
+                      11
+                    ]
+                  }
+                ],
+                "expected": "Ao solicitar a reserva com quantidade 11, o sistema não registra reserva para a solicitação e informa \"Quantidade inválida\".",
+                "sources": [
+                  {
+                    "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                    "locator": "L1",
+                    "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive."
+                  },
+                  {
+                    "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                    "locator": "L3",
+                    "quote": "Para uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\"."
+                  }
+                ]
+              },
+              {
+                "id": "CT-06",
+                "requirementIds": [
+                  "RF-01"
+                ],
+                "ruleIds": [
+                  "CA-01",
+                  "CA-03"
+                ],
+                "preconditions": [
+                  "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+                ],
+                "setup": "Identificar os registros existentes para verificar a ausência de nova reserva correspondente à solicitação.",
+                "pathId": null,
+                "data": {
+                  "quantidade": 5.5
+                },
+                "techniques": [
+                  {
+                    "name": "Particionamento de equivalência",
+                    "description": "CA-01 e CA-03: 5.5 representa a classe inválida de números não inteiros; estar entre 1 e 10 isola a violação de integralidade, sem pressupor arredondamento ou precisão permitida.",
+                    "values": [
+                      5.5
+                    ]
+                  }
+                ],
+                "expected": "Ao solicitar a reserva com quantidade 5.5, o sistema não registra reserva para a solicitação e informa \"Quantidade inválida\".",
+                "sources": [
+                  {
+                    "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                    "locator": "L1",
+                    "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive."
+                  },
+                  {
+                    "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                    "locator": "L3",
+                    "quote": "Para uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\"."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "validations": [
+        {
+          "id": "7154524c-ec76-4229-bbbc-141654ee309d",
+          "outputId": "3ae97f8b-5ddf-4f56-b78c-db50c0913281",
+          "outputRevision": 1,
+          "validator": "output-validator",
+          "at": "2026-09-24T23:12:01.389Z",
+          "attempt": 1,
+          "status": "approved",
+          "findings": [],
+          "reason": "A curadoria preserva integralmente as condições de validade, o registro ou rejeição da reserva e as mensagens previstas nas fontes, sem omissões ou comportamentos inventados."
+        },
+        {
+          "id": "fddc33aa-7ead-43fd-a99d-b0b35aea09d0",
+          "outputId": "536339cb-9096-4bff-96e2-d2cefff456c8",
+          "outputRevision": 1,
+          "validator": "output-validator",
+          "at": "2026-09-24T23:12:25.999Z",
+          "attempt": 1,
+          "status": "approved",
+          "findings": [],
+          "reason": "O plano cobre todas as regras da curadoria aprovada, com partições e limites fundamentados nas fontes, resultados esperados fiéis e pré-condição adequada, sem inventar percursos ou comportamentos."
+        },
+        {
+          "id": "bbaade80-a005-456e-9090-31119043af88",
+          "outputId": "374c358b-87db-443d-972b-c3a104bf53c7",
+          "outputRevision": 1,
+          "validator": "output-validator",
+          "at": "2026-09-24T23:13:24.912Z",
+          "attempt": 1,
+          "status": "approved",
+          "findings": [],
+          "reason": "Os casos cobrem as regras e a abordagem do plano aprovado, incluindo limites inclusivos, inteiros imediatamente externos e quantidade não inteira. Dados, expectativas e mensagens são fiéis às fontes, sem percursos ou comportamentos inventados."
+        }
+      ],
+      "approvals": [
+        {
+          "id": "334da55e-3e30-4954-9565-ff4b4118c276",
+          "outputId": "536339cb-9096-4bff-96e2-d2cefff456c8",
+          "outputRevision": 1,
+          "at": "2026-09-24T23:12:26.493Z",
+          "comment": "",
+          "decision": "approved",
+          "actorKind": "controlled-demo-automation"
+        }
+      ],
+      "artifacts": [
+        {
+          "id": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+          "name": "historias-e-criterios.txt",
+          "version": "1",
+          "text": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive.\nPara uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\".\nPara uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\".\n"
+        }
+      ],
+      "answers": [],
+      "budgetCycles": [
+        {
+          "id": "dcebe99d-9d6f-47cb-b80a-fdcef0556403",
+          "startedAt": "2026-09-24T23:11:35.234Z",
+          "reason": "initial_preparation",
+          "answerRef": null,
+          "affectedCaseIds": [],
+          "limits": {
+            "maxRequirements": 10,
+            "maxRevisions": 3,
+            "maxValidatorAttempts": 2,
+            "timeoutMs": 120000,
+            "activeMs": 2700000
+          }
+        }
+      ],
+      "preparation": {
+        "id": "91218786-82d1-4a8c-b6fc-01c8472fe4bf",
+        "budgetCycleId": "dcebe99d-9d6f-47cb-b80a-fdcef0556403",
+        "startedAt": "2026-09-24T23:12:26.506Z",
+        "finishedAt": "2026-09-24T23:13:24.924Z",
+        "activeRole": null,
+        "activity": null,
+        "stopReason": null,
+        "limits": {
+          "maxRequirements": 10,
+          "maxRevisions": 3,
+          "maxValidatorAttempts": 2,
+          "timeoutMs": 120000,
+          "activeMs": 2700000
+        },
+        "calls": [
+          {
+            "id": "d07c6f4f-4491-4719-84f9-5c7df8c98cf2",
+            "role": "artifact-curator",
+            "provider": "openai-codex",
+            "model": "gpt-6-astra",
+            "phase": "curation",
+            "attempt": 1,
+            "outputRevision": 1,
+            "startedAt": "2026-09-24T23:11:35.246Z",
+            "status": "completed",
+            "budgetCycleId": "dcebe99d-9d6f-47cb-b80a-fdcef0556403",
+            "finishedAt": "2026-09-24T23:11:57.766Z",
+            "durationMs": 22520,
+            "usage": {
+              "input": 1702,
+              "output": 657,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 2359
+            }
+          },
+          {
+            "id": "75db5f54-f572-485e-84a4-07f88e565077",
+            "role": "output-validator",
+            "provider": "openai-codex",
+            "model": "gpt-6-astra",
+            "phase": "curation",
+            "attempt": 1,
+            "outputRevision": 1,
+            "startedAt": "2026-09-24T23:11:57.784Z",
+            "status": "completed",
+            "budgetCycleId": "dcebe99d-9d6f-47cb-b80a-fdcef0556403",
+            "finishedAt": "2026-09-24T23:12:01.369Z",
+            "durationMs": 3585,
+            "usage": {
+              "input": 2507,
+              "output": 51,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 2558
+            }
+          },
+          {
+            "id": "109c8e97-4e87-4bbb-81df-a9b9b51530bb",
+            "role": "test-designer",
+            "provider": "openai-codex",
+            "model": "gpt-6-astra",
+            "phase": "planning",
+            "attempt": 1,
+            "outputRevision": 1,
+            "startedAt": "2026-09-24T23:12:01.402Z",
+            "status": "completed",
+            "budgetCycleId": "dcebe99d-9d6f-47cb-b80a-fdcef0556403",
+            "finishedAt": "2026-09-24T23:12:21.772Z",
+            "durationMs": 20370,
+            "usage": {
+              "input": 1804,
+              "output": 609,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 2413
+            }
+          },
+          {
+            "id": "f0fcaf74-9a09-4e0e-85b7-0a36da4a0810",
+            "role": "output-validator",
+            "provider": "openai-codex",
+            "model": "gpt-6-astra",
+            "phase": "planning",
+            "attempt": 1,
+            "outputRevision": 1,
+            "startedAt": "2026-09-24T23:12:21.795Z",
+            "status": "completed",
+            "budgetCycleId": "dcebe99d-9d6f-47cb-b80a-fdcef0556403",
+            "finishedAt": "2026-09-24T23:12:25.989Z",
+            "durationMs": 4194,
+            "usage": {
+              "input": 3138,
+              "output": 58,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 3196
+            }
+          },
+          {
+            "id": "92429f73-51a3-4bfb-8340-00c695682b69",
+            "role": "test-designer",
+            "provider": "openai-codex",
+            "model": "gpt-6-astra",
+            "phase": "case_design",
+            "attempt": 1,
+            "outputRevision": 1,
+            "startedAt": "2026-09-24T23:12:26.519Z",
+            "status": "completed",
+            "budgetCycleId": "dcebe99d-9d6f-47cb-b80a-fdcef0556403",
+            "finishedAt": "2026-09-24T23:13:18.308Z",
+            "durationMs": 51789,
+            "usage": {
+              "input": 2618,
+              "output": 1656,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 4274
+            }
+          },
+          {
+            "id": "cf0d4463-dd71-4b96-8d86-fc7bc20acf12",
+            "role": "output-validator",
+            "provider": "openai-codex",
+            "model": "gpt-6-astra",
+            "phase": "case_design",
+            "attempt": 1,
+            "outputRevision": 1,
+            "startedAt": "2026-09-24T23:13:18.329Z",
+            "status": "completed",
+            "budgetCycleId": "dcebe99d-9d6f-47cb-b80a-fdcef0556403",
+            "finishedAt": "2026-09-24T23:13:24.898Z",
+            "durationMs": 6569,
+            "usage": {
+              "input": 5059,
+              "output": 63,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 5122
+            }
+          }
+        ],
+        "accumulatedActiveMs": 109192,
+        "consumedAnswerIds": []
+      },
+      "workIntents": [
+        {
+          "type": "create_cases",
+          "outputId": "536339cb-9096-4bff-96e2-d2cefff456c8",
+          "outputRevision": 1,
+          "id": "b1daac17-cff7-4795-98b9-a24b8475adb8",
+          "processingId": "91218786-82d1-4a8c-b6fc-01c8472fe4bf",
+          "createdAt": "2026-09-24T23:12:26.506Z",
+          "status": "completed",
+          "finishedAt": "2026-09-24T23:13:24.924Z"
+        }
+      ],
+      "activeMsBeforeCases": 50774,
+      "publicCases": {
+        "id": "374c358b-87db-443d-972b-c3a104bf53c7",
+        "revision": 1,
+        "current": true,
+        "dependsOn": [
+          {
+            "outputId": "3ae97f8b-5ddf-4f56-b78c-db50c0913281",
+            "revision": 1
+          },
+          {
+            "outputId": "536339cb-9096-4bff-96e2-d2cefff456c8",
+            "revision": 1
+          }
+        ],
+        "answerRefs": [],
+        "payload": {
+          "testCases": [
+            {
+              "id": "CT-01",
+              "requirementIds": [
+                "RF-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "preconditions": [
+                "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+              ],
+              "setup": "Identificar os registros existentes para distinguir a reserva a ser solicitada.",
+              "pathId": null,
+              "data": {
+                "quantidade": 5
+              },
+              "techniques": [
+                {
+                  "name": "Particionamento de equivalência",
+                  "description": "CA-01 e CA-02: 5 representa a classe válida de inteiros entre 1 e 10, afastado das fronteiras.",
+                  "values": [
+                    5
+                  ]
+                }
+              ],
+              "expected": "Ao solicitar a reserva com quantidade 5, o sistema registra uma reserva com quantidade 5 e informa \"Reserva confirmada\".",
+              "sources": [
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L1-L2",
+                  "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive.\nPara uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\"."
+                }
+              ]
+            },
+            {
+              "id": "CT-02",
+              "requirementIds": [
+                "RF-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "preconditions": [
+                "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+              ],
+              "setup": "Identificar os registros existentes para distinguir a reserva a ser solicitada.",
+              "pathId": null,
+              "data": {
+                "quantidade": 1
+              },
+              "techniques": [
+                {
+                  "name": "Análise de valores limite",
+                  "description": "CA-01 e CA-02: 1 exercita o limite inferior inclusivo do domínio inteiro válido.",
+                  "values": [
+                    1
+                  ]
+                }
+              ],
+              "expected": "Ao solicitar a reserva com quantidade 1, o sistema registra uma reserva com quantidade 1 e informa \"Reserva confirmada\".",
+              "sources": [
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L1-L2",
+                  "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive.\nPara uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\"."
+                }
+              ]
+            },
+            {
+              "id": "CT-03",
+              "requirementIds": [
+                "RF-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "preconditions": [
+                "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+              ],
+              "setup": "Identificar os registros existentes para distinguir a reserva a ser solicitada.",
+              "pathId": null,
+              "data": {
+                "quantidade": 10
+              },
+              "techniques": [
+                {
+                  "name": "Análise de valores limite",
+                  "description": "CA-01 e CA-02: 10 exercita o limite superior inclusivo do domínio inteiro válido.",
+                  "values": [
+                    10
+                  ]
+                }
+              ],
+              "expected": "Ao solicitar a reserva com quantidade 10, o sistema registra uma reserva com quantidade 10 e informa \"Reserva confirmada\".",
+              "sources": [
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L1-L2",
+                  "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive.\nPara uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\"."
+                }
+              ]
+            },
+            {
+              "id": "CT-04",
+              "requirementIds": [
+                "RF-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-03"
+              ],
+              "preconditions": [
+                "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+              ],
+              "setup": "Identificar os registros existentes para verificar a ausência de nova reserva correspondente à solicitação.",
+              "pathId": null,
+              "data": {
+                "quantidade": 0
+              },
+              "techniques": [
+                {
+                  "name": "Análise de valores limite",
+                  "description": "CA-01 e CA-03: 0 é o inteiro imediatamente abaixo do mínimo 1, usando passo unitário do domínio inteiro.",
+                  "values": [
+                    0
+                  ]
+                },
+                {
+                  "name": "Particionamento de equivalência",
+                  "description": "CA-01 e CA-03: 0 representa a classe inválida de inteiros menores que 1.",
+                  "values": [
+                    0
+                  ]
+                }
+              ],
+              "expected": "Ao solicitar a reserva com quantidade 0, o sistema não registra reserva para a solicitação e informa \"Quantidade inválida\".",
+              "sources": [
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L1",
+                  "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive."
+                },
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L3",
+                  "quote": "Para uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\"."
+                }
+              ]
+            },
+            {
+              "id": "CT-05",
+              "requirementIds": [
+                "RF-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-03"
+              ],
+              "preconditions": [
+                "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+              ],
+              "setup": "Identificar os registros existentes para verificar a ausência de nova reserva correspondente à solicitação.",
+              "pathId": null,
+              "data": {
+                "quantidade": 11
+              },
+              "techniques": [
+                {
+                  "name": "Análise de valores limite",
+                  "description": "CA-01 e CA-03: 11 é o inteiro imediatamente acima do máximo 10, usando passo unitário do domínio inteiro.",
+                  "values": [
+                    11
+                  ]
+                },
+                {
+                  "name": "Particionamento de equivalência",
+                  "description": "CA-01 e CA-03: 11 representa a classe inválida de inteiros maiores que 10.",
+                  "values": [
+                    11
+                  ]
+                }
+              ],
+              "expected": "Ao solicitar a reserva com quantidade 11, o sistema não registra reserva para a solicitação e informa \"Quantidade inválida\".",
+              "sources": [
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L1",
+                  "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive."
+                },
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L3",
+                  "quote": "Para uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\"."
+                }
+              ]
+            },
+            {
+              "id": "CT-06",
+              "requirementIds": [
+                "RF-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-03"
+              ],
+              "preconditions": [
+                "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+              ],
+              "setup": "Identificar os registros existentes para verificar a ausência de nova reserva correspondente à solicitação.",
+              "pathId": null,
+              "data": {
+                "quantidade": 5.5
+              },
+              "techniques": [
+                {
+                  "name": "Particionamento de equivalência",
+                  "description": "CA-01 e CA-03: 5.5 representa a classe inválida de números não inteiros; estar entre 1 e 10 isola a violação de integralidade, sem pressupor arredondamento ou precisão permitida.",
+                  "values": [
+                    5.5
+                  ]
+                }
+              ],
+              "expected": "Ao solicitar a reserva com quantidade 5.5, o sistema não registra reserva para a solicitação e informa \"Quantidade inválida\".",
+              "sources": [
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L1",
+                  "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive."
+                },
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L3",
+                  "quote": "Para uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\"."
+                }
+              ]
+            }
+          ]
+        },
+        "validations": [
+          {
+            "outputId": "374c358b-87db-443d-972b-c3a104bf53c7",
+            "outputRevision": 1,
+            "validator": "output-validator",
+            "status": "approved",
+            "reason": "Os casos cobrem as regras e a abordagem do plano aprovado, incluindo limites inclusivos, inteiros imediatamente externos e quantidade não inteira. Dados, expectativas e mensagens são fiéis às fontes, sem percursos ou comportamentos inventados.",
+            "findings": []
+          }
+        ]
+      },
+      "rereadConfirmed": true
+    },
+    {
+      "inputFile": "entrada-gherkin.feature",
+      "inputSha256": "471151458f8b6ad25dd538352ca108be388e09c314217d381d66c41ef5f39003",
+      "inputText": "Funcionalidade: Reserva de itens\n  Cenário: Solicitação de cinco itens\n    Dado um item disponível para reserva\n    Quando solicito a reserva de 5 unidades desse item\n    Então uma reserva de 5 unidades é registrada\n    E recebo a mensagem \"Reserva confirmada\"\n",
+      "state": {
+        "status": "awaiting_approval",
+        "phase": "case_design"
+      },
+      "events": [
+        {
+          "operation": "start",
+          "httpStatus": 202
+        },
+        {
+          "operation": "approve",
+          "httpStatus": 200,
+          "actorKind": "controlled-demo-automation"
+        },
+        {
+          "operation": "continue",
+          "httpStatus": 202
+        },
+        {
+          "operation": "continue-repeated-running",
+          "httpStatus": 200
+        },
+        {
+          "operation": "continue-repeated-finished",
+          "httpStatus": 200
+        }
+      ],
+      "outputs": [
+        {
+          "id": "d06a30d2-824b-488c-8863-afabe0a62d21",
+          "phase": "curation",
+          "revision": 1,
+          "producer": "artifact-curator",
+          "createdAt": "2026-09-24T23:13:41.646Z",
+          "budgetCycleId": "2d3994d1-6cfb-4b36-a28b-7754540c91a4",
+          "dependsOn": [],
+          "answerRefs": [],
+          "payload": {
+            "requirements": [
+              {
+                "id": "RF-01",
+                "statement": "Reserva de itens.",
+                "sources": [
+                  {
+                    "artifactId": "6a20f6e4-e7c2-45da-a1fd-7be0aeaff28b",
+                    "locator": "L1",
+                    "quote": "Funcionalidade: Reserva de itens"
+                  }
+                ],
+                "rules": [
+                  {
+                    "id": "CA-01",
+                    "statement": "Para um item disponível, a solicitação de reserva de 5 unidades registra uma reserva de 5 unidades e apresenta a mensagem \"Reserva confirmada\".",
+                    "sources": [
+                      {
+                        "artifactId": "6a20f6e4-e7c2-45da-a1fd-7be0aeaff28b",
+                        "locator": "L3-L6",
+                        "quote": "    Dado um item disponível para reserva\n    Quando solicito a reserva de 5 unidades desse item\n    Então uma reserva de 5 unidades é registrada\n    E recebo a mensagem \"Reserva confirmada\""
+                      }
+                    ],
+                    "kind": "example",
+                    "examples": [
+                      {
+                        "id": "EX-01",
+                        "given": [
+                          "Um item disponível para reserva."
+                        ],
+                        "when": [
+                          "Solicito a reserva de 5 unidades desse item."
+                        ],
+                        "then": [
+                          "Uma reserva de 5 unidades é registrada.",
+                          "Recebo a mensagem \"Reserva confirmada\"."
+                        ],
+                        "sources": [
+                          {
+                            "artifactId": "6a20f6e4-e7c2-45da-a1fd-7be0aeaff28b",
+                            "locator": "L2-L6",
+                            "quote": "  Cenário: Solicitação de cinco itens\n    Dado um item disponível para reserva\n    Quando solicito a reserva de 5 unidades desse item\n    Então uma reserva de 5 unidades é registrada\n    E recebo a mensagem \"Reserva confirmada\""
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "questions": []
+          }
+        },
+        {
+          "id": "11b8457e-f3e2-4e6f-8400-b8c2849d845e",
+          "phase": "planning",
+          "revision": 1,
+          "producer": "test-designer",
+          "createdAt": "2026-09-24T23:14:00.314Z",
+          "budgetCycleId": "2d3994d1-6cfb-4b36-a28b-7754540c91a4",
+          "dependsOn": [
+            {
+              "outputId": "d06a30d2-824b-488c-8863-afabe0a62d21",
+              "revision": 1
+            }
+          ],
+          "answerRefs": [],
+          "payload": {
+            "testPlan": {
+              "objective": "Verificar a confirmação e o registro da reserva de 5 unidades de um item disponível, conforme RF-01 e o exemplo CA-01/EX-01.",
+              "requirementIds": [
+                "RF-01"
+              ],
+              "ruleIds": [
+                "CA-01"
+              ],
+              "priorities": [
+                {
+                  "ruleId": "CA-01",
+                  "reason": "Garantir que a quantidade registrada corresponda à solicitação e que a confirmação prevista seja apresentada."
+                }
+              ],
+              "exclusions": [
+                {
+                  "description": "Outras quantidades, limites de reserva e item indisponível.",
+                  "reason": "CA-01 é um exemplo pontual; o material não define regras gerais nem resultados esperados para essas condições."
+                }
+              ],
+              "approach": [
+                "Cobertura baseada no exemplo EX-01: verificar o registro de 5 unidades e a mensagem literal \"Reserva confirmada\" após a solicitação para um item disponível.",
+                "Não aplicar partições ou análise de valores limite: a quantidade 5 exemplifica um comportamento, mas não estabelece domínio ou limite geral."
+              ],
+              "preconditions": [
+                "Existir um item disponível para reserva."
+              ],
+              "sources": [
+                {
+                  "artifactId": "6a20f6e4-e7c2-45da-a1fd-7be0aeaff28b",
+                  "locator": "L2-L6",
+                  "quote": "  Cenário: Solicitação de cinco itens\n    Dado um item disponível para reserva\n    Quando solicito a reserva de 5 unidades desse item\n    Então uma reserva de 5 unidades é registrada\n    E recebo a mensagem \"Reserva confirmada\""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "dd161e09-8077-4c98-b763-a16ad03d4b05",
+          "phase": "case_design",
+          "revision": 1,
+          "producer": "test-designer",
+          "createdAt": "2026-09-24T23:14:13.976Z",
+          "budgetCycleId": "2d3994d1-6cfb-4b36-a28b-7754540c91a4",
+          "dependsOn": [
+            {
+              "outputId": "d06a30d2-824b-488c-8863-afabe0a62d21",
+              "revision": 1
+            },
+            {
+              "outputId": "11b8457e-f3e2-4e6f-8400-b8c2849d845e",
+              "revision": 1
+            }
+          ],
+          "answerRefs": [],
+          "payload": {
+            "testCases": [
+              {
+                "id": "CT-01",
+                "requirementIds": [
+                  "RF-01"
+                ],
+                "ruleIds": [
+                  "CA-01"
+                ],
+                "preconditions": [
+                  "Existir um item disponível para reserva."
+                ],
+                "setup": "Nenhuma preparação adicional necessária.",
+                "pathId": null,
+                "data": {
+                  "quantidadeSolicitada": 5
+                },
+                "techniques": [
+                  {
+                    "name": "Teste baseado em exemplo",
+                    "description": "Exercitar CA-01 conforme EX-01, solicitando 5 unidades do item disponível. O valor 5 reproduz o exemplo aprovado, sem representar uma classe ou fronteira.",
+                    "values": [
+                      5
+                    ]
+                  }
+                ],
+                "expected": "Ao solicitar a reserva de 5 unidades do item disponível, uma reserva de 5 unidades desse item é registrada e o solicitante recebe a mensagem \"Reserva confirmada\".",
+                "sources": [
+                  {
+                    "artifactId": "6a20f6e4-e7c2-45da-a1fd-7be0aeaff28b",
+                    "locator": "L2-L6",
+                    "quote": "  Cenário: Solicitação de cinco itens\n    Dado um item disponível para reserva\n    Quando solicito a reserva de 5 unidades desse item\n    Então uma reserva de 5 unidades é registrada\n    E recebo a mensagem \"Reserva confirmada\""
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "validations": [
+        {
+          "id": "9056cb2b-4b3c-469a-8ba4-9d91520ccc80",
+          "outputId": "d06a30d2-824b-488c-8863-afabe0a62d21",
+          "outputRevision": 1,
+          "validator": "output-validator",
+          "at": "2026-09-24T23:13:45.008Z",
+          "attempt": 1,
+          "status": "approved",
+          "findings": [],
+          "reason": "A curadoria preserva as condições, a quantidade e os resultados do cenário original, classificado corretamente como exemplo pontual, sem generalizações indevidas."
+        },
+        {
+          "id": "8bfe7638-9d18-4176-8f0b-35636466f7b9",
+          "outputId": "11b8457e-f3e2-4e6f-8400-b8c2849d845e",
+          "outputRevision": 1,
+          "validator": "output-validator",
+          "at": "2026-09-24T23:14:04.060Z",
+          "attempt": 1,
+          "status": "approved",
+          "findings": [],
+          "reason": "O plano cobre fielmente o exemplo CA-01/EX-01, incluindo quantidade registrada e mensagem literal, sem generalizar regras ou inventar limites. As exclusões estão justificadas pelas fontes."
+        },
+        {
+          "id": "4c7212d2-f467-4c53-b363-a4f1ce220886",
+          "outputId": "dd161e09-8077-4c98-b763-a16ad03d4b05",
+          "outputRevision": 1,
+          "validator": "output-validator",
+          "at": "2026-09-24T23:14:17.571Z",
+          "attempt": 1,
+          "status": "approved",
+          "findings": [],
+          "reason": "O caso CT-01 reproduz fielmente o exemplo recebido, cobre o registro das 5 unidades e a mensagem prevista, sem extrapolar o plano aprovado."
+        }
+      ],
+      "approvals": [
+        {
+          "id": "128ee49c-0589-466b-bca1-708a7acb690f",
+          "outputId": "11b8457e-f3e2-4e6f-8400-b8c2849d845e",
+          "outputRevision": 1,
+          "at": "2026-09-24T23:14:04.248Z",
+          "comment": "",
+          "decision": "approved",
+          "actorKind": "controlled-demo-automation"
+        }
+      ],
+      "artifacts": [
+        {
+          "id": "6a20f6e4-e7c2-45da-a1fd-7be0aeaff28b",
+          "name": "historias-e-criterios.txt",
+          "version": "1",
+          "text": "Funcionalidade: Reserva de itens\n  Cenário: Solicitação de cinco itens\n    Dado um item disponível para reserva\n    Quando solicito a reserva de 5 unidades desse item\n    Então uma reserva de 5 unidades é registrada\n    E recebo a mensagem \"Reserva confirmada\"\n"
+        }
+      ],
+      "answers": [],
+      "budgetCycles": [
+        {
+          "id": "2d3994d1-6cfb-4b36-a28b-7754540c91a4",
+          "startedAt": "2026-09-24T23:13:24.996Z",
+          "reason": "initial_preparation",
+          "answerRef": null,
+          "affectedCaseIds": [],
+          "limits": {
+            "maxRequirements": 10,
+            "maxRevisions": 3,
+            "maxValidatorAttempts": 2,
+            "timeoutMs": 120000,
+            "activeMs": 2700000
+          }
+        }
+      ],
+      "preparation": {
+        "id": "6c3963f7-538e-4d3a-bcc8-40d0e3678100",
+        "budgetCycleId": "2d3994d1-6cfb-4b36-a28b-7754540c91a4",
+        "startedAt": "2026-09-24T23:14:04.260Z",
+        "finishedAt": "2026-09-24T23:14:17.582Z",
+        "activeRole": null,
+        "activity": null,
+        "stopReason": null,
+        "limits": {
+          "maxRequirements": 10,
+          "maxRevisions": 3,
+          "maxValidatorAttempts": 2,
+          "timeoutMs": 120000,
+          "activeMs": 2700000
+        },
+        "calls": [
+          {
+            "id": "7e1601e2-bd30-4551-8a08-500419551096",
+            "role": "artifact-curator",
+            "provider": "openai-codex",
+            "model": "gpt-6-astra",
+            "phase": "curation",
+            "attempt": 1,
+            "outputRevision": 1,
+            "startedAt": "2026-09-24T23:13:25.006Z",
+            "status": "completed",
+            "budgetCycleId": "2d3994d1-6cfb-4b36-a28b-7754540c91a4",
+            "finishedAt": "2026-09-24T23:13:41.630Z",
+            "durationMs": 16624,
+            "usage": {
+              "input": 1690,
+              "output": 468,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 2158
+            }
+          },
+          {
+            "id": "dbaa5f36-0628-4669-a8a1-96f3b8aae77b",
+            "role": "output-validator",
+            "provider": "openai-codex",
+            "model": "gpt-6-astra",
+            "phase": "curation",
+            "attempt": 1,
+            "outputRevision": 1,
+            "startedAt": "2026-09-24T23:13:41.657Z",
+            "status": "completed",
+            "budgetCycleId": "2d3994d1-6cfb-4b36-a28b-7754540c91a4",
+            "finishedAt": "2026-09-24T23:13:44.997Z",
+            "durationMs": 3340,
+            "usage": {
+              "input": 2328,
+              "output": 47,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 2375
+            }
+          },
+          {
+            "id": "2ae39908-042d-4362-8f77-3b8edd473c99",
+            "role": "test-designer",
+            "provider": "openai-codex",
+            "model": "gpt-6-astra",
+            "phase": "planning",
+            "attempt": 1,
+            "outputRevision": 1,
+            "startedAt": "2026-09-24T23:13:45.019Z",
+            "status": "completed",
+            "budgetCycleId": "2d3994d1-6cfb-4b36-a28b-7754540c91a4",
+            "finishedAt": "2026-09-24T23:14:00.304Z",
+            "durationMs": 15285,
+            "usage": {
+              "input": 1625,
+              "output": 382,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 2007
+            }
+          },
+          {
+            "id": "b1c748bf-5a51-40ec-946b-f67863b59274",
+            "role": "output-validator",
+            "provider": "openai-codex",
+            "model": "gpt-6-astra",
+            "phase": "planning",
+            "attempt": 1,
+            "outputRevision": 1,
+            "startedAt": "2026-09-24T23:14:00.323Z",
+            "status": "completed",
+            "budgetCycleId": "2d3994d1-6cfb-4b36-a28b-7754540c91a4",
+            "finishedAt": "2026-09-24T23:14:04.048Z",
+            "durationMs": 3725,
+            "usage": {
+              "input": 2776,
+              "output": 56,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 2832
+            }
+          },
+          {
+            "id": "dd37d2eb-8c45-434c-ad79-92525c2ca51d",
+            "role": "test-designer",
+            "provider": "openai-codex",
+            "model": "gpt-6-astra",
+            "phase": "case_design",
+            "attempt": 1,
+            "outputRevision": 1,
+            "startedAt": "2026-09-24T23:14:04.271Z",
+            "status": "completed",
+            "budgetCycleId": "2d3994d1-6cfb-4b36-a28b-7754540c91a4",
+            "finishedAt": "2026-09-24T23:14:13.966Z",
+            "durationMs": 9695,
+            "usage": {
+              "input": 2259,
+              "output": 257,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 2516
+            }
+          },
+          {
+            "id": "b012406a-4f98-4c70-ab2c-4c2942c25744",
+            "role": "output-validator",
+            "provider": "openai-codex",
+            "model": "gpt-6-astra",
+            "phase": "case_design",
+            "attempt": 1,
+            "outputRevision": 1,
+            "startedAt": "2026-09-24T23:14:13.986Z",
+            "status": "completed",
+            "budgetCycleId": "2d3994d1-6cfb-4b36-a28b-7754540c91a4",
+            "finishedAt": "2026-09-24T23:14:17.561Z",
+            "durationMs": 3575,
+            "usage": {
+              "input": 3307,
+              "output": 48,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 3355
+            }
+          }
+        ],
+        "accumulatedActiveMs": 52397,
+        "consumedAnswerIds": []
+      },
+      "workIntents": [
+        {
+          "type": "create_cases",
+          "outputId": "11b8457e-f3e2-4e6f-8400-b8c2849d845e",
+          "outputRevision": 1,
+          "id": "e7476a78-ecc6-4b6b-9a60-b28484862b1d",
+          "processingId": "6c3963f7-538e-4d3a-bcc8-40d0e3678100",
+          "createdAt": "2026-09-24T23:14:04.260Z",
+          "status": "completed",
+          "finishedAt": "2026-09-24T23:14:17.582Z"
+        }
+      ],
+      "activeMsBeforeCases": 39075,
+      "publicCases": {
+        "id": "dd161e09-8077-4c98-b763-a16ad03d4b05",
+        "revision": 1,
+        "current": true,
+        "dependsOn": [
+          {
+            "outputId": "d06a30d2-824b-488c-8863-afabe0a62d21",
+            "revision": 1
+          },
+          {
+            "outputId": "11b8457e-f3e2-4e6f-8400-b8c2849d845e",
+            "revision": 1
+          }
+        ],
+        "answerRefs": [],
+        "payload": {
+          "testCases": [
+            {
+              "id": "CT-01",
+              "requirementIds": [
+                "RF-01"
+              ],
+              "ruleIds": [
+                "CA-01"
+              ],
+              "preconditions": [
+                "Existir um item disponível para reserva."
+              ],
+              "setup": "Nenhuma preparação adicional necessária.",
+              "pathId": null,
+              "data": {
+                "quantidadeSolicitada": 5
+              },
+              "techniques": [
+                {
+                  "name": "Teste baseado em exemplo",
+                  "description": "Exercitar CA-01 conforme EX-01, solicitando 5 unidades do item disponível. O valor 5 reproduz o exemplo aprovado, sem representar uma classe ou fronteira.",
+                  "values": [
+                    5
+                  ]
+                }
+              ],
+              "expected": "Ao solicitar a reserva de 5 unidades do item disponível, uma reserva de 5 unidades desse item é registrada e o solicitante recebe a mensagem \"Reserva confirmada\".",
+              "sources": [
+                {
+                  "artifactId": "6a20f6e4-e7c2-45da-a1fd-7be0aeaff28b",
+                  "locator": "L2-L6",
+                  "quote": "  Cenário: Solicitação de cinco itens\n    Dado um item disponível para reserva\n    Quando solicito a reserva de 5 unidades desse item\n    Então uma reserva de 5 unidades é registrada\n    E recebo a mensagem \"Reserva confirmada\""
+                }
+              ]
+            }
+          ]
+        },
+        "validations": [
+          {
+            "outputId": "dd161e09-8077-4c98-b763-a16ad03d4b05",
+            "outputRevision": 1,
+            "validator": "output-validator",
+            "status": "approved",
+            "reason": "O caso CT-01 reproduz fielmente o exemplo recebido, cobre o registro das 5 unidades e a mensagem prevista, sem extrapolar o plano aprovado.",
+            "findings": []
+          }
+        ]
+      },
+      "rereadConfirmed": true
+    }
+  ],
+  "negativeValidator": {
+    "startedFrom": {
+      "outputId": "374c358b-87db-443d-972b-c3a104bf53c7",
+      "revision": 1
+    },
+    "changedCaseId": "CT-04",
+    "correctExpected": "Ao solicitar a reserva com quantidade 0, o sistema não registra reserva para a solicitação e informa \"Quantidade inválida\".",
+    "alteredExpected": "O sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\".",
+    "errorDescriptionSentToModel": false,
+    "completeContext": {
+      "task": "validation",
+      "artifacts": [
+        {
+          "id": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+          "name": "historias-e-criterios.txt",
+          "version": "1",
+          "text": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive.\nPara uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\".\nPara uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\".\n"
+        }
+      ],
+      "answers": [],
+      "objective": "",
+      "approvedCuration": {
+        "id": "3ae97f8b-5ddf-4f56-b78c-db50c0913281",
+        "phase": "curation",
+        "revision": 1,
+        "producer": "artifact-curator",
+        "createdAt": "2026-09-24T23:11:57.774Z",
+        "budgetCycleId": "dcebe99d-9d6f-47cb-b80a-fdcef0556403",
+        "dependsOn": [],
+        "answerRefs": [],
+        "payload": {
+          "requirements": [
+            {
+              "id": "RF-01",
+              "statement": "Validar a quantidade solicitada na reserva de itens e registrar ou rejeitar a reserva conforme sua validade.",
+              "sources": [
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L1-L3",
+                  "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive.\nPara uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\".\nPara uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\"."
+                }
+              ],
+              "rules": [
+                {
+                  "id": "CA-01",
+                  "statement": "A quantidade solicitada deve ser um número inteiro de 1 a 10, inclusive.",
+                  "sources": [
+                    {
+                      "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                      "locator": "L1",
+                      "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive."
+                    }
+                  ],
+                  "kind": "rule"
+                },
+                {
+                  "id": "CA-02",
+                  "statement": "Para uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\".",
+                  "sources": [
+                    {
+                      "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                      "locator": "L2",
+                      "quote": "Para uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\"."
+                    }
+                  ],
+                  "kind": "rule"
+                },
+                {
+                  "id": "CA-03",
+                  "statement": "Para uma quantidade fora do intervalo de 1 a 10, inclusive, ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\".",
+                  "sources": [
+                    {
+                      "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                      "locator": "L1",
+                      "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive."
+                    },
+                    {
+                      "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                      "locator": "L3",
+                      "quote": "Para uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\"."
+                    }
+                  ],
+                  "kind": "rule"
+                }
+              ]
+            }
+          ],
+          "questions": []
+        }
+      },
+      "approvedPlan": {
+        "id": "536339cb-9096-4bff-96e2-d2cefff456c8",
+        "phase": "planning",
+        "revision": 1,
+        "producer": "test-designer",
+        "createdAt": "2026-09-24T23:12:21.784Z",
+        "budgetCycleId": "dcebe99d-9d6f-47cb-b80a-fdcef0556403",
+        "dependsOn": [
+          {
+            "outputId": "3ae97f8b-5ddf-4f56-b78c-db50c0913281",
+            "revision": 1
+          }
+        ],
+        "answerRefs": [],
+        "payload": {
+          "testPlan": {
+            "objective": "Verificar a validação da quantidade na solicitação de reserva, o registro correto para quantidades válidas e a rejeição sem registro para quantidades inválidas.",
+            "requirementIds": [
+              "RF-01"
+            ],
+            "ruleIds": [
+              "CA-01",
+              "CA-02",
+              "CA-03"
+            ],
+            "priorities": [
+              {
+                "ruleId": "CA-01",
+                "reason": "A integralidade e os limites inclusivos determinam quais solicitações podem ser aceitas."
+              },
+              {
+                "ruleId": "CA-03",
+                "reason": "Impedir registros inválidos preserva a integridade das reservas."
+              },
+              {
+                "ruleId": "CA-02",
+                "reason": "Garantir que a reserva registrada corresponda à quantidade solicitada e que a confirmação seja informada."
+              }
+            ],
+            "exclusions": [],
+            "approach": [
+              "CA-01: aplicar particionamento de equivalência para inteiros dentro do intervalo, inteiros abaixo e acima do intervalo e valores não inteiros.",
+              "CA-01 e CA-03: aplicar análise de valores limite nas extremidades inclusivas de 1 a 10 e nos inteiros imediatamente externos, verificando aceitação ou rejeição conforme a regra.",
+              "CA-02: nas quantidades válidas, verificar o registro da reserva com a quantidade solicitada e a mensagem literal \"Reserva confirmada\".",
+              "CA-03: nas partições inválidas, verificar conjuntamente a ausência de registro de reserva e a mensagem literal \"Quantidade inválida\"."
+            ],
+            "preconditions": [
+              "Dispor de um ambiente que permita solicitar reservas e consultar os registros correspondentes para verificar sua criação ou ausência."
+            ],
+            "sources": [
+              {
+                "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                "locator": "L1",
+                "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive."
+              },
+              {
+                "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                "locator": "L2",
+                "quote": "Para uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\"."
+              },
+              {
+                "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                "locator": "L3",
+                "quote": "Para uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\"."
+              }
+            ]
+          }
+        }
+      },
+      "planApproval": {
+        "id": "334da55e-3e30-4954-9565-ff4b4118c276",
+        "outputId": "536339cb-9096-4bff-96e2-d2cefff456c8",
+        "outputRevision": 1,
+        "actorId": "278665d7-378b-472a-b9fb-d0e830e09d4d",
+        "at": "2026-09-24T23:12:26.493Z",
+        "comment": "",
+        "decision": "approved"
+      },
+      "output": {
+        "id": "bc8b3ef5-ab9e-40b3-913d-ddcaa597cc37",
+        "phase": "case_design",
+        "revision": 1,
+        "producer": "test-designer",
+        "createdAt": "2026-09-24T23:14:17.855Z",
+        "budgetCycleId": "dcebe99d-9d6f-47cb-b80a-fdcef0556403",
+        "dependsOn": [
+          {
+            "outputId": "3ae97f8b-5ddf-4f56-b78c-db50c0913281",
+            "revision": 1
+          },
+          {
+            "outputId": "536339cb-9096-4bff-96e2-d2cefff456c8",
+            "revision": 1
+          }
+        ],
+        "answerRefs": [],
+        "payload": {
+          "testCases": [
+            {
+              "id": "CT-01",
+              "requirementIds": [
+                "RF-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "preconditions": [
+                "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+              ],
+              "setup": "Identificar os registros existentes para distinguir a reserva a ser solicitada.",
+              "pathId": null,
+              "data": {
+                "quantidade": 5
+              },
+              "techniques": [
+                {
+                  "name": "Particionamento de equivalência",
+                  "description": "CA-01 e CA-02: 5 representa a classe válida de inteiros entre 1 e 10, afastado das fronteiras.",
+                  "values": [
+                    5
+                  ]
+                }
+              ],
+              "expected": "Ao solicitar a reserva com quantidade 5, o sistema registra uma reserva com quantidade 5 e informa \"Reserva confirmada\".",
+              "sources": [
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L1-L2",
+                  "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive.\nPara uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\"."
+                }
+              ]
+            },
+            {
+              "id": "CT-02",
+              "requirementIds": [
+                "RF-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "preconditions": [
+                "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+              ],
+              "setup": "Identificar os registros existentes para distinguir a reserva a ser solicitada.",
+              "pathId": null,
+              "data": {
+                "quantidade": 1
+              },
+              "techniques": [
+                {
+                  "name": "Análise de valores limite",
+                  "description": "CA-01 e CA-02: 1 exercita o limite inferior inclusivo do domínio inteiro válido.",
+                  "values": [
+                    1
+                  ]
+                }
+              ],
+              "expected": "Ao solicitar a reserva com quantidade 1, o sistema registra uma reserva com quantidade 1 e informa \"Reserva confirmada\".",
+              "sources": [
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L1-L2",
+                  "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive.\nPara uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\"."
+                }
+              ]
+            },
+            {
+              "id": "CT-03",
+              "requirementIds": [
+                "RF-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "preconditions": [
+                "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+              ],
+              "setup": "Identificar os registros existentes para distinguir a reserva a ser solicitada.",
+              "pathId": null,
+              "data": {
+                "quantidade": 10
+              },
+              "techniques": [
+                {
+                  "name": "Análise de valores limite",
+                  "description": "CA-01 e CA-02: 10 exercita o limite superior inclusivo do domínio inteiro válido.",
+                  "values": [
+                    10
+                  ]
+                }
+              ],
+              "expected": "Ao solicitar a reserva com quantidade 10, o sistema registra uma reserva com quantidade 10 e informa \"Reserva confirmada\".",
+              "sources": [
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L1-L2",
+                  "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive.\nPara uma quantidade válida, o sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\"."
+                }
+              ]
+            },
+            {
+              "id": "CT-04",
+              "requirementIds": [
+                "RF-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-03"
+              ],
+              "preconditions": [
+                "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+              ],
+              "setup": "Identificar os registros existentes para verificar a ausência de nova reserva correspondente à solicitação.",
+              "pathId": null,
+              "data": {
+                "quantidade": 0
+              },
+              "techniques": [
+                {
+                  "name": "Análise de valores limite",
+                  "description": "CA-01 e CA-03: 0 é o inteiro imediatamente abaixo do mínimo 1, usando passo unitário do domínio inteiro.",
+                  "values": [
+                    0
+                  ]
+                },
+                {
+                  "name": "Particionamento de equivalência",
+                  "description": "CA-01 e CA-03: 0 representa a classe inválida de inteiros menores que 1.",
+                  "values": [
+                    0
+                  ]
+                }
+              ],
+              "expected": "O sistema registra uma reserva com a quantidade solicitada e informa \"Reserva confirmada\".",
+              "sources": [
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L1",
+                  "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive."
+                },
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L3",
+                  "quote": "Para uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\"."
+                }
+              ]
+            },
+            {
+              "id": "CT-05",
+              "requirementIds": [
+                "RF-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-03"
+              ],
+              "preconditions": [
+                "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+              ],
+              "setup": "Identificar os registros existentes para verificar a ausência de nova reserva correspondente à solicitação.",
+              "pathId": null,
+              "data": {
+                "quantidade": 11
+              },
+              "techniques": [
+                {
+                  "name": "Análise de valores limite",
+                  "description": "CA-01 e CA-03: 11 é o inteiro imediatamente acima do máximo 10, usando passo unitário do domínio inteiro.",
+                  "values": [
+                    11
+                  ]
+                },
+                {
+                  "name": "Particionamento de equivalência",
+                  "description": "CA-01 e CA-03: 11 representa a classe inválida de inteiros maiores que 10.",
+                  "values": [
+                    11
+                  ]
+                }
+              ],
+              "expected": "Ao solicitar a reserva com quantidade 11, o sistema não registra reserva para a solicitação e informa \"Quantidade inválida\".",
+              "sources": [
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L1",
+                  "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive."
+                },
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L3",
+                  "quote": "Para uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\"."
+                }
+              ]
+            },
+            {
+              "id": "CT-06",
+              "requirementIds": [
+                "RF-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-03"
+              ],
+              "preconditions": [
+                "Dispor de ambiente que permita solicitar reservas e consultar os registros correspondentes."
+              ],
+              "setup": "Identificar os registros existentes para verificar a ausência de nova reserva correspondente à solicitação.",
+              "pathId": null,
+              "data": {
+                "quantidade": 5.5
+              },
+              "techniques": [
+                {
+                  "name": "Particionamento de equivalência",
+                  "description": "CA-01 e CA-03: 5.5 representa a classe inválida de números não inteiros; estar entre 1 e 10 isola a violação de integralidade, sem pressupor arredondamento ou precisão permitida.",
+                  "values": [
+                    5.5
+                  ]
+                }
+              ],
+              "expected": "Ao solicitar a reserva com quantidade 5.5, o sistema não registra reserva para a solicitação e informa \"Quantidade inválida\".",
+              "sources": [
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L1",
+                  "quote": "Ao solicitar uma reserva de itens, a quantidade deve ser um número inteiro de 1 a 10, inclusive."
+                },
+                {
+                  "artifactId": "39ef6a10-ad0e-4fc9-8fe1-69b0f824fe04",
+                  "locator": "L3",
+                  "quote": "Para uma quantidade fora desse intervalo ou que não seja um número inteiro, o sistema não registra reserva e informa \"Quantidade inválida\"."
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "previousVerdicts": []
+    },
+    "verdict": {
+      "status": "changes_requested",
+      "findings": [
+        {
+          "code": "SOURCE_MISMATCH",
+          "message": "CT-04 usa quantidade 0, fora do intervalo permitido por CA-01, mas espera registro e confirmação. Conforme CA-03 e L3 do original, corrigir a expectativa para ausência de registro e mensagem \"Quantidade inválida\".",
+          "location": "testCases[3].expected"
+        }
+      ],
+      "reason": "A revisão 1 inverte o resultado exigido para o limite externo inferior no CT-04."
+    },
+    "metadata": {
+      "provider": "openai-codex",
+      "model": "gpt-6-astra",
+      "durationMs": 7684,
+      "usage": {
+        "input": 5047,
+        "output": 105,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 5152
+      }
+    },
+    "structuralParserAccepted": true,
+    "modifiedOriginalRun": false
+  },
+  "finishedAt": "2026-09-24T23:14:25.540Z"
+}

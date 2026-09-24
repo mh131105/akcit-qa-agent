@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test, { type TestContext } from 'node:test';
 import { createApp } from '../src/app.js';
-import { executePlanCommand } from '../src/application/plan-approval.js';
+import { executePlanCommand, getPlanReview } from '../src/application/plan-approval.js';
 import { readConfig } from '../src/config.js';
 import { RunStore, type RunRecord, type StoredRun } from '../src/storage/runs.js';
 
@@ -418,11 +418,169 @@ test('T3.1 CA-09: recuperação persiste interrupção, conserva históricos e �
   utc(interruption.at);
   assert.deepEqual(recovered.run, { ...running.run, status: 'interrupted', interruptions: [originalInterruption, interruption] });
   assert.deepEqual(recovered.workIntents[0], running.workIntents[0]);
-  assert.deepEqual(recovered.workIntents[1], { ...running.workIntents[1], status: 'interrupted', interruption });
+  assert.deepEqual(recovered.workIntents[1], { ...running.workIntents[1], status: 'interrupted', interruption,
+    finishedAt: interruption.at, reason: { code: 'SERVICE_RESTART', message: 'O serviço reiniciou; trabalho interrompido sem retomada automática.' } });
   const after = await raw();
   assert.equal(await store.recoverInterrupted(), 0);
   assert.equal(await raw(), after, 'segunda recuperação preserva a interrupção original');
   for (const record of unchanged) assert.deepEqual(await reopen(record.run.id), record);
+});
+
+function withCasePreparation(id = 'run-test'): RunRecord {
+  const run = waiting(id);
+  const startedAt = new Date(Date.now() - 1000).toISOString();
+  const limits = { maxRequirements: 10, maxRevisions: 3, maxValidatorAttempts: 2, timeoutMs: 120000, activeMs: 2700000 };
+  run.phase = 'case_design';
+  run.budgetCycles.push({ id: 'case-cycle', startedAt, reason: 'initial_preparation', answerRef: null, affectedCaseIds: [], limits });
+  run.preparation = { id: 'case-processing', budgetCycleId: 'case-cycle', startedAt, finishedAt: startedAt,
+    activeRole: null, activity: null, stopReason: null, limits, accumulatedActiveMs: 123, consumedAnswerIds: [],
+    calls: [{ id: 'case-call', role: 'test-designer', provider: 'synthetic', model: 'never-called',
+      phase: 'case_design', attempt: 1, outputRevision: 1, startedAt, finishedAt: startedAt,
+      status: 'completed', durationMs: 0, budgetCycleId: 'case-cycle' }] };
+  return run;
+}
+
+test('T6.1: casos e encerramentos de intenção sobrevivem à leitura; registros legados continuam legíveis', async t => {
+  const { store, reopen } = await temporaryStore(t);
+  const run = withCasePreparation();
+  await store.create(run);
+  const at = run.preparation!.startedAt;
+  await store.update(run.id, record => {
+    record.workIntents = [
+      { id: 'completed-cases', type: 'create_cases', ...reference, createdAt: at, processingId: 'case-processing', status: 'completed', finishedAt: at },
+      { id: 'cancelled-cases', type: 'create_cases', ...reference, createdAt: at, processingId: 'cancelled-processing',
+        status: 'cancelled', finishedAt: at, reason: { code: 'CANCELLED', message: 'Cancelado pelo usuário.' } },
+      { id: 'blocked-cases', type: 'create_cases', ...reference, createdAt: at, processingId: 'blocked-processing',
+        status: 'interrupted', finishedAt: at, reason: { code: 'VALIDATION_BLOCKED', message: 'Regra sem suporte.' } },
+      { id: 'legacy-pending', type: 'analyze_feedback', ...reference, createdAt: at, status: 'pending' },
+      { id: 'legacy-interrupted', type: 'create_cases', ...reference, createdAt: at, status: 'interrupted',
+        interruption: { reason: 'service_restart', at } },
+    ];
+    return { save: true, value: undefined };
+  });
+  const saved = await reopen();
+  assert.deepEqual(saved.run, run);
+  assert.deepEqual(saved.workIntents.map(work => work.status), ['completed', 'cancelled', 'interrupted', 'pending', 'interrupted']);
+  assert.equal(saved.run.preparation!.calls[0]!.phase, 'case_design');
+  const original = await store.read(run.id);
+  assert.deepEqual(await reopen(), original);
+  const legacy = waiting('legacy-without-preparation');
+  await store.create(legacy);
+  assert.deepEqual((await reopen(legacy.id)).run, legacy);
+});
+
+test('T6.1: leitura recusa fases e situações inválidas, encerramento incompleto e metadados inconsistentes', async t => {
+  const { store, file, raw } = await temporaryStore(t);
+  await store.create(withCasePreparation());
+  await store.update('run-test', record => {
+    record.workIntents.push({ id: 'case-intent', type: 'create_cases', ...reference,
+      createdAt: record.run.preparation!.startedAt, status: 'pending', processingId: 'case-processing' });
+    return { save: true, value: undefined };
+  });
+  const saved = await raw();
+  const mutations: ((record: StoredRun) => void)[] = [
+    record => { Object.assign(record.run.preparation!.calls[0]!, { phase: 'navigation' }); },
+    record => { Object.assign(record.workIntents[0]!, { status: 'unknown' }); },
+    record => { Object.assign(record.workIntents[0]!, { status: 'completed' }); },
+    record => { Object.assign(record.workIntents[0]!, { status: 'cancelled' }); },
+    record => { Object.assign(record.workIntents[0]!, { status: 'interrupted', finishedAt: record.run.createdAt }); },
+    record => { Object.assign(record.workIntents[0]!, { processingId: '' }); },
+    record => { Object.assign(record.workIntents[0]!, { finishedAt: record.run.createdAt }); },
+    record => { Object.assign(record.workIntents[0]!, { status: 'completed', finishedAt: 'invalid-date' }); },
+    record => { Object.assign(record.workIntents[0]!, { status: 'cancelled', finishedAt: record.run.createdAt, reason: { code: '', message: 'Cancelado.' } }); },
+  ];
+  for (const mutate of mutations) {
+    const invalid = JSON.parse(saved) as StoredRun;
+    mutate(invalid);
+    const contents = JSON.stringify(invalid);
+    await fs.writeFile(file(), contents);
+    await assert.rejects(store.read('run-test'), { code: 'INVALID_RECORD' });
+    assert.equal(await raw(), contents, 'leitura inválida preserva o registro para recuperação explícita');
+  }
+  await fs.writeFile(file(), saved);
+  assert.deepEqual(await store.read('run-test'), JSON.parse(saved));
+});
+
+test('T6.1: projeção dos casos recusa objetos em textos e publica somente campos conhecidos', async t => {
+  const { store, raw } = await temporaryStore(t);
+  const invalidFields: ((item: Record<string, unknown>) => void)[] = [
+    item => { item.expected = { privateField: 'synthetic-private-marker' }; },
+    item => { item.setup = { privateField: 'synthetic-private-marker' }; },
+    item => { (item.sources as Record<string, unknown>[])[0]!.quote = { privateField: 'synthetic-private-marker' }; },
+    item => { (item.techniques as Record<string, unknown>[])[0]!.description = { privateField: 'synthetic-private-marker' }; },
+    item => { item.data = null; },
+    item => { item.techniques = null; },
+  ];
+  for (const [index, change] of invalidFields.entries()) {
+    const run = waiting(`invalid-public-case-${index}`);
+    const output = run.outputs.find(output => output.phase === 'case_design')!;
+    change((output.payload.testCases as Record<string, unknown>[])[0]!);
+    await store.create(run);
+    const before = await raw(run.id);
+    const review = await getPlanReview(store, run.id, owner);
+    assert.equal(review.ok, false);
+    assert.ok(!review.ok);
+    assert.equal(review.error.code, 'INVALID_RECORD');
+    assert.doesNotMatch(JSON.stringify(review), /synthetic-private-marker/);
+    assert.equal(await raw(run.id), before);
+  }
+  const run = waiting('public-case-allowlist');
+  const output = run.outputs.find(output => output.phase === 'case_design')!;
+  const item = (output.payload.testCases as Record<string, unknown>[])[0]!;
+  output.privateMetadata = 'synthetic-private-marker';
+  output.payload.privateMetadata = 'synthetic-private-marker';
+  item.privateMetadata = 'synthetic-private-marker';
+  (item.sources as Record<string, unknown>[])[0]!.privateMetadata = 'synthetic-private-marker';
+  (item.techniques as Record<string, unknown>[])[0]!.privateMetadata = 'synthetic-private-marker';
+  await store.create(run);
+  const review = await getPlanReview(store, run.id, owner);
+  assert.ok(review.ok);
+  assert.equal(review.review.cases!.payload.testCases[0]!.expected, item.expected);
+  assert.doesNotMatch(JSON.stringify(review), /privateMetadata|synthetic-private-marker/);
+  assert.deepEqual((await store.read(run.id)).run, run, 'projeção não modifica o histórico extensível');
+});
+
+test('T6.1: reinício encerra processamento de casos e conserva saída, pareceres, orçamento e intenções concluídas', async t => {
+  const { store, reopen, raw } = await temporaryStore(t);
+  const run = withCasePreparation();
+  run.status = 'running';
+  run.preparation!.finishedAt = null;
+  run.preparation!.activeRole = 'output-validator';
+  run.preparation!.activity = 'validating_case_design';
+  run.preparation!.calls.push({ ...run.preparation!.calls[0]!, id: 'case-validation', role: 'output-validator', status: 'running' });
+  delete run.preparation!.calls[1]!.finishedAt;
+  await store.create(run);
+  await store.update(run.id, record => {
+    const at = run.preparation!.startedAt;
+    record.workIntents = [
+      { id: 'earlier-completed', type: 'create_cases', ...reference, createdAt: at, status: 'completed', finishedAt: at, processingId: 'previous' },
+      { id: 'current-cases', type: 'create_cases', ...reference, createdAt: at, status: 'pending', processingId: run.preparation!.id },
+    ];
+    return { save: true, value: undefined };
+  });
+  const before = await reopen();
+  assert.equal(await store.recoverInterrupted(), 1);
+  const after = await reopen();
+  assert.equal(after.run.status, 'interrupted');
+  assert.equal(after.run.phase, 'case_design');
+  assert.deepEqual(after.run.outputs, before.run.outputs);
+  assert.deepEqual(after.run.validations, before.run.validations);
+  assert.deepEqual(after.run.approvals, before.run.approvals);
+  assert.equal(after.run.preparation!.stopReason!.code, 'SERVICE_RESTART');
+  assert.ok(after.run.preparation!.accumulatedActiveMs! >= 1123);
+  assert.equal(after.run.preparation!.activeRole, null);
+  assert.equal(after.run.preparation!.activity, null);
+  assert.deepEqual(after.run.preparation!.calls[0], before.run.preparation!.calls[0]);
+  assert.equal(after.run.preparation!.calls[1]!.status, 'interrupted');
+  assert.equal(after.run.preparation!.calls[1]!.errorCode, 'SERVICE_RESTART');
+  assert.equal(after.run.preparation!.calls[1]!.finishedAt, after.run.preparation!.finishedAt);
+  assert.deepEqual(after.workIntents[0], before.workIntents[0]);
+  assert.equal(after.workIntents[1]!.status, 'interrupted');
+  assert.equal(after.workIntents[1]!.finishedAt, after.run.preparation!.finishedAt);
+  assert.equal(after.workIntents[1]!.reason!.code, 'SERVICE_RESTART');
+  const preserved = await raw();
+  assert.equal(await store.recoverInterrupted(), 0);
+  assert.equal(await raw(), preserved);
 });
 
 test('T3.1 CA-09/10: createApp recupera antes de servir, entrega site/health e não carrega fixture', async t => {
