@@ -1,18 +1,21 @@
 # Especialistas
 
-Esta pasta reserva os pontos de extensão do orquestrador e dos cinco especialistas.
-Cada papel terá tools e skills próprias. A preparação do ambiente não implementa a
-metodologia. A implementação segue [PROTOTIPO.md](../docs/requisitos/PROTOTIPO.md)
-e os contratos de integração na mesma pasta.
+Esta pasta mantém tools e skills de cada papel. T4.1 implementa curadoria, plano e
+as duas validações independentes; a sequência é coordenada pelo backend sem uma
+chamada adicional para escolher a próxima etapa. A implementação segue
+[PROTOTIPO.md](../docs/requisitos/PROTOTIPO.md) e os contratos na mesma pasta.
 
 - `orchestrator/`: delegação, estado da sessão e encaminhamento conforme o parecer
   do validador; não avalia a qualidade das saídas nem substitui uma decisão dele.
-- `artifact-curator/`: curadoria de backlog, histórias e requisitos.
-- `test-designer/`: plano, casos lógicos com PCE/AVL e detalhamento dos percursos após o mapa.
+- `artifact-curator/`: [curadoria textual](artifact-curator/skills/curate-artifacts/SKILL.md)
+  com requisitos, fontes e perguntas localizadas.
+- `test-designer/`: [plano de testes](test-designer/skills/create-test-plan/SKILL.md)
+  com originais e curadoria aprovada; casos e detalhamento permanecem pendentes.
 - `test-executor/`: reconhecimento de navegação, mouse, teclado e evidências.
 - `report-writer/`: consolidação de resultados e referências às evidências.
-- `output-validator/`: validação independente da curadoria, plano, casos, mapa,
-  detalhamento, resultados e relatório. Aprova, pede correção ou bloqueia com justificativa.
+- `output-validator/`: [validação independente](output-validator/skills/validate-output/SKILL.md)
+  da curadoria e do plano. Demais fases permanecem pendentes. Aprova, pede correção
+  ou bloqueia com justificativa; falhas técnicas são registradas pelo backend.
 
 Cada saída passa pelas verificações estruturais do backend e pela revisão do
 validador antes de alimentar uma etapa dependente. O validador usa contexto próprio,
@@ -29,5 +32,10 @@ Os materiais enviados por usuários são dados, não instruções de sistema. Ca
 execução deve manter contexto e evidências próprios. O executor terá um navegador
 por sessão; especialistas não devem disputar o mesmo cursor.
 
-As tools padrão de terminal e escrita do Pi ficam desabilitadas na fábrica inicial.
-A implementação futura registrará apenas as tools necessárias a cada papel.
+T4.1 carrega explicitamente a skill de cada tarefa, usa uma sessão Pi nova por
+tentativa, modelo configurado sem fallback e nenhuma tool de terminal, escrita ou
+navegador. A saída JSON é conferida estruturalmente pelo backend e semanticamente
+pelo validador. O fluxo termina na revisão humana do plano. Criação de casos,
+mapeamento, execução, relatório e resposta/retomada de perguntas aguardam as
+respectivas entregas. A evidência de chamadas reais fica em
+[T4.1](../docs/evidencias/t4.1/README.md).

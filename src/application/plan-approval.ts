@@ -19,6 +19,11 @@ export type PlanCommandResult =
 export type PlanReview = {
   id: string; name: string; applicationName: string; createdAt: string;
   status: string; phase: string;
+  progress: { processingId: string | null; activeRole: string | null; activity: string | null;
+    startedAt: string | null; finishedAt: string | null };
+  stopReason: { code: string; message: string } | null;
+  questions: { id: string; description: string; requirementIds: string[]; blocking: boolean;
+    sources: { artifactId: string; locator: string; quote: string }[] }[];
   plan: {
     id: string; revision: number;
     payload: { testPlan: ReturnType<typeof publicTestPlan> };
@@ -102,6 +107,20 @@ export async function getPlanReview(
     return { ok: true, review: {
       id: run.id, name: run.name, applicationName: run.applicationName, createdAt: run.createdAt,
       status: run.status, phase: run.phase,
+      progress: { processingId: run.preparation?.id ?? null, activeRole: run.preparation?.activeRole ?? null,
+        activity: run.preparation?.activity ?? null, startedAt: run.preparation?.startedAt ?? null,
+        finishedAt: run.preparation?.finishedAt ?? null },
+      stopReason: run.preparation?.stopReason ? { code: run.preparation.stopReason.code, message: run.preparation.stopReason.message }
+        : run.status === 'interrupted' && run.interruptions?.length ? { code: 'SERVICE_RESTART', message: 'O serviço reiniciou. O trabalho foi interrompido.' }
+        : run.status === 'cancelled' ? { code: 'CANCELLED', message: 'Execução cancelada pelo usuário.' } : null,
+      questions: run.questions.map(question => ({
+        id: String(question.id ?? ''), description: String(question.description ?? ''),
+        requirementIds: Array.isArray(question.requirementIds) ? question.requirementIds.filter((id): id is string => typeof id === 'string') : [],
+        blocking: question.blocking === true,
+        sources: Array.isArray(question.sources) ? question.sources.map((source: Record<string, unknown>) => ({
+          artifactId: String(source.artifactId ?? ''), locator: String(source.locator ?? ''), quote: String(source.quote ?? ''),
+        })) : [],
+      })),
       plan: plan ? {
         id: plan.id, revision: plan.revision,
         payload: { testPlan: publicTestPlan(plan.payload.testPlan) },

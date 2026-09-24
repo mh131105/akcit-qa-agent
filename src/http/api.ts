@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { AuthError, AuthService } from '../auth.js';
 import { executePlanCommand, getPlanReview, publicPlanDecisions } from '../application/plan-approval.js';
 import { createRun, listRuns, RunInputError } from '../application/runs.js';
+import { PreparationError, type PreparationCoordinator } from '../application/prepare-plan.js';
 import type { readConfig } from '../config.js';
 import { StorageError, type RunStore } from '../storage/runs.js';
 
@@ -57,7 +58,7 @@ function serviceError(error: { code: string; message: string }): never {
 /** Todas as identidades vêm da sessão; rotas só traduzem HTTP para os serviços. */
 export async function handleApi(
   request: IncomingMessage, response: ServerResponse, runs: RunStore,
-  auth: AuthService, config: ReturnType<typeof readConfig>,
+  auth: AuthService, config: ReturnType<typeof readConfig>, preparation: PreparationCoordinator,
 ): Promise<void> {
   response.setHeader('Cache-Control', 'no-store');
   try {
@@ -65,7 +66,7 @@ export async function handleApi(
     const path = url.pathname;
     const collection = path === '/api/runs';
     const account = /^\/api\/auth\/(register|login|logout|me)$/.exec(path)?.[1];
-    const run = /^\/api\/runs\/([^/]+)(?:\/(approve|request-changes))?$/.exec(path);
+    const run = /^\/api\/runs\/([^/]+)(?:\/(approve|request-changes|start|cancel))?$/.exec(path);
     if (!account && !run && !collection) throw new HttpError(404, 'NOT_FOUND', 'Rota não encontrada.');
     const methods = collection ? ['GET', 'POST'] : [account === 'me' || (run && !run[2]) ? 'GET' : 'POST'];
     if (!methods.includes(request.method!)) {
@@ -130,6 +131,17 @@ export async function handleApi(
       json(response, 200, result.review);
       return;
     }
+    if (run![2] === 'start' || run![2] === 'cancel') {
+      fields(body, []);
+      if (url.search) throw invalid();
+      const accepted = run![2] === 'start'
+        ? (await preparation.start(runId, session.userId)).accepted
+        : (await preparation.cancel(runId, session.userId), false);
+      const result = await getPlanReview(runs, runId, { userId: session.userId });
+      if (!result.ok) serviceError(result.error);
+      json(response, accepted ? 202 : 200, result.review);
+      return;
+    }
     const changes = run![2] === 'request-changes';
     fields(body, changes ? ['outputId', 'outputRevision', 'comment'] : ['outputId', 'outputRevision']);
     const outputId = string(body, 'outputId', 1, 128);
@@ -146,7 +158,9 @@ export async function handleApi(
     json(response, 200, { status: result.status, phase: result.phase, approvals: publicPlanDecisions(result.approvals) });
   } catch (error) {
     // Não devolve mensagens de exceções de IO, caminhos, cookies ou conteúdo privado.
-    const failure = error instanceof HttpError || error instanceof AuthError ? error
+    const failure = error instanceof HttpError || error instanceof AuthError || error instanceof PreparationError ? error
+      : error instanceof StorageError && ['RUN_NOT_FOUND', 'INVALID_RUN_ID'].includes(error.code)
+        ? new HttpError(error.code === 'RUN_NOT_FOUND' ? 404 : 400, error.code, error.message)
       : error instanceof RunInputError ? new HttpError(400, error.code, error.message)
       : error instanceof StorageError && error.code === 'IDEMPOTENCY_CONFLICT' ? new HttpError(409, error.code, error.message)
       : new HttpError(503, 'STORAGE_FAILURE', 'Não foi possível concluir a operação.');

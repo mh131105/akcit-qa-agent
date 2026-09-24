@@ -7,11 +7,15 @@ const limit = 16 * 1024;
 const statuses = { draft: 'Rascunho', running: 'Em andamento', awaiting_approval: 'Aguardando aprovação', awaiting_input: 'Aguardando informações', completed: 'Concluída', interrupted: 'Interrompida', error: 'Erro', cancelled: 'Cancelada' };
 const phases = { intake: 'Recebimento do material', curation: 'Curadoria', planning: 'Planejamento', case_design: 'Criação dos casos', mapping: 'Mapeamento', route_detail: 'Detalhamento dos percursos', execution: 'Execução dos testes', report: 'Relatório' };
 const validations = { approved: 'Aprovado pelo validador', changes_requested: 'Validador solicitou alterações', blocked: 'Validação bloqueada', error: 'Erro de validação' };
+const roles = { 'artifact-curator': 'Curador', 'test-designer': 'Planejador', 'output-validator': 'Validador independente' };
+const activities = { curating: 'Organizando requisitos e fontes', planning: 'Elaborando o plano de testes', validating_curation: 'Revisando a curadoria', validating_planning: 'Revisando o plano de testes' };
 let user = null;
 let rememberForm = null;
 let sessionTimer;
 let checkingSession = null;
 let signedOut = false;
+let detailTimer;
+let detailSequence = 0;
 
 // Dados da API entram somente como texto. Nenhum conteúdo recebido vira HTML.
 function el(tag, text, className) {
@@ -78,10 +82,14 @@ function errorText(error) {
     COMMENT_REQUIRED: 'Informe um comentário para solicitar alterações.',
     STALE_VERSION: 'A revisão ou suas dependências mudaram. Consulte o plano atualizado antes de decidir novamente.',
     DECISION_CONFLICT: 'Esta revisão já possui uma decisão diferente. Consulte a decisão salva.',
-    INVALID_STATE: 'A execução não está mais disponível para esta decisão. Consulte o estado atualizado.',
+    INVALID_STATE: 'A execução não permite esta operação no estado atual. Consulte o estado atualizado.',
     INSUFFICIENT_VALIDATION: 'O plano e a curadoria precisam de validação aprovada. A decisão foi recusada.',
     IDEMPOTENCY_CONFLICT: 'A chave já está associada a outro conteúdo. A tentativa foi preservada; consulte o histórico e solicite ajuda à equipe.',
     RUN_NOT_FOUND: 'Execução não encontrada ou indisponível para esta conta.',
+    RESOURCE_UNAVAILABLE: 'O ambiente está ocupado com outra execução. Seu rascunho foi preservado; tente novamente após a conclusão.',
+    MODEL_NOT_CONFIGURED: 'A preparação exige a configuração do provedor e modelo para curador, planejador e validador. Solicite a configuração à equipe do piloto.',
+    MODEL_UNAVAILABLE: 'O modelo configurado não está disponível. Solicite à equipe a conferência da configuração.',
+    CREDENTIAL_UNAVAILABLE: 'A credencial do modelo não está disponível. Solicite a configuração à equipe do piloto.',
   };
   return texts[error.code] || (error.status === 409 ? 'O registro não permite esta operação. Atualize a consulta e, se persistir, solicite ajuda à equipe.' : 'Não foi possível concluir a solicitação. Verifique a conexão e tente novamente.');
 }
@@ -101,7 +109,7 @@ async function api(path, { accountId, ...options } = {}) {
 function expire() {
   if (signedOut) return;
   if (rememberForm) rememberForm();
-  user = null; rememberForm = null; clearInterval(sessionTimer);
+  user = null; rememberForm = null; clearInterval(sessionTimer); clearTimeout(detailTimer); detailSequence++;
   main.replaceChildren(); account.replaceChildren(); main.hidden = false;
   location.replace(`/acesso?expired=1&next=${encodeURIComponent(internal(location.pathname + location.search))}`);
 }
@@ -151,7 +159,7 @@ function navigation() {
       return;
     }
     // O 204 encerrou a sessão, mesmo se a limpeza local falhar. pagehide não deve regravar o formulário.
-    signedOut = true; rememberForm = null; clearInterval(sessionTimer); user = null;
+    signedOut = true; rememberForm = null; clearInterval(sessionTimer); clearTimeout(detailTimer); detailSequence++; user = null;
     main.replaceChildren(); account.replaceChildren();
     let cleanupFailed = false;
     try { clearAttempts(); } catch { cleanupFailed = true; }
@@ -333,13 +341,14 @@ function preservedComment(pending) {
 }
 async function detailPage(noticeText = '', isError = false, pending = null) {
   if (!user) return;
+  clearTimeout(detailTimer); const sequence = ++detailSequence;
   const accountId = user.id;
   main.replaceChildren(); main.append(message('Carregando execução…')); main.setAttribute('aria-busy', 'true');
   const id = location.pathname.split('/')[2]; let run;
   if (pending && (pending.accountId !== accountId || pending.runId !== id)) pending = null;
-  try { run = await api(`/runs/${encodeURIComponent(id)}`, { accountId }); if (user?.id !== accountId) return; }
+  try { run = await api(`/runs/${encodeURIComponent(id)}`, { accountId }); if (user?.id !== accountId || sequence !== detailSequence) return; }
   catch (error) {
-    if (user) { main.replaceChildren(link('← Minhas execuções', '/execucoes', 'back-link'), message([noticeText, errorText(error)].filter(Boolean).join(' '), true));
+    if (user && sequence === detailSequence) { main.replaceChildren(link('← Minhas execuções', '/execucoes', 'back-link'), message([noticeText, errorText(error)].filter(Boolean).join(' '), true));
       if (pending) main.append(preservedComment(pending));
       if (error.status !== 404) main.append(button('Tentar novamente', () => detailPage(noticeText, isError, pending), 'secondary')); }
     main.setAttribute('aria-busy', 'false'); return;
@@ -349,6 +358,45 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   const metadata = el('dl', null, 'metadata');
   for (const [title, value] of [['Criada em', date(run.createdAt)], ['Etapa', phases[run.phase] || run.phase], ['Situação', statuses[run.status] || run.status]]) { const item = el('div'); item.append(el('dt', title), el('dd', value)); metadata.append(item); }
   const summary = el('section', null, 'panel'); summary.append(metadata, el('p', `Identificação: ${run.id}`, 'run-id')); main.append(summary);
+  if (run.progress?.activeRole || run.progress?.activity) {
+    summary.append(message([roles[run.progress.activeRole] || run.progress.activeRole, activities[run.progress.activity] || run.progress.activity].filter(Boolean).join(' · ')));
+  }
+  if (run.stopReason) main.append(message(run.stopReason.message, ['error', 'interrupted'].includes(run.status)));
+  if (run.questions?.length) {
+    const questions = el('section', null, 'panel'); questions.append(el('h2', 'Pendências do material'));
+    for (const question of run.questions) {
+      const item = el('section', null, 'plan-section');
+      item.append(el('h3', question.id), el('p', question.description, 'text-content'),
+        el('p', `Requisitos afetados: ${question.requirementIds.join(', ')}. ${question.blocking ? 'Impede planejar os requisitos afetados.' : 'Pode ser tratada sem impedir os requisitos independentes.'}`));
+      for (const source of question.sources) item.append(el('p', `${source.artifactId} · ${source.locator}`, 'text-content'), el('blockquote', source.quote, 'text-content'));
+      questions.append(item);
+    }
+    questions.append(el('p', 'A resposta e a retomada das pendências serão disponibilizadas em uma próxima etapa.', 'hint')); main.append(questions);
+  }
+  if ((run.status === 'draft' && run.phase === 'intake') || run.status === 'running') {
+    const operation = run.status === 'draft' ? 'start' : 'cancel';
+    const notice = message(); const action = button(operation === 'start' ? 'Preparar plano' : 'Cancelar preparação', async () => {
+      action.disabled = true; clearTimeout(detailTimer); detailSequence++;
+      tell(notice, operation === 'start' ? 'Solicitando a preparação do plano…' : 'Solicitando cancelamento…');
+      try {
+        await sameAccount(accountId); if (user?.id !== accountId) return;
+        await api(`/runs/${encodeURIComponent(id)}/${operation}`, { accountId, method: 'POST', body: '{}' });
+        await detailPage(operation === 'start' ? 'Preparação aceita. Acompanhe o progresso abaixo.' : 'Cancelamento registrado.');
+      } catch (error) {
+        if (user?.id === accountId) await detailPage(errorText(error), true);
+      }
+    }, operation === 'cancel' ? 'secondary' : '');
+    summary.append(action, notice);
+  }
+  if (run.status === 'running') {
+    // ponytail: consulta simples durante o trabalho; a revisão humana não reconstrói formulários.
+    const poll = () => {
+      if (user?.id !== accountId || sequence !== detailSequence) return;
+      if (document.hidden) detailTimer = setTimeout(poll, 2000);
+      else void detailPage();
+    };
+    detailTimer = setTimeout(poll, 2000);
+  }
   if (pending && run.approvals.some(decision => decision.outputId === pending.outputId &&
       decision.outputRevision === pending.outputRevision && decision.decision === pending.decision &&
       (pending.decision === 'approved' || decision.comment === pending.comment))) pending = null;
@@ -424,7 +472,7 @@ async function boot() {
   }
 }
 // Limpa o snapshot privado antes de entrar no cache de navegação do navegador.
-addEventListener('pagehide', () => { if (rememberForm) rememberForm(); main.replaceChildren(); account.replaceChildren(); });
+addEventListener('pagehide', () => { if (rememberForm) rememberForm(); clearTimeout(detailTimer); detailSequence++; main.replaceChildren(); account.replaceChildren(); });
 addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
 document.addEventListener('visibilitychange', () => {
   if (!user) return;

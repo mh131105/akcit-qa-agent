@@ -8,8 +8,8 @@ import { createApp } from '../dist/app.js';
 import { readConfig } from '../dist/config.js';
 import { RunStore } from '../dist/storage/runs.js';
 
-// Jornada real do site/API. Somente planos são preparados no armazenamento
-// temporário: este smoke não gera planos por IA nem chama provedores de LLM.
+// Jornada real do site/API e coordenador. A chamada textual ao modelo é
+// substituída aqui, na composição do teste, sem opção de simulação na API.
 assert.equal(Number(process.versions.node.split('.')[0]), 24, 'Execute com Node.js 24.');
 const root = await mkdtemp(join(tmpdir(), 'akcit-web-smoke-'));
 const artifactDir = process.env.SMOKE_ARTIFACT_DIR;
@@ -29,6 +29,42 @@ let page;
 let result;
 let clock = Date.now();
 let releaseResponse = () => {};
+const preparationText = 'US-01: Como pessoa, quero reservar itens.\nCA-01: Quantidade inteira de 1 a 10.\nUS-02: Como pessoa, quero registrar uma observação.\nCA-02: Observação opcional com limite a definir.';
+const preparationCalls = [];
+let holdPreparation = false;
+let releasePreparation = () => {};
+
+async function modelCall(task) {
+  const input = JSON.parse(task.prompt);
+  assert.equal(input.artifacts[0].text, preparationText, 'Cada especialista recebe o material original.');
+  if (task.role === 'output-validator') assert.ok(input.output, 'Validador recebe a revisão exata da saída.');
+  preparationCalls.push(task.role);
+  if (holdPreparation) {
+    await new Promise(resolve => {
+      releasePreparation = resolve;
+      if (task.signal.aborted) resolve();
+      else task.signal.addEventListener('abort', resolve, { once: true });
+    });
+  }
+  const source = line => ({ artifactId: input.artifacts[0].id, locator: `L${line}`, quote: preparationText.split('\n')[line - 1] });
+  const payload = task.role === 'artifact-curator' ? {
+    requirements: [
+      { id: 'US-01', statement: 'Reservar itens.', sources: [source(1)],
+        rules: [{ id: 'CA-01', statement: 'Quantidade inteira de 1 a 10.', sources: [source(2)] }] },
+      { id: 'US-02', statement: 'Registrar uma observação.', sources: [source(3)],
+        rules: [{ id: 'CA-02', statement: 'Observação opcional com limite a definir.', sources: [source(4)] }] },
+    ],
+    questions: [{ id: 'Q-01', description: 'Qual é o limite da observação opcional?', requirementIds: ['US-02'], caseIds: [], blocking: true, sources: [source(4)] }],
+  } : task.role === 'test-designer' ? { testPlan: {
+    objective: 'Conferir a quantidade de itens segundo o material recebido.',
+    requirementIds: ['US-01'], ruleIds: ['CA-01'],
+    priorities: [{ ruleId: 'CA-01', reason: 'Verificar os limites e a quantidade inteira.' }],
+    exclusions: [{ description: 'US-02 / CA-02: observação opcional.', reason: 'Q-01: o limite não foi informado.' }],
+    approach: ['Análise dos limites 1 e 10, valores externos e quantidade não inteira; sem detalhar casos ou navegação.'],
+    preconditions: ['Disponibilizar ambiente controlado antes da execução.'], sources: [source(1), source(2), source(4)],
+  } } : { status: 'approved', reason: 'O material e as pendências localizadas foram preservados.', findings: [] };
+  return { payload, metadata: { provider: task.model.provider, model: task.model.model, durationMs: 1 } };
+}
 
 function waiting(id, ownerId, label) {
   return {
@@ -390,10 +426,88 @@ async function commentRecovery(context, store, owner) {
   checked.push('BUG-T2.1-01: resposta de decisão perdida após gravação recupera confirmação sem novo POST; revisão nova/conflito preservam cópia da revisão original sem preencher revisão nova');
 }
 
+async function preparationJourney(context, store, owner) {
+  const createDraft = async label => {
+    await page.goto('/execucoes/nova');
+    await fillRun(label, preparationText);
+    await page.getByRole('button', { name: 'Salvar rascunho', exact: true }).click();
+    await page.waitForURL(url => /^\/execucoes\/run-/.test(url.pathname));
+    await visible(page.getByRole('button', { name: 'Preparar plano', exact: true }));
+    const id = new URL(page.url()).pathname.split('/').at(-1);
+    return id;
+  };
+  const begin = async id => {
+    const response = page.waitForResponse(response => response.url().endsWith(`/api/runs/${id}/start`));
+    await page.getByRole('button', { name: 'Preparar plano', exact: true }).click();
+    const accepted = await response;
+    assert.equal(accepted.status(), 202);
+    assert.equal(accepted.request().headers()['x-expected-user-id'], owner.id);
+    assert.deepEqual(accepted.request().postDataJSON(), {});
+    await visible(page.getByRole('button', { name: 'Cancelar preparação', exact: true }));
+    await bodyIncludes('Curador');
+  };
+
+  const id = await createDraft('Preparação do plano pelo site');
+  holdPreparation = true;
+  await begin(id);
+  await screenshot('web-preparation.png', 1366);
+  const repeated = await context.request.post(`/api/runs/${id}/start`, {
+    headers: { Origin: new URL(page.url()).origin, 'X-Expected-User-Id': owner.id }, data: {},
+  });
+  assert.equal(repeated.status(), 200);
+  assert.deepEqual(preparationCalls, ['artifact-curator']);
+  holdPreparation = false; releasePreparation();
+  await visible(page.getByRole('button', { name: 'Aprovar plano', exact: true }));
+  assert.deepEqual(preparationCalls, ['artifact-curator', 'output-validator', 'test-designer', 'output-validator']);
+  await bodyIncludes('Qual é o limite da observação opcional?');
+  await bodyIncludes('US-02 / CA-02: observação opcional.');
+  assert.equal(await page.getByRole('button', { name: 'Cancelar preparação', exact: true }).count(), 0);
+  const review = await api(context, `/api/runs/${id}`, owner.id);
+  assert.equal(review.status, 'awaiting_approval'); assert.equal(review.phase, 'planning');
+  assert.equal(review.questions.length, 1); assert.deepEqual(review.approvals, []);
+  assert.deepEqual(review.plan.payload.testPlan.requirementIds, ['US-01']);
+  const persisted = (await store.read(id)).run;
+  assert.equal(persisted.outputs.length, 2);
+  for (const output of persisted.outputs) assert.ok(persisted.validations.some(verdict =>
+    verdict.outputId === output.id && verdict.outputRevision === output.revision && verdict.status === 'approved'));
+  let detailQueries = 0;
+  const counted = request => { if (request.method() === 'GET' && new URL(request.url()).pathname === `/api/runs/${id}`) detailQueries++; };
+  page.on('request', counted);
+  await page.getByLabel('Comentário', { exact: true }).fill('Comentário em edição preservado.');
+  await new Promise(resolve => setTimeout(resolve, 2400)); // Atravessa um ciclo de consulta de 2 s.
+  assert.equal(detailQueries, 0, 'A consulta periódica termina antes da revisão humana.');
+  assert.equal(await page.getByLabel('Comentário', { exact: true }).inputValue(), 'Comentário em edição preservado.');
+  page.off('request', counted);
+  await screenshot('web-generated-plan.png', 1366);
+  await page.getByRole('button', { name: 'Aprovar plano', exact: true }).click();
+  await visible(page.getByText('Plano aprovado · Revisão 1', { exact: true }));
+  assert.equal((await api(context, `/api/runs/${id}`, owner.id)).approvals.length, 1);
+  checked.push('T4.1: rascunho → iniciar 202 → curador → validador → planejador → validador → aprovação pelo site; chamada de modelo substituída explicitamente no teste');
+  checked.push('T4.1: repetição não duplica chamada; pendência localizada permite plano independente; consulta periódica para na revisão e conserva comentário em edição');
+
+  const cancelledId = await createDraft('Preparação cancelada pelo site');
+  const callsBefore = preparationCalls.length;
+  holdPreparation = true;
+  await begin(cancelledId);
+  const cancellation = page.waitForResponse(response => response.url().endsWith(`/api/runs/${cancelledId}/cancel`));
+  await page.getByRole('button', { name: 'Cancelar preparação', exact: true }).click();
+  const stopped = await cancellation;
+  assert.equal(stopped.status(), 200);
+  assert.equal(stopped.request().headers()['x-expected-user-id'], owner.id);
+  await visible(page.getByText('Cancelada', { exact: true }));
+  holdPreparation = false; releasePreparation();
+  const cancelled = await api(context, `/api/runs/${cancelledId}`, owner.id);
+  assert.equal(cancelled.status, 'cancelled'); assert.equal(cancelled.plan, null);
+  assert.equal(preparationCalls.length, callsBefore + 1);
+  assert.equal(await page.getByRole('button', { name: 'Preparar plano', exact: true }).count(), 0);
+  checked.push('T4.1: cancelar pelo site conserva identidade e estado cancelado, aborta a chamada e impede planejamento posterior');
+}
+
 try {
   if (artifactDir) await mkdir(artifactDir, { recursive: true });
-  const config = readConfig({ DATA_DIR: root, PILOT_ALLOWED_EMAILS: accounts.map(account => account.email).join(',') });
-  server = await createApp(config, { now: () => clock });
+  const config = readConfig({ DATA_DIR: root, PILOT_ALLOWED_EMAILS: accounts.map(account => account.email).join(','),
+    PI_PROVIDER: 'test-only', PI_MODEL: 'scripted' });
+  server = await createApp(config, { now: () => clock, modelCall, modelPreflight: async () => {} });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const origin = `http://127.0.0.1:${server.address().port}`;
@@ -689,9 +803,11 @@ try {
   assert.ok(!secretStorage.includes('akcit_session'));
   assert.deepEqual(pageErrors, [], 'Nenhum erro JavaScript na jornada.');
   checked.push('desktop 1366px e celular 390px sem transbordamento; nenhum token ou senha no storage');
+  await preparationJourney(context, store, owner);
+  assert.deepEqual(pageErrors, [], 'Nenhum erro JavaScript na preparação e aprovação do plano.');
   }
   await regressions(origin, store, owner, other);
-  result = { status: 'passed', scope: 'T2.1 — navegador, API e persistência reais; planos sintéticos, sem IA', checked,
+  result = { status: 'passed', scope: 'T2.1/T4.1 — navegador, API, coordenador e persistência reais; chamada de modelo substituída, sem inferência paga', checked,
     node: process.versions.node, chromium: browser.version(), durationMs: Date.now() - started };
 } catch (error) {
   result = { status: 'failed', checked, error: error.message, durationMs: Date.now() - started };
@@ -700,6 +816,7 @@ try {
   process.exitCode = 1;
 } finally {
   releaseResponse();
+  releasePreparation();
   if (artifactDir && result) await writeFile(join(artifactDir, 'web-result.json'), JSON.stringify(result, null, 2));
   if (result) console.log(JSON.stringify(result));
   await browser?.close();

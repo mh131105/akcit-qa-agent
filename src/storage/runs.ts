@@ -9,14 +9,36 @@ export type RunOutput = JsonObject & {
   id: string; phase: string; revision: number;
   dependsOn: { outputId: string; revision: number }[];
   payload: JsonObject;
+  producer?: string; createdAt?: string; budgetCycleId?: string;
+  answerRefs?: { questionId: string; revision: number }[];
+};
+export type PreparationCall = {
+  id: string; role: 'artifact-curator' | 'test-designer' | 'output-validator';
+  provider: string; model: string; phase: 'curation' | 'planning'; attempt: number;
+  outputRevision: number; startedAt: string; finishedAt?: string; durationMs?: number;
+  status: 'running' | 'completed' | 'invalid' | 'error' | 'cancelled' | 'interrupted';
+  errorCode?: string; usage?: Record<string, number>; estimatedCost?: number;
+};
+export type Preparation = {
+  id: string; budgetCycleId: string; startedAt: string; finishedAt: string | null;
+  activeRole: PreparationCall['role'] | null; activity: string | null;
+  stopReason: { code: string; message: string } | null;
+  limits: { maxRequirements: number; maxRevisions: number; maxValidatorAttempts: number;
+    timeoutMs: number; activeMs: number };
+  calls: PreparationCall[];
+};
+export type RunValidation = PlanApprovalState['validations'][number] & {
+  id?: string; at?: string; attempt?: number; reason?: string;
+  findings?: { code: string; message: string; location: string | null }[];
 };
 export type Interruption = { reason: 'service_restart'; at: string };
 export type RunRecord = JsonObject & {
   id: string; ownerId: string; name: string; applicationName: string; createdAt: string;
   status: string; phase: string; input: JsonObject; artifacts: JsonObject[];
-  outputs: RunOutput[]; validations: PlanApprovalState['validations'];
+  outputs: RunOutput[]; validations: RunValidation[];
   approvals: PlanDecision[]; questions: JsonObject[]; answers: JsonObject[];
   validationPolicy: JsonObject; budgetCycles: JsonObject[];
+  preparation?: Preparation;
   creation?: { requestHash: string };
   interruptions?: Interruption[];
 };
@@ -69,6 +91,31 @@ const utc = (value: unknown) => typeof value === 'string' &&
 const interruption = (value: unknown) => object(value) &&
   value.reason === 'service_restart' && utc(value.at);
 
+const positive = (value: unknown) => Number.isSafeInteger(value) && (value as number) > 0;
+const nonnegative = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+function validPreparation(value: unknown): boolean {
+  if (!object(value) || !strings(value, ['id', 'budgetCycleId']) || !value.id || !value.budgetCycleId ||
+    !utc(value.startedAt) || (value.finishedAt !== null && !utc(value.finishedAt)) ||
+    ![null, 'artifact-curator', 'test-designer', 'output-validator'].includes(value.activeRole as string | null) ||
+    (value.activity !== null && typeof value.activity !== 'string') ||
+    (value.stopReason !== null && (!object(value.stopReason) || !strings(value.stopReason, ['code', 'message']))) ||
+    !object(value.limits) || !['maxRequirements', 'maxRevisions', 'maxValidatorAttempts', 'timeoutMs', 'activeMs']
+      .every(key => positive((value.limits as JsonObject)[key])) ||
+    Object.entries({ maxRequirements: 10, maxRevisions: 3, maxValidatorAttempts: 2, timeoutMs: 120000, activeMs: 2700000 })
+      .some(([key, ceiling]) => ((value.limits as JsonObject)[key] as number) > ceiling) || !objects(value.calls)) return false;
+  return new Set(value.calls.map(call => call.id)).size === value.calls.length && value.calls.every(call =>
+    strings(call, ['id', 'provider', 'model']) && !!call.id && !!call.provider && !!call.model &&
+    ['artifact-curator', 'test-designer', 'output-validator'].includes(call.role as string) &&
+    ['curation', 'planning'].includes(call.phase as string) && positive(call.attempt) && positive(call.outputRevision) &&
+    utc(call.startedAt) && (call.finishedAt === undefined || utc(call.finishedAt)) &&
+    (call.durationMs === undefined || nonnegative(call.durationMs)) &&
+    ['running', 'completed', 'invalid', 'error', 'cancelled', 'interrupted'].includes(call.status as string) &&
+    (call.errorCode === undefined || typeof call.errorCode === 'string') &&
+    (call.estimatedCost === undefined || nonnegative(call.estimatedCost)) &&
+    (call.usage === undefined || (object(call.usage) && Object.keys(call.usage).every(key =>
+      ['input', 'output', 'cacheRead', 'cacheWrite', 'totalTokens'].includes(key) && nonnegative((call.usage as JsonObject)[key])))));
+}
+
 function validId(runId: string): void {
   if (typeof runId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(runId)) {
     throw new StorageError('INVALID_RUN_ID');
@@ -89,13 +136,31 @@ function validate(record: unknown, runId: string): asserts record is StoredRun {
     !['artifacts', 'questions', 'answers', 'budgetCycles'].every(key => objects(run[key])) ||
     !objects(run.outputs) || !run.outputs.every(output =>
       strings(output, ['id', 'phase']) && Number.isFinite(output.revision) &&
+      (output.producer === undefined || (typeof output.producer === 'string' && !!output.producer)) &&
+      (output.createdAt === undefined || utc(output.createdAt)) &&
+      (output.budgetCycleId === undefined || (typeof output.budgetCycleId === 'string' && !!output.budgetCycleId)) &&
+      (output.answerRefs === undefined || (objects(output.answerRefs) && output.answerRefs.every(ref =>
+        typeof ref.questionId === 'string' && !!ref.questionId && positive(ref.revision)))) &&
       object(output.payload) && objects(output.dependsOn) && output.dependsOn.every(ref =>
         typeof ref.outputId === 'string' && Number.isFinite(ref.revision))) ||
     !objects(run.validations) || !run.validations.every(verdict =>
-      strings(verdict, ['outputId', 'validator', 'status']) && Number.isFinite(verdict.outputRevision)) ||
+      strings(verdict, ['outputId', 'validator', 'status']) && Number.isFinite(verdict.outputRevision) &&
+      (verdict.id === undefined || (typeof verdict.id === 'string' && !!verdict.id)) &&
+      (verdict.at === undefined || utc(verdict.at)) &&
+      (verdict.attempt === undefined || positive(verdict.attempt)) &&
+      (verdict.reason === undefined || (typeof verdict.reason === 'string' && !!verdict.reason.trim())) &&
+      (verdict.findings === undefined || (objects(verdict.findings) && verdict.findings.every(finding =>
+        strings(finding, ['code', 'message']) && !!finding.code && !!finding.message &&
+        (finding.location === null || typeof finding.location === 'string'))))) ||
     !objects(run.approvals) || !run.approvals.every(decision =>
       strings(decision, ['id', 'outputId', 'actorId', 'at', 'decision', 'comment']) &&
       Number.isFinite(decision.outputRevision)) ||
+    (run.preparation !== undefined && (!validPreparation(run.preparation) ||
+      !(run.budgetCycles as JsonObject[]).some(cycle => cycle.id === (run.preparation as JsonObject).budgetCycleId &&
+        utc(cycle.startedAt) && cycle.reason === 'initial_preparation' && cycle.answerRef === null &&
+        Array.isArray(cycle.affectedCaseIds) && cycle.affectedCaseIds.length === 0 && object(cycle.limits) &&
+        Object.entries((run.preparation as JsonObject).limits as JsonObject).every(([key, value]) =>
+          (cycle.limits as JsonObject)[key] === value)))) ||
     (run.creation !== undefined && (!object(run.creation) ||
       typeof run.creation.requestHash !== 'string' || !/^[a-f0-9]{64}$/.test(run.creation.requestHash))) ||
     (run.interruptions !== undefined && (!Array.isArray(run.interruptions) || !run.interruptions.every(interruption))) ||
@@ -261,6 +326,20 @@ export class RunStore {
         if (record.run.status !== 'running') return { value: 0, save: false };
         const event: Interruption = { reason: 'service_restart', at: new Date().toISOString() };
         record.run.status = 'interrupted';
+        if (record.run.preparation) {
+          const preparation = record.run.preparation;
+          preparation.finishedAt = event.at;
+          preparation.activeRole = null;
+          preparation.activity = null;
+          preparation.stopReason = { code: 'SERVICE_RESTART', message: 'O serviço reiniciou. O trabalho foi interrompido sem retomada automática.' };
+          for (const call of preparation.calls) {
+            if (call.status === 'running') {
+              call.status = 'interrupted'; call.finishedAt = event.at;
+              call.durationMs = Math.max(0, Date.parse(event.at) - Date.parse(call.startedAt));
+              call.errorCode = 'SERVICE_RESTART';
+            }
+          }
+        }
         record.run.interruptions = [...(record.run.interruptions ?? []), event];
         for (const work of record.workIntents) {
           if (work.status === 'pending') {
