@@ -41,7 +41,8 @@ somente o container do ambiente correspondente.
 
 ## Publicação e recuperação
 
-O workflow de desenvolvimento testa a imagem antes do envio ao GHCR. A VPS confere
+O workflow de desenvolvimento testa a imagem antes do envio ao GHCR, incluindo
+os smokes de infraestrutura e da jornada web. A VPS confere
 o evento e branch no GitHub, os identificadores de commit/árvore e labels da imagem.
 Após subir o container, executa healthcheck e teste de Pi, navegador, cursor e vídeo.
 Somente uma publicação bem-sucedida atualiza `release.json` e `current.env`.
@@ -115,12 +116,14 @@ A trava de dados não reserva o navegador; reserva e despacho cabem à orquestra
 
 ### Criar e reencontrar uma entrada textual
 
-`POST /api/runs` exige sessão, origem configurada, JSON de até 16 KiB e um
-`Idempotency-Key` UUID v4. Guarde a chave junto do corpo enviado até receber uma
-resposta conclusiva. Se houver queda de conexão ou erro de armazenamento após a
-substituição do arquivo, a execução pode já existir: repita **a mesma chave e o
-mesmo conteúdo**. `201` confirma uma nova criação; `200` confirma a execução já
-persistida, com os IDs e horário originais. Trocar a chave cria outra execução;
+`POST /api/runs` exige sessão, origem configurada, JSON de até 16 KiB,
+`X-Expected-User-Id` e um `Idempotency-Key` UUID v4. Guarde a identidade esperada
+junto da chave e do corpo enviado até receber uma resposta conclusiva. Se houver
+queda de conexão ou erro de armazenamento após a
+substituição do arquivo, a execução pode já existir: entre na conta original e
+repita **a mesma identidade esperada, a mesma chave e o mesmo conteúdo**.
+`201` confirma uma nova criação; `200` confirma a execução já persistida, com os
+IDs e horário originais. Trocar a chave cria outra execução;
 trocar o conteúdo mantendo a chave retorna `409 / IDEMPOTENCY_CONFLICT`.
 
 O exemplo usa somente dados fictícios. Em um ambiente local com
@@ -135,24 +138,31 @@ cat > "$qa_demo_dir/input.json" <<'JSON'
 {"name":"Reservas — exemplo fictício","applicationName":"Aplicação de demonstração","text":"  # US-01\r\nComo usuário, quero reservar itens.\nCA-01: quantidade de 1 a 10.  "}
 JSON
 
-curl -sS -c "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/auth/login \
+curl -sS -c "$qa_demo_dir/cookies" -o "$qa_demo_dir/account.json" \
+  http://127.0.0.1:3000/api/auth/login \
   -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
   --data '{"email":"ana@example.invalid","password":"Senha ficticia de exemplo 123"}'
+qa_demo_expected=$(node --input-type=module -e 'import fs from "node:fs"; console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).user.id)' "$qa_demo_dir/account.json")
 curl -sS -D "$qa_demo_dir/headers" -o "$qa_demo_dir/created.json" \
   -b "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/runs \
+  -H "X-Expected-User-Id: $qa_demo_expected" \
   -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
   -H "Idempotency-Key: $qa_demo_key" --data-binary "@$qa_demo_dir/input.json"
 cat "$qa_demo_dir/headers"
 qa_demo_run=$(node --input-type=module -e 'import fs from "node:fs"; console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).id)' "$qa_demo_dir/created.json")
-curl -sS -b "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/runs
-curl -sS -b "$qa_demo_dir/cookies" "http://127.0.0.1:3000/api/runs/$qa_demo_run"
+curl -sS -b "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/runs \
+  -H "X-Expected-User-Id: $qa_demo_expected"
+curl -sS -b "$qa_demo_dir/cookies" "http://127.0.0.1:3000/api/runs/$qa_demo_run" \
+  -H "X-Expected-User-Id: $qa_demo_expected"
 ```
 
 A criação retorna `201` e `Location`; o histórico contém o rascunho e a consulta
 individual retorna `plan: null`. Para demonstrar recuperação, pare o processo
 local e inicie-o novamente com o mesmo `DATA_DIR` e configuração. Repita o comando
 de login acima para substituir o cookie invalidado pelo reinício, depois os dois
-GETs. A execução reaparece com o mesmo ID e horário. Repita também o POST acima,
+GETs, conservando `qa_demo_expected` capturado para a tentativa original. Uma
+consulta posterior de sessão não deve substituí-lo. A execução reaparece com o
+mesmo ID e horário. Repita também o POST acima,
 sem mudar `qa_demo_key` ou `input.json`: o cabeçalho salvo passa a indicar `200`
 e a criação original é preservada. Ao terminar, remova apenas os arquivos dessa
 demonstração com `rm -r "$qa_demo_dir"`.
@@ -161,7 +171,8 @@ Falha de leitura ou registro corrompido torna o histórico indisponível com
 `503 / STORAGE_FAILURE`; não se devolve lista parcial nem caminho interno.
 Entradas e metadados da criação já integram o backup do volume. O material recebido
 ainda aguarda curadoria: criar não reconhece requisitos, inicia agentes ou consome
-modelo. Upload de arquivos, edição, exclusão e interface permanecem pendentes.
+modelo. Upload de arquivos, edição e exclusão permanecem pendentes. O acesso
+pelo site está documentado em [T2.1](#jornada-pelo-navegador--t21).
 
 ## Acesso dos participantes do piloto
 
@@ -214,6 +225,16 @@ nunca o e-mail enviado no cadastro ou login. Execuções antigas não são atrib
 a uma conta apenas porque alguém informou o mesmo e-mail. T3.3 cria rascunhos pela
 API para a conta da sessão; não realiza migração automática de proprietários.
 
+Todas as operações de `/api/runs` (criação, histórico, detalhe e decisões) e
+`POST /api/auth/logout` exigem um único `X-Expected-User-Id`, com o UUID v4
+retornado em `user.id` pelo cadastro/login da conta que preparou a operação.
+Cadastro, login e `/api/auth/me` não exigem o cabeçalho. Ausência, formato inválido
+ou repetição, mesmo com valores iguais, retorna `400 / INVALID_EXPECTED_USER_ID`.
+Diferença da conta autenticada retorna `409 / ACCOUNT_CHANGED`, sem acessar
+execuções ou encerrar a sessão atual. O cabeçalho é uma precondição; propriedade
+e autoria continuam vindo da sessão. Não substitua esse ID pela conta encontrada
+em uma consulta posterior nem repita automaticamente a operação com outra conta.
+
 Cadastro/login compartilham limite de dez tentativas por e-mail e trinta por
 endereço de conexão em quinze minutos. O endereço é o da conexão direta, sem
 confiar em `X-Forwarded-For`; participantes que chegam pelo mesmo relay podem
@@ -229,6 +250,154 @@ relógio controlado. A jornada de criação e histórico de T3.3 está em
 reproduzida por `node --import tsx --test test/run-intake-api.test.ts`, criando o
 rascunho por POST e recuperando-o após reinício e novo login. Os dados sintéticos
 são preparados exclusivamente nos testes; nenhuma fixture é carregada pela aplicação.
+
+## Jornada pelo navegador — T2.1
+
+Configure `APP_ORIGIN` e `PILOT_ALLOWED_EMAILS` conforme a seção anterior. Com
+Node.js 24 e dependências do `package-lock.json`, um ambiente local fictício pode
+ser iniciado assim:
+
+```sh
+npm ci
+APP_ENV=local HOST=127.0.0.1 PORT=3000 DATA_DIR=.data \
+  APP_ORIGIN=http://127.0.0.1:3000 \
+  PILOT_ALLOWED_EMAILS=ana@example.invalid,bruno@example.invalid npm run dev
+```
+
+Abra [o site local](http://127.0.0.1:3000); a raiz leva ao histórico e solicita
+entrada se necessário. Use `/acesso` para cadastrar uma das contas habilitadas,
+com nome, e-mail, senha de 15 a 128 caracteres e equipe opcional. Esta é a conta
+do produto; o acesso usado pelos agentes na aplicação testada será configurado
+separadamente. No ambiente pelo túnel, abra sua origem configurada seguida de
+`/acesso`; a porta do navegador pode diferir da porta interna do container.
+
+Em “Nova execução”, preencha nome, aplicação, objetivo opcional e texto das
+histórias de usuário e critérios de aceite. “Salvar rascunho” persiste a entrada
+e abre o detalhe. O rascunho informa que o processamento ainda não começou.
+O histórico permite busca, filtro por situação e reabertura após recarregar ou
+entrar novamente. Quando o armazenamento já contém um plano, o detalhe mostra
+conteúdo, revisão e validação; as decisões disponíveis usam essa revisão e são
+reconsultadas depois de salvas. Aprovar o plano mantém a espera.
+
+Os nomes têm limite de 120 caracteres, o objetivo de 2.000, e **todo o JSON de
+entrada** de 16 KiB UTF-8. Não há upload ou campo de credenciais neste formulário.
+Texto de US/CA é preservado como digitado. O detalhe ainda não devolve o texto
+original, board ou perguntas.
+
+Antes de enviar, a interface guarda em `sessionStorage` a chave UUID v4, o corpo
+exato e o ID da conta. Se a resposta se perder, use “Tentar confirmar salvamento”
+para recuperar a criação sem duplicá-la. A tentativa permanece **na mesma aba e
+para a mesma conta, até confirmação ou logout confirmado**, inclusive após
+atualizar a página. Não é um backup entre abas ou dispositivos. Fechar a aba ou
+limpar o armazenamento do navegador pode impedir a recuperação. Se a sessão
+expirar, os dados privados saem da tela e o formulário só é restaurado após
+confirmar novamente a mesma conta. Outra conta não recebe esse conteúdo.
+O preenchimento ainda não enviado pode ser guardado ao sair da página ou quando
+a sessão é retirada, se o armazenamento estiver disponível; isso não cria uma
+execução no servidor nem representa salvamento contínuo. A interface confere a
+sessão a cada 30 segundos com a aba visível e ao voltar para ela. Durante essa
+última conferência, oculta o conteúdo; uma falha também solicita nova entrada.
+Se o navegador impedir salvar a tentativa, a página informa o problema e não
+envia um POST sem recuperação. Senha e token não são gravados pelo frontend.
+
+Se o logout falhar por rede ou `503`, a interface informa: “Não foi possível
+confirmar a saída. Sua tentativa de salvamento foi preservada.” Chave, corpo,
+conta original e mecanismo de recuperação permanecem. A sessão pode já ter sido
+encerrada no servidor: ao confirmar que ela é inválida, a interface retira os
+dados privados, mas permite recuperar a tentativa após entrar novamente na conta
+original. `ACCOUNT_CHANGED` também oculta os dados, sem encerrar a sessão da
+outra conta. Consultar a sessão periodicamente é proteção visual complementar;
+o cabeçalho garante a precondição no próprio pedido HTTP.
+
+Somente `204` confirma o logout e autoriza limpar a recuperação. Primeiro a
+interface impede regravação pelo formulário ou `pagehide`, interrompe a verificação de
+sessão e remove os dados privados. Depois limpa o armazenamento e abre o acesso.
+Se a limpeza local falhar, informa esse problema e mantém a sessão tratada como
+encerrada; não retorna à tela privada nem anuncia falha de logout.
+
+O comentário de uma decisão fica em memória com conta, execução, saída e revisão
+originais. Uma falha no POST ou na consulta posterior preserva espaços e quebras
+de linha. Na mesma revisão sem decisão, a reconsulta restaura o comentário para
+nova ação explícita. Se a decisão já foi salva, mostra a confirmação do servidor;
+se a revisão mudou ou há decisão conflitante, mantém o texto anterior somente
+para leitura/cópia, identificado pela revisão original. Não aplica esse texto em
+outra revisão nem repete o POST automaticamente. A cópia só aparece para a mesma
+conta e execução durante as reconstruções da página atual; fechar a aba ou
+recarregar completamente a página perde essa cópia em memória.
+
+### Reproduzir a jornada com dados fictícios
+
+O smoke não utiliza contas nem execuções do ambiente em operação. Ele cria seu
+próprio servidor com armazenamento temporário e configura a origem para o
+endereço realmente aberto no Chromium, sem contornar a conferência de `Origin`.
+Inclui cadastro/entrada, criação, histórico, detalhe, atualização, novo login,
+resposta perdida após persistência, repetição sem duplicação, isolamento entre
+contas, texto semelhante a HTML, aprovação e pedido de alteração persistidos.
+Planos e pareceres são sintéticos e preparados somente nos dados temporários do
+teste; não há geração por IA, chamada paga ou carga automática na aplicação.
+
+As regressões de BUG-T2.1-01 são reproduzidas no mesmo smoke, com navegador,
+API e arquivos de persistência reais:
+
+1. Duas abas compartilham cookies. O teste atrasa uma resposta de `/auth/me` da
+   conta A, entra na conta B pela outra aba e libera a resposta antiga. O envio
+   preparado por A deve receber `ACCOUNT_CHANGED`, sem criar execução para B;
+   ao voltar à conta A, a tentativa conserva chave e corpo.
+2. Após persistir uma execução, o teste perde a resposta de criação e faz o
+   logout falhar. Recarrega a página, confirma a mesma conta e verifica chave e
+   corpo originais; a repetição explícita encontra a execução já salva. Também
+   cobre logout confirmado, perda de sua resposta e falha de limpeza local após
+   `204`, sem regravação do material por `pagehide`.
+3. O pedido de alteração falha antes da gravação, perde a resposta depois de
+   gravar e encontra falha na consulta de recuperação. O teste verifica o texto
+   literal, ausência de duplicação e de POST automático. Ao mudar a revisão,
+   verifica que o texto anterior continua identificado e disponível para cópia,
+   sem preencher o comentário da revisão nova.
+
+As suítes HTTP existentes cobrem também cabeçalho ausente, inválido,
+duplicado e divergente em criação, consultas, decisões e logout. O caso de logout
+divergente confirma que a sessão de B continua válida. Os helpers conservam o ID
+original da operação; não consultam a conta atual para substituí-lo silenciosamente.
+Consulte o resultado gerado pelo smoke para saber quais verificações passaram;
+o procedimento e os cenários descritos aqui não substituem essa evidência.
+
+Verificações locais, usando Node.js 24 e um Chromium instalado:
+
+```sh
+npm run check
+npm test
+npm run build
+CHROMIUM_PATH=/usr/bin/chromium SMOKE_ARTIFACT_DIR=artifacts/web npm run smoke:web
+```
+
+Defina `CHROMIUM_PATH` para o executável instalado quando estiver em outro
+endereço. Para conferir a imagem final nas mesmas restrições dos workflows:
+
+```sh
+docker build --target runtime -t akcit-qa:ci .
+docker run --rm --cpus=1 --memory=2g --shm-size=512m \
+  --cap-drop=ALL --security-opt=no-new-privileges --read-only \
+  --tmpfs /tmp:rw,size=512m,mode=1777 \
+  --tmpfs /home/node:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+  --tmpfs /data:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+  akcit-qa:ci node scripts/smoke-runtime.mjs
+docker run --rm --cpus=1 --memory=2g --shm-size=512m \
+  --cap-drop=ALL --security-opt=no-new-privileges --read-only \
+  --tmpfs /tmp:rw,size=512m,mode=1777 \
+  --tmpfs /home/node:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+  --tmpfs /data:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+  akcit-qa:ci node scripts/smoke-web.mjs
+```
+
+Para guardar capturas e o resultado, crie `artifacts/web` no host com permissão de
+escrita para UID 1000 e acrescente `-e SMOKE_ARTIFACT_DIR=/evidence` e
+`-v "$PWD/artifacts/web:/evidence"` ao segundo `docker run`. A saída inclui
+`web-desktop.png` (1366 px), `web-mobile.png` (390 px), `web-plan.png` e
+`web-result.json`. Esses arquivos contêm somente a demonstração sintética;
+`artifacts/` é ignorado pelo Git. Não versionar sessões, evidências privadas ou
+dados dos participantes. A CI verifica ambos os smokes na imagem de runtime;
+desenvolvimento executa os mesmos checks antes de publicar. A promoção para
+produção continua usando a imagem já validada em desenvolvimento.
 
 ## Referências
 

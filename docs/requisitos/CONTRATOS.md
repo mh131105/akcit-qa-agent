@@ -2,8 +2,9 @@
 
 Base para implementar o [produto](PROTOTIPO.md), alinhada ao fluxo aprovado em
 23/09/2026. São contratos propostos; esta documentação não significa que as APIs ou
-agentes já estejam implementados. Frontend e backend usam o mesmo
-[exemplo sintético](exemplos/execucao-demo.json).
+agentes já estejam implementados. As seções de entregas implementadas delimitam
+o comportamento disponível. O [exemplo sintético](exemplos/execucao-demo.json)
+apoia os contratos e testes; a interface usa a API e não carrega exemplos.
 
 ## Fluxo e responsabilidades
 
@@ -500,6 +501,32 @@ JSON inválido, arrays, `null`, tipos incorretos e campos extras são recusados,
 inclusive `actorId`, `at`, `status`, `validations` e `resourceReserved`.
 Todas as respostas da API, inclusive erros, têm `Cache-Control: no-store`.
 
+### Precondição de conta esperada
+
+Todas as operações de `/api/runs` e `/api/runs/:id`, incluindo histórico,
+consulta e decisões, e `POST /api/auth/logout` exigem `X-Expected-User-Id`.
+Cadastro, login e `GET /api/auth/me` dispensam esse cabeçalho.
+O cliente envia o ID da conta para a qual preparou a operação: um único UUID v4,
+no formato dos IDs gerados para as contas, com hífens (`8-4-4-4-12`) e comparação
+sem distinguir maiúsculas/minúsculas. Cabeçalhos repetidos, inclusive iguais,
+são recusados usando `headersDistinct`; valores
+concatenados também são inválidos.
+
+`handleApi` confere essa precondição em um único ponto, depois de autenticar a
+requisição e antes de ler ou alterar execuções ou encerrar a sessão:
+
+| Cabeçalho | Resultado |
+| --- | --- |
+| Ausente, repetido ou fora do formato | `400 / INVALID_EXPECTED_USER_ID` |
+| UUID válido diferente do ID autenticado | `409 / ACCOUNT_CHANGED` |
+| ID igual ao autenticado | Prossegue com as verificações existentes |
+
+O cabeçalho é **uma precondição, não uma autorização**. `ownerId` e `actorId`
+continuam vindo exclusivamente da sessão. Na divergência, a API não acessa
+execuções, não encerra a sessão atual e não revela IDs de contas ou dados privados.
+Consultar `/auth/me` antes do envio não substitui a precondição: outra aba pode
+trocar o cookie entre a consulta e a operação.
+
 ### Identidade, senha e sessão
 
 `APP_ORIGIN` é a origem exata usada pelo navegador, com protocolo e porta quando
@@ -590,12 +617,12 @@ Não são expostos stack traces, caminhos, segredos ou dados de outra conta.
 
 | HTTP | Situação e códigos |
 | --- | --- |
-| `400` | Entrada/JSON inválidos (`INVALID_INPUT`, `INVALID_JSON`), comentário obrigatório (`COMMENT_REQUIRED`) ou ID de execução inválido (`INVALID_RUN_ID`) |
+| `400` | Entrada/JSON inválidos (`INVALID_INPUT`, `INVALID_JSON`), comentário obrigatório (`COMMENT_REQUIRED`), ID de execução inválido (`INVALID_RUN_ID`) ou conta esperada ausente, repetida ou inválida (`INVALID_EXPECTED_USER_ID`) |
 | `401` | Sessão ausente, inválida ou expirada (`INVALID_SESSION`); login inválido com mensagem genérica (`INVALID_CREDENTIALS`) |
 | `403` | Origem recusada (`ORIGIN_REJECTED`) ou cadastro não habilitado (`REGISTRATION_NOT_ALLOWED`) |
 | `404` | Execução inexistente ou de outro proprietário (`RUN_NOT_FOUND`); rota não oferecida (`NOT_FOUND`) |
 | `405` | Método não oferecido para a rota (`METHOD_NOT_ALLOWED`) |
-| `409` | Cadastro duplicado (`ACCOUNT_EXISTS`); revisão, estado, parecer ou decisão incompatíveis (`STALE_VERSION`, `INVALID_STATE`, `INSUFFICIENT_VALIDATION`, `DECISION_CONFLICT`, `INVALID_DECISION`); registro inválido/ambíguo (`INVALID_RECORD`, `AMBIGUOUS_RECORD`) |
+| `409` | Conta esperada diferente da sessão (`ACCOUNT_CHANGED`); cadastro duplicado (`ACCOUNT_EXISTS`); revisão, estado, parecer ou decisão incompatíveis (`STALE_VERSION`, `INVALID_STATE`, `INSUFFICIENT_VALIDATION`, `DECISION_CONFLICT`, `INVALID_DECISION`); registro inválido/ambíguo (`INVALID_RECORD`, `AMBIGUOUS_RECORD`) |
 | `413` | Corpo maior que 16 KiB (`BODY_TOO_LARGE`) |
 | `415` | Conteúdo diferente de JSON (`UNSUPPORTED_MEDIA_TYPE`) |
 | `429` | Excesso de tentativas de cadastro/login ou saturação de contadores (`TOO_MANY_ATTEMPTS`) |
@@ -609,33 +636,43 @@ um registro previamente criado pelo backend para o ID interno retornado no
 cadastro; não há endpoint de preparação ou fixture carregada pela aplicação.
 
 ```sh
-# Cadastro inicia a sessão e guarda o cookie localmente.
-curl -i -c /tmp/qa-demo.cookies http://127.0.0.1:3000/api/auth/register \
+# Cadastro inicia a sessão e guarda o cookie e a resposta localmente.
+qa_demo_dir=$(mktemp -d)
+curl -sS -c "$qa_demo_dir/cookies" -o "$qa_demo_dir/account.json" \
+  http://127.0.0.1:3000/api/auth/register \
   -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
   --data '{"name":"Ana Exemplo","email":"ana@example.invalid","password":"Senha ficticia de exemplo 123","teamName":"Equipe Demo"}'
 
-# Novo login também emite uma sessão nova.
-curl -i -c /tmp/qa-demo.cookies http://127.0.0.1:3000/api/auth/login \
+# Em acessos posteriores, o login também emite uma sessão nova.
+curl -sS -c "$qa_demo_dir/cookies" -o "$qa_demo_dir/account.json" \
+  http://127.0.0.1:3000/api/auth/login \
   -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
   --data '{"email":"ana@example.invalid","password":"Senha ficticia de exemplo 123"}'
 
-curl -b /tmp/qa-demo.cookies http://127.0.0.1:3000/api/auth/me
-curl -b /tmp/qa-demo.cookies http://127.0.0.1:3000/api/runs/run-demo-001
-curl -b /tmp/qa-demo.cookies http://127.0.0.1:3000/api/runs/run-demo-001/approve \
+# Capture a conta ao preparar a operação; uma consulta posterior não a substitui.
+qa_demo_expected=$(node --input-type=module -e 'import fs from "node:fs"; console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).user.id)' "$qa_demo_dir/account.json")
+curl -b "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/auth/me
+curl -b "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/runs/run-demo-001 \
+  -H "X-Expected-User-Id: $qa_demo_expected"
+curl -b "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/runs/run-demo-001/approve \
+  -H "X-Expected-User-Id: $qa_demo_expected" \
   -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
   --data '{"outputId":"out-planning","outputRevision":1}'
 
 # Em outra execução ainda sem decisão, solicitar alteração exige comentário.
-curl -b /tmp/qa-demo.cookies http://127.0.0.1:3000/api/runs/run-demo-002/request-changes \
+curl -b "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/runs/run-demo-002/request-changes \
+  -H "X-Expected-User-Id: $qa_demo_expected" \
   -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
   --data '{"outputId":"out-planning","outputRevision":1,"comment":"Incluir o limite superior da quantidade."}'
 
 # Reconsulta a decisão persistida antes de sair.
-curl -b /tmp/qa-demo.cookies http://127.0.0.1:3000/api/runs/run-demo-001
-curl -i -b /tmp/qa-demo.cookies -c /tmp/qa-demo.cookies \
+curl -b "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/runs/run-demo-001 \
+  -H "X-Expected-User-Id: $qa_demo_expected"
+curl -i -b "$qa_demo_dir/cookies" -c "$qa_demo_dir/cookies" \
   http://127.0.0.1:3000/api/auth/logout \
+  -H "X-Expected-User-Id: $qa_demo_expected" \
   -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' --data '{}'
-rm /tmp/qa-demo.cookies
+rm -r "$qa_demo_dir"
 ```
 
 Cadastro/login/me devolvem, por exemplo,
@@ -655,14 +692,16 @@ parâmetros de senha nem chama modelos. A verificação completa é `npm run che
 
 [`src/application/runs.ts`](../../src/application/runs.ts) recebe a configuração
 permitida, constrói o rascunho e consulta o histórico usando `RunStore`. As duas
-rotas exigem a sessão de T3.2. O proprietário é sempre o ID interno da conta na
-sessão; não se aceita `RunRecord` completo, `ownerId` ou identidade do cliente.
+rotas exigem a sessão e a precondição `X-Expected-User-Id` de T3.2. O proprietário
+é sempre o ID interno da conta na sessão; não se aceita `RunRecord` completo,
+`ownerId` ou identidade de autoria/propriedade fornecida pelo cliente.
 O recorte cobre parcialmente RF-01, RF-08 e RF-11; RNF-04 e RNF-06.
 
 ### Criar um rascunho
 
 `POST /api/runs` exige `Origin` exatamente igual a `APP_ORIGIN`,
-`Content-Type: application/json` e um único cabeçalho `Idempotency-Key` com UUID v4.
+`Content-Type: application/json`, `X-Expected-User-Id` correspondente à sessão e
+um único cabeçalho `Idempotency-Key` com UUID v4.
 A rota não aceita parâmetros de consulta na URL. O corpo aceita somente:
 
 ```json
@@ -761,19 +800,21 @@ sucesso só ocorre após concluir a persistência atômica.
 | Conta ainda não usou a chave | `201`, cria a execução |
 | Mesma conta, chave e conteúdo normalizado | `200`, devolve a execução existente, inclusive em concorrência ou após reinício |
 | Mesma conta e chave, conteúdo diferente | `409 / IDEMPOTENCY_CONFLICT`, sem alteração |
-| Outra conta usa a mesma chave | Execução independente, com outro ID e proprietário |
+| Outra conta usa a mesma chave, com sua própria identidade esperada | Execução independente, com outro ID e proprietário |
 
 A comparação usa `creation.requestHash` da criação original, nunca campos que
 etapas posteriores possam ter modificado. Repetir conserva IDs, horário, artefatos
 e trabalho posterior; não recoloca a execução em `draft` nem apaga resultados.
 A confirmação da repetição reflete o estado atual salvo. Se a resposta falhar
 depois da substituição do arquivo, o registro pode existir: o cliente repete a
-**mesma chave e o mesmo conteúdo**, obtendo a criação original sem duplicação.
+**mesma chave, o mesmo conteúdo e a identidade esperada original**, obtendo a
+criação original sem duplicação após autenticar novamente essa conta.
 
 ### Consultar o histórico
 
-`GET /api/runs` não aceita corpo e responde `200` com `{"items": []}` para histórico vazio. Cada item
-contém somente os mesmos seis campos públicos da confirmação. A ordenação é por
+`GET /api/runs` exige `X-Expected-User-Id`, não aceita corpo e responde `200` com
+`{"items": []}` para histórico vazio. Cada item contém somente os mesmos seis
+campos públicos da confirmação. A ordenação é por
 `createdAt` decrescente e, em empate, `id` decrescente. Há somente dois filtros
 opcionais, combináveis:
 
@@ -801,10 +842,10 @@ As respostas usam o envelope de erro e `Cache-Control: no-store` de T3.2.
 
 | HTTP | Código e situação |
 | --- | --- |
-| `400` | `INVALID_INPUT`: campos, tipos ou filtros inválidos; `INVALID_JSON`: JSON malformado; `INVALID_IDEMPOTENCY_KEY`: chave ausente, inválida ou duplicada |
+| `400` | `INVALID_INPUT`: campos, tipos ou filtros inválidos; `INVALID_JSON`: JSON malformado; `INVALID_IDEMPOTENCY_KEY`: chave ausente, inválida ou duplicada; `INVALID_EXPECTED_USER_ID`: conta esperada ausente, inválida ou duplicada |
 | `401` | `INVALID_SESSION`: sessão ausente, inválida ou expirada |
 | `403` | `ORIGIN_REJECTED`: origem ausente ou diferente no POST |
-| `409` | `IDEMPOTENCY_CONFLICT`: conteúdo diferente para a mesma conta e chave |
+| `409` | `IDEMPOTENCY_CONFLICT`: conteúdo diferente para a mesma conta e chave; `ACCOUNT_CHANGED`: conta esperada diferente da sessão, sem acessar execuções |
 | `413` | `BODY_TOO_LARGE`: corpo JSON excede 16 KiB |
 | `415` | `UNSUPPORTED_MEDIA_TYPE`: conteúdo diferente de JSON |
 | `503` | `STORAGE_FAILURE`: falha de leitura, gravação ou registro corrompido/inacessível; sem confirmação falsa ou dados internos |
@@ -817,10 +858,165 @@ Estados variados usados para testar filtros são simulações exclusivas dos tes
 a aplicação não carrega exemplos. A suíte cobre texto literal, isolamento,
 repetição, concorrência, reinício, rejeições e falhas de armazenamento.
 
-Upload de `.txt`, `.md` e PDF e seus limites maiores, edição, exclusão, interface,
+Upload de `.txt`, `.md` e PDF e seus limites maiores, edição, exclusão,
 processamento/curadoria e execução dos agentes permanecem pendentes. O limite de
 16 KiB corresponde apenas à entrada textual deste card. **RF-01, RF-11 e T3
 continuam parcialmente implementados; curadoria e orquestração permanecem abertas.**
+A interface deste recorte é documentada em T2.1 a seguir.
+
+## Interface inicial — T2.1
+
+[`src/web/index.html`](../../src/web/index.html),
+[`src/web/app.js`](../../src/web/app.js) e
+[`src/web/styles.css`](../../src/web/styles.css) implementam as páginas em HTML,
+CSS e JavaScript nativos, servidas pelo mesmo processo Node da API. Não há
+framework, roteador, servidor de frontend separado ou carga automática de dados
+sintéticos. Este recorte faz parte de [T2 #5](https://github.com/mh131105/akcit-qa-agent/issues/5),
+que permanece aberta.
+
+### Rotas e relação com as APIs
+
+| Página | Comportamento e API consumida |
+| --- | --- |
+| `/` | Redireciona para `/execucoes` |
+| `/acesso` | Consulta `GET /api/auth/me`; cadastro com nome, e-mail, senha e equipe opcional por `POST /api/auth/register`; entrada por `POST /api/auth/login` |
+| `/execucoes` | Histórico real por `GET /api/runs`, com `q` para nome/aplicação e `status` para situação; links para detalhe e nova execução |
+| `/execucoes/nova` | Identificação, objetivo opcional e US/CA textuais; “Salvar rascunho” envia `POST /api/runs` com chave idempotente e abre o ID confirmado |
+| `/execucoes/:id` | Consulta `GET /api/runs/:id`; quando há plano, exibe sua revisão e permite as decisões elegíveis por `POST /api/runs/:id/approve` e `POST /api/runs/:id/request-changes` |
+| Saída da conta | `POST /api/auth/logout` com `{}`; aceita `204` sem tentar ler JSON |
+
+As quatro páginas entregam o mesmo HTML; o endereço determina a página montada.
+Links e recarregamento funcionam diretamente. Após cadastro ou login, a pessoa
+retorna à página interna solicitada ou ao histórico. A conta do produto é
+identificada como distinta do acesso que os agentes usarão na aplicação testada.
+
+O helper HTTP envia `X-Expected-User-Id` nas operações de execuções e logout.
+A identidade é capturada quando a operação é preparada; uma tentativa recuperada
+usa seu `accountId` original. Consultas posteriores de sessão não substituem essa
+identidade. `ACCOUNT_CHANGED` retira os dados privados da tela e conserva a
+tentativa para a conta original, sem repetir a operação na conta recém-encontrada
+nem encerrar automaticamente a sessão dela.
+
+O servidor permite somente as páginas acima e `/web/app.js` e `/web/styles.css`,
+com tipos de conteúdo explícitos. Os arquivos são encontrados a partir do módulo
+do servidor, em desenvolvimento e após compilação, independentemente do diretório
+do comando. `/api`, `/healthz` e os `404` de caminhos desconhecidos são preservados.
+A política de conteúdo permite scripts, estilos e conexões da mesma origem, sem
+scripts inline; incorporação em páginas externas permanece bloqueada.
+
+### Entrada, histórico e estado verdadeiro
+
+Nome da execução e aplicação aceitam até 120 pontos de código Unicode; objetivo,
+até 2.000. O frontend confere os **bytes UTF-8 do JSON completo serializado**, com
+todos os campos, contra 16 KiB. O valor de US/CA segue sem `trim()`, reescrita ou
+truncamento. Erros mantêm os valores para correção, e confirmação depende de
+resposta bem-sucedida do servidor. A API continua sendo a validação definitiva.
+
+O histórico mostra nome, aplicação, data local, etapa e situação, e distingue
+carregamento, primeira lista vazia, filtro sem resultados e falha recuperável.
+O detalhe usa somente a projeção pública de T3.2. Um rascunho sem plano informa:
+“Material recebido. O processamento ainda não foi iniciado.” Texto original,
+board de US/CA, perguntas, percentuais e resultados não são fabricados nem
+reconstituídos a partir de exemplos.
+
+Com `plan`, são apresentados objetivo, IDs de requisitos e critérios
+referenciados, prioridades e razões, exclusões e razões, abordagem,
+pré-condições, fontes, revisão e situação da validação recebida. A consulta não
+fornece o texto das US/CA para substituir suas referências.
+
+As ações de revisão usam exatamente `plan.id` e `plan.revision` exibidos. Pedido
+de alteração exige comentário não vazio, com limite de 4.000 caracteres. O
+frontend oferece as ações conforme o estado público recebido; o servidor ainda
+confere estado, curadoria vigente, pareceres, revisão e conflitos. Após uma
+decisão, a página consulta novamente o registro e mostra decisão e revisão.
+Aprovação mantém a execução em espera: não inicia testes nem cria casos.
+
+### Recuperação da tentativa e erros
+
+Antes do primeiro envio, a página gera um UUID v4 e guarda em `sessionStorage`
+o ID interno da conta, a chave e a **string JSON exata** a enviar. Se não for
+possível guardar a tentativa, informa a falha e não faz o POST. Durante o envio,
+o botão fica desabilitado. Não se armazenam senha, token ou cookie nessa área.
+
+Queda de conexão ou resultado incerto preservam a tentativa, incluindo após
+recarregar a página. “Tentar confirmar salvamento” repete a mesma chave e o mesmo
+corpo original e `accountId`; o formulário não transforma silenciosamente essa
+tentativa em outro rascunho. Falhas conclusivas de preenchimento liberam correção. Sucesso
+confirmado remove o registro. Logout só remove a recuperação após receber `204`.
+
+A recuperação dura **na mesma aba e para a mesma conta, até confirmação ou
+logout confirmado**; não é backup permanente do formulário. Depois de expiração
+da sessão, o conteúdo pendente só reaparece após `GET /api/auth/me` confirmar o mesmo ID de
+conta. Outra conta não recebe o formulário da anterior. Fechar a aba ou apagar
+seus dados locais pode perder a possibilidade de recuperar a tentativa.
+O preenchimento ainda não enviado também pode ser preservado ao sair da página
+ou ao retirar a sessão, se o armazenamento local estiver disponível. Essa cópia
+não tem chave de envio e não representa uma execução criada; sua preservação
+ocorre nesses eventos, sem promessa de salvamento contínuo a cada alteração.
+
+Ao receber `204` do logout, a interface primeiro impede que `rememberForm` ou
+`pagehide` regravem o material, interrompe a verificação periódica de sessão e
+retira os dados privados; então limpa os registros de recuperação e abre a página
+de acesso. Se essa limpeza local falhar, a sessão continua tratada como encerrada
+e a interface informa o problema de limpeza, sem reabrir a tela privada ou afirmar
+que o logout falhou.
+
+Falha de rede ou `503` no logout preserva chave, corpo original, identificação da
+conta e mecanismo de recuperação. A mensagem é: “Não foi possível confirmar a
+saída. Sua tentativa de salvamento foi preservada.” Isso não afirma que a sessão
+continua ativa: o servidor pode ter encerrado a sessão e perdido apenas a
+resposta. Uma confirmação posterior de sessão inválida retira os dados da tela
+e mantém a recuperação restrita à conta original.
+
+Antes de enviar uma decisão, a página mantém em memória
+`{accountId, runId, outputId, outputRevision, comment}`, com o texto literal,
+inclusive espaços. Esse contexto acompanha as reconsultas e “Tentar novamente”:
+
+| Estado consultado | Recuperação do comentário |
+| --- | --- |
+| Mesma revisão, ainda sem decisão | Restaura o comentário e permite nova ação explícita do usuário |
+| A decisão enviada já consta no servidor | Exibe a confirmação persistida e dispensa a cópia pendente |
+| Revisão mudou ou há decisão conflitante | Mantém o comentário anterior para leitura/cópia, identificado pela revisão original; não preenche uma revisão nova |
+| Consulta falhou | Mantém o contexto para a próxima tentativa de consulta |
+
+A cópia aparece somente para a mesma conta e execução, não gera outro POST
+automaticamente e não é persistida. Sua preservação cobre erros e reconstruções
+da página atual; não há promessa de recuperação após recarregar ou fechar a aba.
+
+Credenciais inválidas, participante não habilitado, excesso de tentativas,
+configuração de origem e indisponibilidade recebem mensagens legíveis. Falhas de
+consulta oferecem nova tentativa. Sessão inválida ou expirada remove dados
+privados da tela e solicita entrada novamente. Além das respostas da API, a
+sessão é conferida a cada 30 segundos enquanto a aba está visível e ao retornar
+para a aba; nesse retorno, o conteúdo fica oculto até a conferência. Falha ao
+conferir a sessão também retira os dados e solicita entrada. Conflito de decisão ou revisão
+desatualizada explica a recusa e atualiza a consulta, sem reaplicar a decisão
+automaticamente sobre uma revisão nova. Nenhum erro confirma salvamento ou
+avanço.
+
+As chamadas `fetch` usam `/api`, mesma origem e o cookie existente; o navegador
+define `Origin`. Proprietário, autoria, aprovação do validador, estado e revisão
+vigente continuam definidos no backend. Nomes, comentários, fontes e demais
+dados recebidos são renderizados como texto por `textContent`. Formulários têm
+rótulos, mensagens junto aos campos, foco visível e estados acessíveis de
+carregamento e erro. O layout contempla 1366 px e 390 px.
+
+### Verificação e limites
+
+[`scripts/smoke-web.mjs`](../../scripts/smoke-web.mjs) usa Chromium,
+`playwright-core`, servidor real e armazenamento temporário: cadastro/entrada,
+histórico vazio, criação, detalhe, recarregamento, logout/login, recuperação de
+resposta perdida sem duplicação, isolamento entre contas, texto com aparência
+de HTML e decisões persistidas de planos. Planos e pareceres são preparados
+**somente no armazenamento temporário do teste**; o teste não comprova geração
+por IA. Capturas de desktop e celular são sintéticas. A reprodução está em
+[OPERACAO.md](../OPERACAO.md#jornada-pelo-navegador--t21).
+
+Cobertura parcial: RF-01, RF-08, RF-10, RF-11, RF-13 e RF-14; RN-05 e RN-06;
+RNF-01, RNF-02, RNF-04 e RNF-06. Upload, edição de conta/execução, exclusão,
+duplicação, board de US/CA, perguntas, início dos agentes, curadoria, geração do
+plano, casos e relatório permanecem nas tarefas correspondentes. Este recorte
+não encerra T2 nem comprova os cenários completos de aceitação do produto.
 
 ## Mapeamento, dúvidas e execução
 
@@ -935,7 +1131,8 @@ incluindo `plan: null` para rascunhos. As demais operações, inclusive `/contin
 aguardam a integração correspondente.
 
 Cadastro e entrada permitem obter a sessão; saída a invalida. Todas as operações
-de execução abaixo exigem usuário autenticado e conferência de proprietário. Operações
+de execução abaixo exigem usuário autenticado, `X-Expected-User-Id` e conferência
+de proprietário. Operações
 com versões desatualizadas são recusadas com motivo legível; mídia não expõe caminhos
 internos nem segredos. Autenticação e cadastro seguem os RF do produto.
 
@@ -957,15 +1154,18 @@ internos nem segredos. Autenticação e cadastro seguem os RF do produto.
 | `GET /api/runs/:id/report/print` | Versão de impressão do relatório publicado, final ou parcial; navegador permite salvar PDF |
 | `DELETE /api/runs/:id` | Após confirmação, excluir execução encerrada, sua credencial e mídias locais; informar tratamento separado de backups |
 
-Upload pode integrar o formulário inicial. Polling simples atualiza o progresso.
-Aprovar/responder persiste a decisão; a interface pode chamar `continue` em seguida.
-Se o recurso estiver ocupado, o usuário não perde sua resposta ou aprovação.
+Na integração futura, upload poderá integrar o formulário inicial e polling
+simples poderá atualizar o progresso. Aprovar/responder persistirá a decisão;
+quando `/continue` existir, a interface poderá solicitar a continuidade depois.
+Se o recurso estiver ocupado, o usuário não deverá perder sua resposta ou
+aprovação. T2.1 não oferece essas operações e mantém a espera após a decisão.
 
 ## Exemplo e verificação
 
 O [artefato](exemplos/artefato-demo.md) e o [JSON](exemplos/execucao-demo.json) são
-sintéticos. `fixture: true` existe somente no exemplo; a interface identifica simulação
-e o backend não o aceita como execução real. Não há mídia ou chamadas de modelo.
+sintéticos. `fixture: true` existe somente no exemplo e o backend não o aceita
+como execução real. A interface de T2.1 não carrega esse JSON. Não há mídia ou
+chamadas de modelo no exemplo.
 
 O exemplo apresenta plano e casos aprovados antes do mapa, detalhamento preservando
 os campos aprovados e uma execução devolvida por falta de evidência. Sua revisão 2

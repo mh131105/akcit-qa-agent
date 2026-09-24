@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import fs from 'node:fs/promises';
+import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test, { type TestContext } from 'node:test';
@@ -61,18 +62,27 @@ async function harness(t: TestContext, env: NodeJS.ProcessEnv = {}) {
   await listen();
   t.after(async () => { await close(); await fs.rm(dataDir, { recursive: true, force: true }); });
   const store = new RunStore(dataDir);
+  // Identidade capturada apenas no login/cadastro; nunca reconsultada antes de uma operação.
+  const expectedUsers = new Map<string, string>();
   async function request(path: string, body?: unknown, cookie?: string, overrides: RequestInit = {}) {
+    const expectedUserId = cookie && expectedUsers.get(cookie);
     const response = await fetch(`${base}${path}`, {
       method: body === undefined ? 'GET' : 'POST',
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       ...overrides,
       headers: { Origin: config.appOrigin ?? origin, 'Content-Type': 'application/json',
-        ...(cookie ? { Cookie: cookie } : {}), ...overrides.headers },
+        ...(cookie ? { Cookie: cookie } : {}),
+        ...(expectedUserId && (path.startsWith('/api/runs') || path === '/api/auth/logout')
+          ? { 'X-Expected-User-Id': expectedUserId } : {}), ...overrides.headers },
     });
     assert.equal(response.headers.get('cache-control'), 'no-store');
     const text = await response.text();
     assert.ok(!text.includes(secret), 'resposta não pode conter campos privados');
-    return { response, status: response.status, body: text ? JSON.parse(text) : null };
+    const result = text ? JSON.parse(text) : null;
+    if (response.ok && ['/api/auth/register', '/api/auth/login'].includes(path)) {
+      expectedUsers.set(sessionCookie(response), result.user.id);
+    }
+    return { response, status: response.status, body: result };
   }
   async function register(input = account) {
     const result = await request('/api/auth/register', input);
@@ -89,6 +99,78 @@ function error(result: { status: number; body: any }, status: number, code: stri
   assert.equal(result.body.error.code, code);
   assert.deepEqual(Object.keys(result.body), ['error']);
 }
+
+async function wireRequest(url: string, cookie: string, body: unknown, headers: string[]) {
+  return new Promise<{ status: number; body: any }>((resolve, reject) => {
+    const request = httpRequest(url, { method: body === undefined ? 'GET' : 'POST', headers: [
+      'Host', new URL(url).host, 'Origin', origin, 'Content-Type', 'application/json', 'Cookie', cookie, ...headers,
+    ] }, response => {
+      let text = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { text += chunk; });
+      response.on('end', () => resolve({ status: response.statusCode!, body: text ? JSON.parse(text) : null }));
+    });
+    request.on('error', reject);
+    request.end(body === undefined ? undefined : JSON.stringify(body));
+  });
+}
+
+test('BUG-T2.1-01: consulta, decisões e logout exigem uma única identidade esperada válida', async t => {
+  const h = await harness(t);
+  const owner = await h.register();
+  await h.store.create(waiting('expected-user', owner.user.id));
+  const routes = [
+    ['/api/runs/expected-user', undefined],
+    ['/api/runs/expected-user/approve', reference],
+    ['/api/runs/expected-user/request-changes', { ...reference, comment: '  Rever literalmente.  ' }],
+    ['/api/auth/logout', {}],
+  ] as const;
+  for (const [path, body] of routes) {
+    for (const headers of [[], ['X-Expected-User-Id', ''], ['X-Expected-User-Id', 'not-a-uuid'],
+      ['X-Expected-User-Id', '00000000-0000-0000-0000-000000000000'],
+      ['X-Expected-User-Id', `${owner.user.id.slice(0, 14)}1${owner.user.id.slice(15)}`],
+      ['X-Expected-User-Id', `{${owner.user.id}}`],
+      ['X-Expected-User-Id', `${owner.user.id}, ${owner.user.id}`],
+      ['X-Expected-User-Id', owner.user.id, 'x-expected-user-id', owner.user.id]]) {
+      error(await wireRequest(`${h.base}${path}`, owner.cookie, body, headers), 400, 'INVALID_EXPECTED_USER_ID');
+    }
+  }
+  assert.equal((await h.request('/api/auth/me', undefined, owner.cookie)).status, 200);
+  assert.equal((await h.request('/api/runs/expected-user', undefined, owner.cookie,
+    { headers: { 'X-Expected-User-Id': owner.user.id.toUpperCase() } })).status, 200);
+  assert.equal((await h.store.read('expected-user')).run.approvals.length, 1);
+});
+
+test('BUG-T2.1-01: identidade divergente bloqueia consulta, decisões e logout antes de acessar execuções', async t => {
+  const h = await harness(t);
+  const owner = await h.register();
+  const other = await h.register(second as typeof account);
+  await h.store.create(waiting('account-a', owner.user.id));
+  await h.store.create(waiting('account-b', other.user.id));
+  const snapshots = await Promise.all(['account-a', 'account-b'].map(id => fs.readFile(join(h.dataDir, `runs/${id}.json`), 'utf8')));
+  const reads = t.mock.method(RunStore.prototype, 'read');
+  const updates = t.mock.method(RunStore.prototype, 'update');
+  for (const id of ['account-a', 'account-b', 'missing']) {
+    for (const suffix of ['', '/approve', '/request-changes']) {
+      const body = suffix ? { ...reference, ...(suffix.includes('changes') ? { comment: '  Conta A.  ' } : {}) } : undefined;
+      const denied = await h.request(`/api/runs/${id}${suffix}`, body, other.cookie,
+        { headers: { 'X-Expected-User-Id': owner.user.id } });
+      error(denied, 409, 'ACCOUNT_CHANGED');
+      for (const privateValue of [owner.user.id, other.user.id, secret, 'account-a', 'account-b']) {
+        assert.ok(!JSON.stringify(denied.body).includes(privateValue));
+      }
+    }
+  }
+  const logout = await h.request('/api/auth/logout', {}, other.cookie,
+    { headers: { 'X-Expected-User-Id': owner.user.id } });
+  error(logout, 409, 'ACCOUNT_CHANGED');
+  assert.equal(logout.response.headers.get('set-cookie'), null);
+  assert.deepEqual((await h.request('/api/auth/me', undefined, other.cookie)).body, { user: other.user });
+  assert.equal(reads.mock.callCount(), 0);
+  assert.equal(updates.mock.callCount(), 0);
+  reads.mock.restore(); updates.mock.restore();
+  assert.deepEqual(await Promise.all(['account-a', 'account-b'].map(id => fs.readFile(join(h.dataDir, `runs/${id}.json`), 'utf8'))), snapshots);
+});
 
 test('T3.2: cadastro, consulta própria, aprovação idempotente, logout e retorno após reinício', async t => {
   const h = await harness(t);

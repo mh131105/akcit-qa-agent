@@ -34,3 +34,22 @@ jobs:
           --tmpfs /home/node:rw,size=128m,uid=1000,gid=1000,mode=0700
           --tmpfs /data:rw,size=128m,uid=1000,gid=1000,mode=0700
           akcit-qa:ci node scripts/smoke-runtime.mjs
+      - name: Jornada web com API e armazenamento temporários na imagem final
+        run: |
+          mkdir -p artifacts/web
+          chmod 777 artifacts/web
+          docker run --rm --cpus=1 --memory=2g --shm-size=512m \
+            --cap-drop=ALL --security-opt=no-new-privileges --read-only \
+            --tmpfs /tmp:rw,size=512m,mode=1777 \
+            --tmpfs /home/node:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+            --tmpfs /data:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+            -e SMOKE_ARTIFACT_DIR=/evidence -v "$PWD/artifacts/web:/evidence" \
+            akcit-qa:ci node scripts/smoke-web.mjs
+      - name: Evidências sintéticas da interface
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: web-smoke
+          path: artifacts/web/
+          if-no-files-found: ignore
+          retention-days: 14

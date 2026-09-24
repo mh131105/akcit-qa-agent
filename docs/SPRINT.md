@@ -8,7 +8,7 @@ as tarefas abaixo implementam seus requisitos, sem uma segunda sprint no plano.
 
 | Frente | Responsabilidade | Primeiro trabalho |
 | --- | --- | --- |
-| A · Interface | Acesso, histórico e nova execução; página de execução com abas, aprovações, dúvidas, vídeos e impressão | Consumir o exemplo e montar os estados das sete vistas |
+| A · Interface | Acesso, histórico e nova execução; página de execução com abas, aprovações, dúvidas, vídeos e impressão | Integrar T2.1 às APIs de T3.2/T3.3 e seguir com as demais vistas |
 | B · Backend e orquestração | Acesso aos dados, API, persistência, aprovações, estados, limites e sessões Pi | Alinhar contratos e ligar o fluxo mínimo de ponta a ponta |
 | C · Metodologia e validação | Curadoria, plano, casos, detalhamento, relatório e validador independente | Preparar saídas e critérios sobre o artefato sintético |
 | D · Navegador e evidências | Acesso ao alvo, mapa, execução visual, captura, bloqueios e retomada de casos | Provar um percurso real e mídia vinculada à tentativa |
@@ -133,8 +133,8 @@ exemplos e limites estão em
 a configuração do piloto está em [OPERACAO.md](OPERACAO.md#acesso-dos-participantes-do-piloto).
 
 Desbloqueia a integração das telas de acesso e revisão do plano. **T3 e T4
-permanecem abertas.** Criação e histórico seguem em T3.3; interface, upload,
-`/continue`, reserva real e execução de especialistas continuam pendentes.
+permanecem abertas.** Criação e histórico estão em T3.3 e a interface inicial em
+T2.1; upload, `/continue`, reserva real e execução de especialistas continuam pendentes.
 Dados sintéticos existem somente no preparo dos testes; continuidade e despacho
 pertencem à integração de orquestração.
 
@@ -142,10 +142,10 @@ pertencem à integração de orquestração.
 
 História de usuário, prioridade alta, **parte de
 [T3 · #6 — API, persistência e recuperação](https://github.com/mh131105/akcit-qa-agent/issues/6)**.
-Responsável: um desenvolvedor da frente B. Dependências atendidas: armazenamento
-de T3.1 e autenticação de T3.2, integrada pelo PR #19. Implementação na branch
-`feat/run-intake-history`, a partir de `develop` contendo `e18bcec`;
-a entrega exige revisão e integração via PR para `develop`.
+Responsável: um desenvolvedor da frente B. Entrega:
+[PR #20](https://github.com/mh131105/akcit-qa-agent/pull/20), **integrado em
+`develop`**, merge `d5e4cf2`; T3.3 está integrada. Dependências atendidas:
+armazenamento de T3.1 e autenticação de T3.2, integrada pelo PR #19.
 Cobertura parcial: RF-01, RF-08, RF-11; RNF-04 e RNF-06.
 
 Como participante autenticado, quero salvar uma execução com nome, aplicação e
@@ -164,8 +164,9 @@ POST → histórico → abrir → reiniciar → novo login → reencontrar. Os t
 duas contas e diretório temporário, conferem preservação literal, isolamento,
 idempotência, entrada inválida e falhas de armazenamento. Estados variados são
 simulações somente dos testes; não há carga automática de exemplos ou chamada de
-modelo. A entrega exige os 46 testes anteriores preservados e, com Node.js 24,
-`npm run check`, `npm test` e `npm run build` aprovados. Contratos e limites estão
+modelo. A base integrada preserva os 46 testes anteriores e totaliza 54 testes.
+As verificações da entrega usam Node.js 24: `npm run check`, `npm test` e
+`npm run build`. Contratos e limites estão
 em [CONTRATOS.md](requisitos/CONTRATOS.md#criação-e-histórico-de-execuções--t33);
 repetição após resposta incerta e dados no backup estão em
 [OPERACAO.md](OPERACAO.md#criar-e-reencontrar-uma-entrada-textual).
@@ -176,7 +177,98 @@ execução e histórico. A definição de pronto exige PR revisado e integrado e
 fechá-la automaticamente. **T3, curadoria (T5) e orquestração (T4) permanecem
 abertas.** RF-01 e RF-11 continuam parciais: o limite deste card é texto em JSON
 de até 16 KiB; upload de `.txt`, `.md` e PDF com limites maiores, edição, exclusão,
-interface, curadoria e execução de agentes continuam pendentes.
+curadoria e execução de agentes continuam pendentes. A interface de entrada
+textual e histórico é tratada por T2.1 abaixo.
+
+### T2.1 · Acesso, entrada textual, histórico e revisão do plano pelo site
+
+História de usuário, prioridade alta, **parte de
+[T2 · #5 — Interface](https://github.com/mh131105/akcit-qa-agent/issues/5)**.
+Responsável: um desenvolvedor da frente A; revisão: frente B. Implementação na
+branch `feat/web-intake-review`, criada de `origin/develop` atualizado contendo
+`d5e4cf2`. Dependências atendidas: T3.2 e T3.3, integradas pelos
+[PRs #19](https://github.com/mh131105/akcit-qa-agent/pull/19) e
+[#20](https://github.com/mh131105/akcit-qa-agent/pull/20).
+Entrega: [PR #21](https://github.com/mh131105/akcit-qa-agent/pull/21), aberto para
+`develop`; revisão pela frente B e integração ainda pendentes. O PR referencia
+T2 #5 sem encerrá-la automaticamente.
+
+Como participante do piloto, quero entrar no site, salvar minhas histórias de
+usuário e critérios de aceite, reencontrar a execução e revisar seu plano quando
+disponível, para preparar e acompanhar o trabalho sem utilizar comandos técnicos.
+
+As quatro URLs usam HTML, CSS e JavaScript nativos, no mesmo processo Node e com
+`fetch` para as APIs reais. Acesso utiliza a sessão existente; histórico aplica
+busca/filtro; “Salvar rascunho” registra `draft/intake` e abre o detalhe. O corpo
+textual é preservado e o limite é medido no JSON completo em bytes. A tentativa
+salva em `sessionStorage`, vinculada ao ID da conta, permite confirmar resposta
+incerta com chave e corpo originais após atualizar a página, sem duplicação.
+Sessão inválida remove dados privados da tela; outra conta não restaura o
+formulário. Logout confirmado limpa a tentativa.
+
+O detalhe mostra somente o que a API retorna. Sem plano, informa que o
+processamento não começou. Com plano, apresenta conteúdo, validação e revisão;
+aprovação e pedido de alteração usam essa revisão e reconsultam a decisão salva.
+Conflitos atualizam a consulta sem reaplicar a decisão. Aprovar mantém a espera.
+Não há dados de exemplo carregados pela aplicação nem despacho de agentes.
+
+Cobertura parcial: RF-01, RF-08, RF-10, RF-11, RF-13 e RF-14; RN-05 e RN-06;
+RNF-01, RNF-02, RNF-04 e RNF-06. CA-01 a CA-10 do card são verificados por testes
+de rotas/cabeçalhos e jornada em Chromium com API e persistência reais. O smoke
+cobre duas contas, resposta perdida após gravação, recuperação na mesma aba,
+recarregamento e novo login, conteúdo semelhante a HTML e decisões persistidas.
+Planos/pareceres são sintéticos, preparados somente no armazenamento temporário;
+esse teste não comprova geração por IA. Capturas de 1366 px e 390 px integram a
+evidência sintética do PR.
+
+Verificações da implementação inicial: `npm run check`, `npm test` com 55 testes aprovados
+(preservando os 54 testes da base), `npm run build`, seis testes Python de
+publicação e os dois smokes dentro da imagem final. O smoke web passou nas 16
+verificações com Node.js 24.21.0 e Chromium 153.0.8010.52, incluindo as jornadas
+do card, clique duplo, troca de conta durante recuperação, conflitos, teclado e
+falhas de serviço/armazenamento. Resultado e capturas sintéticos estão em
+[evidencias/t2.1](evidencias/t2.1/README.md).
+Comandos e artefatos estão em [OPERACAO.md](OPERACAO.md#jornada-pelo-navegador--t21), e o
+comportamento em [CONTRATOS.md](requisitos/CONTRATOS.md#interface-inicial--t21).
+A definição de pronto exige PR revisado e integrado em `develop`; checks locais
+não substituem essa revisão.
+
+#### BUG-T2.1-01 · Isolamento da conta e recuperação durante falhas
+
+Correção P1 no próprio [PR #21](https://github.com/mh131105/akcit-qa-agent/pull/21),
+branch `feat/web-intake-review`, sobre `fa91ad2`. Commit de correção:
+[`fe61190`](https://github.com/mh131105/akcit-qa-agent/commit/fe6119096f056076e07eb9d05aa9f941422780b6).
+Responsável: integração frontend/backend; nova revisão: frente B.
+
+A revisão apontou três bloqueios: troca de cookie entre `/auth/me` e o POST podia
+salvar material na conta errada; logout malsucedido apagava a tentativa; falha na
+decisão reconstruía a página sem o comentário. As operações de execuções e logout
+agora exigem `X-Expected-User-Id`, validado centralmente contra a sessão, sem
+atribuir propriedade pelo cliente. A recuperação só é apagada após logout `204`;
+falha de limpeza local não desfaz a saída confirmada. Comentários ficam em memória
+com conta, execução e revisão originais, inclusive nas reconsultas malsucedidas;
+revisão nova ou conflito conserva uma cópia para leitura, sem POST automático.
+
+Antes das correções, quatro testes HTTP novos falharam. Os três cenários de
+navegador também falharam na imagem de `fa91ad2`: criação indevida `201` em vez de
+`409`, tentativa apagada no logout `503` e comentário vazio após falha de envio.
+Depois das correções, `npm run check`, `npm test` (**59/59**, preservando os 55
+anteriores) e `npm run build` passaram com Node.js 24.19.0. Os seis testes Python
+de publicação passaram. A imagem final local, com Node.js 24.21.0 e Chromium
+153.0.8010.52, passou no smoke de infraestrutura e nas **21 verificações do smoke
+web**, incluindo os três cenários de regressão, com API e persistência reais,
+sem modelo pago. [Evidências e limites](evidencias/t2.1/README.md).
+
+**T2.1 permanece pendente de nova revisão da frente B e merge em `develop`.**
+A CI deve aprovar o commit enviado; os resultados locais e a revisão técnica da
+correção não substituem a revisão da frente B. **T2 #5 permanece aberta.**
+Design definitivo e implementação de agentes estão fora deste card.
+
+**T2 continua aberta.** Upload, edição, exclusão, duplicação, board de US/CA,
+perguntas, início dos agentes, curadoria, geração do plano, casos e relatório
+permanecem nas tarefas correspondentes. T2.1 implementa entrada textual e
+operações disponíveis; não conclui as sete vistas nem a aceitação completa do
+produto. Não há credenciais, sessões ou documentos privados versionados.
 
 Não criar um produto completo para servir de alvo: telas simples com dados
 restauráveis bastam. O agente recebe requisitos e acesso; o código e o gabarito dos
@@ -186,7 +278,7 @@ defeitos ficam fora de seu contexto.
 
 | Quando | Verificação |
 | --- | --- |
-| 23/09 | Contratos alinhados; interface consome exemplo; primeiro percurso integrado com aprovações, validador, navegador e evidência reais |
+| 23/09 | Contratos alinhados; interface integrada à API; primeiro percurso integrado com aprovações, validador, navegador e evidência reais |
 | 24/09 | Fluxo completo e cenários de correção, bloqueio, retomada, cancelamento e relatório parcial |
 | 25/09 | A-01 a A-08 em dev, correções e ensaio; encerrar ampliação de escopo |
 | 26/09 até 12h | Ensaio na versão candidata; conferir acesso e exportação |

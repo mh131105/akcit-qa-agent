@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=dependencies /app/dist ./dist
+COPY --from=dependencies /app/src/web ./src/web
 COPY package*.json ./
 COPY scripts ./scripts
 COPY agents ./agents
