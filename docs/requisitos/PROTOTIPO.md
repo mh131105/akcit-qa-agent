@@ -1,6 +1,6 @@
 # Especificação do protótipo
 
-Versão 1.0 · 23/09/2026 · Entrega: 26/09 às 17h, horário de Manaus.
+Versão 1.1 · 24/09/2026 · Entrega: 26/09 às 17h, horário de Manaus.
 
 Este documento define o que implementar e como aceitar a entrega. O fluxo e os seis
 agentes refletem as decisões da equipe. As telas, os limites operacionais e os critérios
@@ -8,8 +8,9 @@ abaixo formam a base técnica proposta pelo CTO. Ainda não são funcionalidades
 
 ## 1. Produto e limite da entrega
 
-O usuário envia histórias de usuário (US) com critérios de aceite (CA), aprova o plano
-e os casos, acompanha testes pela interface da aplicação e recebe resultados com
+O usuário envia comportamentos esperados em histórias de usuário (US), critérios
+de aceite (CA), requisitos funcionais, prosa ou Gherkin, aprova o plano e os casos,
+acompanha testes pela interface da aplicação e recebe resultados com
 vídeos e exportação para PDF. O público inicial são times com documentação organizada.
 
 A unidade de trabalho é uma **execução**. Ela tem nome, aplicação, entradas, versões,
@@ -29,13 +30,45 @@ será restrito aos participantes habilitados pela equipe; a liberação pública
 
 <!-- ponytail: um piloto com um proprietário por execução e um trabalho de agente por vez; colaboração e filas distribuídas só quando houver uso que justifique. -->
 
+### Decisão de entrada e curadoria · 24/09/2026
+
+Esta revisão substitui a exigência anterior de uma US formal com CA. O formato
+canônico continua sendo o contrato interno de requisitos, regras, exemplos e
+perguntas; Gherkin é uma entrada opcional. A ausência de Gherkin não transfere a
+criação dos cenários ao usuário: o `test-designer` os elaborará na etapa de casos,
+após a aprovação do plano. Essa etapa ainda depende de implementação.
+
+| Material recebido | Tratamento |
+| --- | --- |
+| US/CA, RF ou prosa com comportamento claro | Normalizar e planejar sem exigir reescrita ou rótulos formais |
+| Cenários Gherkin simples ou exemplos manuais | Preservar contexto, ação e resultados; manter o alcance pontual dos exemplos |
+| História vaga ou resultado ausente | Perguntar pela decisão necessária; propostas não são regras confirmadas |
+| Fontes contraditórias | Localizar o conflito, pedir decisão e conservar os originais |
+| Parte clara e parte ambígua da mesma história | Bloquear só as regras dependentes e avançar com as independentes |
+| Somente URL/acesso | Solicitar o comportamento esperado; observar a interface não define conformidade |
+
+O recorte atual recebe texto colado, sem upload, parser completo de `.feature`
+ou executor Cucumber. Construções Gherkin complexas devem conservar contexto e
+associação dos exemplos ou gerar dúvida específica, nunca ser ignoradas em silêncio.
+A transformação deve preservar condições, ações, resultados, valores, exceções e
+fontes; não exige JSON ou redação idênticos para entradas equivalentes.
+
+O plano apresenta cobertura, prioridades e limitações de forma proporcional ao
+material. O validador aceita paráfrases fiéis e planos concisos; a omissão de uma
+recitação das etapas internas não é defeito. Estados e aprovações continuam
+controlados pelo backend. Resultados e limitações da avaliação desta mudança:
+[ajuste de entradas](../evidencias/ajuste-entradas/README.md).
+
 ## 2. Jornada e responsabilidades
 
 ```mermaid
 flowchart TD
-    A[Entrar e criar execução] --> B[Enviar US e CA e configurar acesso]
+    A[Entrar e criar execução] --> B[Enviar requisitos e configurar acesso]
     B --> C[Curadoria validada]
     C --> D[Plano validado]
+    C -->|Dúvidas localizadas| R[Usuário registra esclarecimentos]
+    D -->|Esclarecer pendência| R
+    R -->|Retomada explícita com novas respostas| C
     D --> E[Usuário aprova plano]
     E --> F[Casos lógicos validados]
     F --> G[Usuário aprova casos]
@@ -51,6 +84,9 @@ flowchart TD
     H -->|Caminho bloqueado| Q[Solicitar orientação e seguir casos independentes]
     Q -->|Resposta disponível| I
 ```
+
+Neste documento, US/CA também designa requisitos e comportamentos equivalentes
+normalizados de outros formatos; não impõe um template à entrada.
 
 O **curador** normaliza mantendo o significado. O **planejador** produz plano, casos
 lógicos e seu detalhamento após o mapa. O **executor** explora, executa e captura
@@ -69,9 +105,9 @@ fazem parte da entrega; os critérios são verificações a realizar na implemen
 | ID | O sistema deve | Critério de aceitação |
 | --- | --- | --- |
 | RF-01 | Criar uma execução com nome, identificação da aplicação, objetivo opcional e artefatos. URL, conta/perfil de teste e preparo podem ser completados depois, mas são obrigatórios antes da exploração. Aceitar texto, `.txt`, `.md` e PDF com texto selecionável. | Preservar formulário em erro; listar arquivos recebidos e recusados; informar formato/tamanho inválido ou PDF sem texto. Capturar a versão das entradas antes da curadoria. |
-| RF-02 | Extrair US/CA, normalizar seu conteúdo e registrar fonte, trecho e localização; listar dúvidas. | Pelo menos uma US com CA identificável permite iniciar planejamento. Limites, condições e exceções permanecem iguais aos originais. Informação ausente gera dúvida, nunca regra inventada. |
+| RF-02 | Extrair requisitos, regras e exemplos recebidos; normalizar conteúdo com fonte, trecho e localização; listar dúvidas. | Pelo menos um comportamento esperado verificável permite planejar seu escopo, sem exigir formato de US, rótulo CA ou Gherkin. Condições, ações, resultados, limites e exceções permanecem fiéis; exemplos não viram regras gerais. Informação ausente gera pergunta, nunca regra inventada. |
 | RF-03 | Confirmar acesso e mapear telas e transições relevantes depois da aprovação dos casos lógicos. | Registrar percurso observado desde a entrada, incluindo ações de navegação. Caminho não localizado gera pedido de orientação e bloqueio dos casos afetados. |
-| RF-04 | Elaborar casos usando plano aprovado e US/CA originais; depois acrescentar os percursos observados. | Cada caso contém CA, fonte, pré-condições, dados, técnica e expectativa. PCE/AVL têm justificativa. Antes do mapa, percurso pode estar pendente; antes de executar, deve estar definido e validado. |
+| RF-04 | Elaborar casos usando plano aprovado e requisitos originais; depois acrescentar os percursos observados. | Cada caso contém referência ao comportamento normalizado, fonte, pré-condições, dados, técnica e expectativa. PCE/AVL têm justificativa. Antes do mapa, percurso pode estar pendente; antes de executar, deve estar definido e validado. |
 | RF-05 | Executar casos pela interface, conferindo o estado inicial e usando visão, cursor, teclado, rolagem e arrastes reais. | Repetir o percurso natural; registrar ações, observações e tentativas. Sem execução direta de lógica do aplicativo por API, banco ou JavaScript para substituir a interação. |
 | RF-06 | Gravar a execução e associar vídeos curtos e capturas a cada caso/tentativa. | Mostrar ação e resultado, incluindo sucessos. Vídeo reproduz no relatório e captura serve ao PDF. Falha de gravação aparece; reprodução posterior ganha outra tentativa. |
 | RF-07 | Apresentar relatório padronizado com esperado, observado, veredito, US/CA, fontes, evidências, cobertura e limitações. | Incluir aprovados, reprovados, bloqueados, inconclusivos e não executados. Conclusões publicadas vêm de saídas validadas; relatório parcial mantém a indicação de interrupção. |
@@ -90,8 +126,8 @@ fazem parte da entrega; os critérios são verificações a realizar na implemen
 
 | ID | Regra |
 | --- | --- |
-| RN-01 | A entrada mínima é uma US com CA. RF, RN e outros documentos do cliente são complementares, sem exigência automática de envio. A cobertura declarada se limita ao que foi recebido e selecionado. |
-| RN-02 | Curadoria preserva significado e origem. A interface revela navegação e resultado observado; não estabelece o comportamento esperado. Uma suposição não sustenta aprovação/reprovação. |
+| RN-01 | Para planejar, a entrada mínima é um comportamento esperado verificável. Aceitar US/CA, requisitos funcionais, prosa e Gherkin textual sem formato obrigatório. Material insuficiente pode ser recebido para curadoria e esclarecimento; não autoriza fabricar expectativas. A cobertura se limita aos comportamentos sustentados pelas fontes e selecionados. |
+| RN-02 | Curadoria preserva significado e origem, distinguindo regras gerais, exemplos recebidos e dúvidas. Exemplo isolado não estabelece domínio ou limite geral. Proposta de regra fica em pergunta e exige decisão explícita com fonte antes de sustentar expectativa. A interface revela navegação e resultado observado; não estabelece o comportamento esperado. |
 | RN-03 | Cada caso aponta para pelo menos um CA e uma expectativa rastreável. PCE/AVL se aplicam apenas quando o domínio e as regras permitem; limites ausentes não são inventados. |
 | RN-04 | Plano e casos são entregas distintas do planejador. Casos recebem o plano aprovado e os artefatos/US/CA de origem. Mapeamento ocorre depois das duas aprovações humanas. |
 | RN-05 | Aprovação humana só é aceita sobre versão aprovada pelo validador e ainda vigente. Ausência de decisão ou decisão antiga não libera trabalho dependente. |
@@ -119,8 +155,8 @@ nem promessas de capacidade comprovada. São conferidos no ambiente de demonstra
 | RNF-04 | **Acesso e segredos.** Conferir autorização no servidor para cada execução, arquivo e mídia; senha protegida por hash próprio para senhas, sessão protegida e invalidada no logout. Credencial do alvo fica em armazenamento privado, fora de logs, respostas, fontes e prompts gerais; vídeos começam após autenticação. Testar com duas contas e um segredo fictício identificável. |
 | RNF-05 | **Isolamento do piloto.** Navegar somente em destinos habilitados pela equipe, incluindo redirecionamentos e destinos privados autorizados para desenvolvimento. Bloquear acesso a serviços internos não autorizados. Conteúdo de páginas/arquivos não amplia tools ou permissões. Exposição pública exige HTTPS; acesso local pode usar o túnel existente. |
 | RNF-06 | **Integridade e recuperação.** Validar contratos e referências no servidor e salvar decisões/resultados antes de avançar. Envios repetidos não duplicam execuções, decisões ou tentativas. Queda mantém os registros confirmados; trabalho incompleto aparece como interrompido, nunca concluído. |
-| RNF-07 | **Limites de entrada e execução.** Até 5 arquivos de 10 MiB cada, 10 US selecionadas e 30 casos por execução. Excesso pede redução de escopo, sem truncar conteúdo silenciosamente. Uma tarefa ativa por ambiente; segunda solicitação recebe “ambiente ocupado” e pode tentar depois. |
-| RNF-08 | **Limites do agente.** Até 3 revisões automáticas por saída, 2 tentativas técnicas de validação por revisão, 120 s por chamada de modelo, 100 ações na exploração e 50 por tentativa de caso. Orçamento ativo de 45 min por execução, sem contar espera humana. Ao atingir limite, salvar motivo e interromper dependentes; sem aprovação por padrão. Resposta humana pode abrir novo ciclo limitado para os itens afetados, com novo orçamento explícito. |
+| RNF-07 | **Limites de entrada e execução.** Até 5 arquivos de 10 MiB cada, 10 histórias/requisitos selecionados e 30 casos por execução. Excesso pede redução de escopo, sem truncar conteúdo silenciosamente. Uma tarefa ativa por ambiente; segunda solicitação recebe “ambiente ocupado” e pode tentar depois. |
+| RNF-08 | **Limites do agente.** Até 3 revisões automáticas por saída, 2 tentativas técnicas de validação por revisão, 120 s por chamada de modelo, 100 ações na exploração e 50 por tentativa de caso. Orçamento ativo de 45 min por execução, sem contar espera humana. Ao atingir limite, salvar motivo e interromper dependentes; sem aprovação por padrão. Resposta humana seguida de retomada explícita pode abrir novo ciclo limitado de produção para os itens afetados; o tempo ativo acumulado continua limitado a 45 min na execução, sem zerar o consumo anterior. |
 | RNF-09 | **Evidência utilizável.** Vídeos e capturas identificam caso/tentativa; vídeo de demonstração mostra preparação imediata, ação e resultado em até 60 s por trecho. Caso mais longo pode ter vários trechos. Falta de captura aparece. PDF inclui texto selecionável, paginação, capturas legíveis e nenhum controle de reprodução sem função. |
 | RNF-10 | **Observação e reprodutibilidade.** Registrar horário, versão do app, papel/modelo usado, duração, chamadas, ações e consumo/custo quando disponível, sem inventar valores ausentes. Erros têm identificação que permita localizar a execução. Modelos configurados por papel no backend, sem tela avançada de configuração. |
 | RNF-11 | **Operação simples.** Reutilizar Node, Pi, navegador e publicação existentes. Persistência por execução e arquivos de mídia bastam; não introduzir microserviços ou fila distribuída. Após validação em dev, promover a mesma imagem para prod. Realizar backup e recuperação de uma execução sintética antes da entrega. |
@@ -135,7 +171,7 @@ compartilham uma página de execução com abas, sem quatro aplicações ou flux
 | --- | --- | --- |
 | TELA-01 · Acesso | Alternar cadastro/entrada; nome, e-mail e senha, nome de equipe opcional no primeiro acesso. Entrar leva ao histórico. | Conta não habilitada, credencial inválida, envio em andamento e sessão expirada. Link de ajuda para recuperação assistida. |
 | TELA-02 · Minhas execuções | Lista com busca e filtro; nome, aplicação, data e situação. “Nova execução”; menu para duplicar ou excluir uma encerrada. | Lista vazia com orientação; carregando; erro recuperável; exclusão com nome da execução e confirmação. |
-| TELA-03 · Nova execução | Formulário em duas partes na mesma página: US/CA e identificação; depois ambiente/acesso/preparo. “Preparar plano”. URL e acesso podem ser completados antes da exploração. | Arquivo inválido, extração sem texto, campo obrigatório, limite excedido e salvamento. Preservar o que foi preenchido. |
+| TELA-03 · Nova execução | Formulário em duas partes na mesma página: requisitos e identificação; depois ambiente/acesso/preparo. “Preparar plano”. URL e acesso podem ser completados antes da exploração. | Arquivo inválido, extração sem texto, campo obrigatório, limite excedido e salvamento. Preservar o que foi preenchido. |
 | TELA-04 · Execução / Visão geral | Cabeçalho com etapa, situação e próxima ação. Board de US/CA; perguntas e respostas; resumo do acesso; cancelar. Sem trabalho independente elegível, oferecer “Encerrar com pendências”. | Curando, revisando, aguardando usuário, acesso bloqueado, ambiente ocupado e execução interrompida. Mostrar próxima ação útil. |
 | TELA-05 · Execução / Plano | Objetivo, CA incluídos/excluídos, prioridades, abordagem, pré-condições, origens e versão. “Aprovar plano” ou “Solicitar alterações”. | Em elaboração, em validação, correção, versão antiga e aguardando aprovação. Mostrar mudanças solicitadas e resultado da revisão. |
 | TELA-06 · Execução / Casos | Lista e detalhe lateral com CA, pré-condições, dados, técnica e expectativa; após mapa, percurso observado no mesmo detalhe. Aprovar conjunto ou pedir alterações. | Caso lógico, percurso pendente, versão aprovada, reaprovação necessária, bloqueado e em execução. Pendência liga à pergunta correspondente. |

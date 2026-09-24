@@ -185,7 +185,7 @@ test('T3.2: cadastro, consulta própria, aprovação idempotente, logout e retor
   assert.deepEqual((await h.request('/api/auth/me', undefined, owner.cookie)).body, { user: owner.user });
   await h.store.create(waiting('run-own', owner.user.id));
   const review = await h.request('/api/runs/run-own', undefined, owner.cookie);
-  assert.deepEqual(Object.keys(review.body).sort(), ['id', 'name', 'applicationName', 'createdAt', 'status', 'phase', 'plan', 'approvals'].sort());
+  assert.deepEqual(Object.keys(review.body).sort(), ['id', 'name', 'applicationName', 'createdAt', 'status', 'phase', 'plan', 'curation', 'answers', 'canResume', 'approvals', 'progress', 'stopReason', 'questions'].sort());
   assert.equal(review.body.plan.revision, 1);
   assert.equal(review.body.plan.payload.testPlan.objective, 'Verificar o exemplo.');
   assert.equal(review.body.plan.validations[0].status, 'approved');

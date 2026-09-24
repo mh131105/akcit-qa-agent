@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import type { PreparationRole, SpecialistModel } from './runtime/pi.js';
 
 export const normalizeEmail = (email: string): string => email.trim().toLowerCase();
 export const isValidEmail = (email: string): boolean =>
@@ -29,6 +30,20 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('PORT inválida.');
   const pilotAllowedEmails = [...new Set((env.PILOT_ALLOWED_EMAILS ?? '').split(',').map(normalizeEmail).filter(Boolean))];
   if (!pilotAllowedEmails.every(isValidEmail)) throw new Error('PILOT_ALLOWED_EMAILS contém e-mail inválido.');
+  const preparationModels = {} as Record<PreparationRole, SpecialistModel>;
+  let preparationConfigError: string | undefined;
+  for (const [role, prefix] of [
+    ['artifact-curator', 'PI_CURATOR'], ['test-designer', 'PI_PLANNER'], ['output-validator', 'PI_VALIDATOR'],
+  ] as const) {
+    const provider = env[`${prefix}_PROVIDER`]?.trim() ?? '';
+    const model = env[`${prefix}_MODEL`]?.trim() ?? '';
+    if (Boolean(provider) !== Boolean(model)) {
+      preparationConfigError ??= `${prefix}_PROVIDER e ${prefix}_MODEL devem ser configurados juntos.`;
+    }
+    preparationModels[role] = provider || model ? { provider, model } : {
+      provider: env.PI_PROVIDER?.trim() ?? '', model: env.PI_MODEL?.trim() ?? '',
+    };
+  }
   return {
     environment,
     port,
@@ -38,5 +53,19 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     appOrigin: applicationOrigin(env.APP_ORIGIN),
     pilotAllowedEmails,
     maxConcurrentBrowserSessions: 1,
+    preparationModels,
+    preparationConfigError,
+    piAuthPath: env.PI_AUTH_PATH?.trim() ? resolve(env.PI_AUTH_PATH.trim()) : undefined,
   };
+}
+
+/** Validado ao iniciar, para permitir salvar rascunhos antes da configuração do Pi. */
+export function resolvePreparationModels(config: ReturnType<typeof readConfig>) {
+  if (config.preparationConfigError) throw new Error(config.preparationConfigError);
+  for (const [role, model] of Object.entries(config.preparationModels)) {
+    if (!model.provider || !model.model) {
+      throw new Error(`Configure PI_PROVIDER e PI_MODEL, ou o par específico de ${role}, para preparar o plano.`);
+    }
+  }
+  return config.preparationModels;
 }

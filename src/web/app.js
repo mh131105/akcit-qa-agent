@@ -7,11 +7,16 @@ const limit = 16 * 1024;
 const statuses = { draft: 'Rascunho', running: 'Em andamento', awaiting_approval: 'Aguardando aprovação', awaiting_input: 'Aguardando informações', completed: 'Concluída', interrupted: 'Interrompida', error: 'Erro', cancelled: 'Cancelada' };
 const phases = { intake: 'Recebimento do material', curation: 'Curadoria', planning: 'Planejamento', case_design: 'Criação dos casos', mapping: 'Mapeamento', route_detail: 'Detalhamento dos percursos', execution: 'Execução dos testes', report: 'Relatório' };
 const validations = { approved: 'Aprovado pelo validador', changes_requested: 'Validador solicitou alterações', blocked: 'Validação bloqueada', error: 'Erro de validação' };
+const roles = { 'artifact-curator': 'Curador', 'test-designer': 'Planejador', 'output-validator': 'Validador independente' };
+const activities = { curating: 'Organizando requisitos e fontes', planning: 'Elaborando o plano de testes', validating_curation: 'Revisando a curadoria', validating_planning: 'Revisando o plano de testes' };
 let user = null;
 let rememberForm = null;
 let sessionTimer;
 let checkingSession = null;
 let signedOut = false;
+let detailTimer;
+let detailSequence = 0;
+const answerDrafts = new Map();
 
 // Dados da API entram somente como texto. Nenhum conteúdo recebido vira HTML.
 function el(tag, text, className) {
@@ -78,10 +83,17 @@ function errorText(error) {
     COMMENT_REQUIRED: 'Informe um comentário para solicitar alterações.',
     STALE_VERSION: 'A revisão ou suas dependências mudaram. Consulte o plano atualizado antes de decidir novamente.',
     DECISION_CONFLICT: 'Esta revisão já possui uma decisão diferente. Consulte a decisão salva.',
-    INVALID_STATE: 'A execução não está mais disponível para esta decisão. Consulte o estado atualizado.',
+    INVALID_STATE: 'A execução não permite esta operação no estado atual. Consulte o estado atualizado.',
     INSUFFICIENT_VALIDATION: 'O plano e a curadoria precisam de validação aprovada. A decisão foi recusada.',
     IDEMPOTENCY_CONFLICT: 'A chave já está associada a outro conteúdo. A tentativa foi preservada; consulte o histórico e solicite ajuda à equipe.',
     RUN_NOT_FOUND: 'Execução não encontrada ou indisponível para esta conta.',
+    RESOURCE_UNAVAILABLE: 'O ambiente está ocupado com outra execução. Seu rascunho foi preservado; tente novamente após a conclusão.',
+    MODEL_NOT_CONFIGURED: 'A preparação exige a configuração do provedor e modelo para curador, planejador e validador. Solicite a configuração à equipe do piloto.',
+    MODEL_UNAVAILABLE: 'O modelo configurado não está disponível. Solicite à equipe a conferência da configuração.',
+    CREDENTIAL_UNAVAILABLE: 'A credencial do modelo não está disponível. Solicite a configuração à equipe do piloto.',
+    ANSWER_CONFLICT: 'Esta pergunta já possui outra resposta. Consulte a resposta registrada.',
+    QUESTION_NOT_FOUND: 'A pergunta não está disponível nesta revisão. Consulte o material atualizado.',
+    ACTIVE_LIMIT: 'Esta execução atingiu o limite de processamento ativo. As respostas e os resultados salvos estão preservados.',
   };
   return texts[error.code] || (error.status === 409 ? 'O registro não permite esta operação. Atualize a consulta e, se persistir, solicite ajuda à equipe.' : 'Não foi possível concluir a solicitação. Verifique a conexão e tente novamente.');
 }
@@ -101,7 +113,7 @@ async function api(path, { accountId, ...options } = {}) {
 function expire() {
   if (signedOut) return;
   if (rememberForm) rememberForm();
-  user = null; rememberForm = null; clearInterval(sessionTimer);
+  user = null; rememberForm = null; answerDrafts.clear(); clearInterval(sessionTimer); clearTimeout(detailTimer); detailSequence++;
   main.replaceChildren(); account.replaceChildren(); main.hidden = false;
   location.replace(`/acesso?expired=1&next=${encodeURIComponent(internal(location.pathname + location.search))}`);
 }
@@ -151,7 +163,7 @@ function navigation() {
       return;
     }
     // O 204 encerrou a sessão, mesmo se a limpeza local falhar. pagehide não deve regravar o formulário.
-    signedOut = true; rememberForm = null; clearInterval(sessionTimer); user = null;
+    signedOut = true; rememberForm = null; answerDrafts.clear(); clearInterval(sessionTimer); clearTimeout(detailTimer); detailSequence++; user = null;
     main.replaceChildren(); account.replaceChildren();
     let cleanupFailed = false;
     try { clearAttempts(); } catch { cleanupFailed = true; }
@@ -162,7 +174,7 @@ function navigation() {
 function access(serviceMessage = '') {
   main.replaceChildren(); document.title = 'Acesso · AKCIT';
   const layout = el('div', null, 'auth-layout'); const story = el('section', null, 'auth-story');
-  story.append(el('p', 'AKCIT / Qualidade de software', 'eyebrow'), el('h1', 'Seu próximo teste começa com uma boa história.'), el('p', 'Reúna histórias de usuário e critérios de aceite. Salve o material e revise o plano quando estiver disponível.', 'lead'));
+  story.append(el('p', 'AKCIT / Qualidade de software', 'eyebrow'), el('h1', 'Seu próximo teste começa com o comportamento esperado.'), el('p', 'Reúna histórias, requisitos ou exemplos do comportamento esperado. Salve o material e revise o plano quando estiver disponível.', 'lead'));
   const steps = el('div', null, 'auth-steps');
   for (const [number, title] of [['01', 'Reúna o material'], ['02', 'Salve a execução'], ['03', 'Revise o plano']]) { const step = el('div'); step.append(el('strong', number), el('span', title)); steps.append(step); }
   story.append(steps); const panel = el('section', null, 'panel'); layout.append(story, panel); main.append(layout);
@@ -226,7 +238,7 @@ function historyPage() {
       const data = await api(`/runs${query.size ? `?${query}` : ''}`, { accountId }); if (user?.id !== accountId || current !== sequence) return;
       results.replaceChildren();
       if (!data.items.length) {
-        const empty = el('div', null, 'empty'); empty.append(el('span', '+', 'empty-symbol'), el('h2', query.size ? 'Nenhum resultado para este filtro' : 'Sua primeira execução começa aqui'), el('p', query.size ? 'Experimente outro nome, aplicação ou situação.' : 'Você ainda não tem execuções. Reúna suas histórias de usuário e critérios de aceite para salvar o primeiro rascunho.'));
+        const empty = el('div', null, 'empty'); empty.append(el('span', '+', 'empty-symbol'), el('h2', query.size ? 'Nenhum resultado para este filtro' : 'Sua primeira execução começa aqui'), el('p', query.size ? 'Experimente outro nome, aplicação ou situação.' : 'Você ainda não tem execuções. Reúna requisitos, histórias ou exemplos para salvar o primeiro rascunho.'));
         empty.append(query.size ? link('Limpar filtros', '/execucoes', 'button secondary') : link('Criar primeira execução', '/execucoes/nova', 'button')); results.append(empty);
       } else {
         results.append(el('p', `${data.items.length} ${data.items.length === 1 ? 'execução encontrada' : 'execuções encontradas'}`, 'list-caption'));
@@ -258,7 +270,7 @@ function intakePage() {
   const fields = { name: field(pair, 'name', 'Nome da execução', { hint: 'Até 120 caracteres.' }), applicationName: field(pair, 'applicationName', 'Aplicação', { hint: 'Até 120 caracteres.' }) };
   fields.objective = field(form, 'objective', 'Objetivo (opcional)', { textarea: true, optional: true, hint: 'Até 2.000 caracteres.' });
   form.append(el('span', '02 / Material de entrada', 'step'));
-  fields.text = field(form, 'text', 'Histórias de usuário e critérios de aceite', { textarea: true, className: 'material', hint: 'Cole o texto original. Espaços e quebras de linha serão preservados.' });
+  fields.text = field(form, 'text', 'Material de requisitos', { textarea: true, className: 'material', hint: 'Cole histórias, requisitos, critérios ou cenários Gherkin. Gherkin é opcional. Preserve o texto original; dúvidas poderão ser esclarecidas depois.' });
   const meter = el('small'); const footer = el('div', null, 'form-footer'); const submit = button('Salvar rascunho'); submit.type = 'submit'; footer.append(meter, submit); form.append(footer); panel.append(form);
   let attempt = null; let sending = false; let blocked = false;
   const body = () => JSON.stringify(Object.fromEntries(Object.entries(fields).map(([name, ref]) => [name, ref.input.value])));
@@ -331,15 +343,82 @@ function preservedComment(pending) {
   copy.input.value = pending.comment; copy.input.readOnly = true;
   return panel;
 }
+function curationPanel(curation) {
+  const panel = el('details', null, 'panel'); panel.append(el('summary', `Entendimento do material · Revisão ${curation.revision}`));
+  for (const requirement of curation.payload.requirements) {
+    panel.append(el('h3', requirement.id), el('p', requirement.statement, 'text-content'));
+    for (const rule of requirement.rules) {
+      panel.append(el('p', `${rule.id}${rule.kind === 'example' ? ' · Exemplo recebido' : ''} — ${rule.statement}`, 'text-content'));
+      for (const example of rule.examples || []) panel.append(planSection(`Exemplo ${example.id}`, [
+        ...example.given.map(value => `Dado: ${value}`), ...example.when.map(value => `Quando: ${value}`), ...example.then.map(value => `Então: ${value}`),
+      ]));
+      for (const source of rule.sources) panel.append(el('p', `${source.artifactId} · ${source.locator}`, 'hint'), el('blockquote', source.quote, 'text-content'));
+    }
+  }
+  return panel;
+}
+function pendingPlanComment(run, accountId, pending) {
+  const comment = document.getElementById('comment')?.value;
+  return comment && run.plan ? { accountId, runId: run.id, outputId: run.plan.id, outputRevision: run.plan.revision, comment, decision: 'changes_requested' } : pending;
+}
+const canAnswer = run => ['curation', 'planning'].includes(run.phase) && ['awaiting_input', 'awaiting_approval'].includes(run.status);
+function questionPanel(run, accountId, pending) {
+  const panel = el('section', null, 'panel'); panel.append(el('h2', 'Esclarecimentos do material'),
+    el('p', 'Responda às dúvidas conhecidas e depois retome a preparação. A resposta será preservada como nova fonte e o plano precisará de nova validação.'));
+  const editable = canAnswer(run);
+  for (const [index, question] of run.questions.entries()) {
+    const item = el('section', null, 'plan-section');
+    const scope = question.ruleIds?.length ? `Critérios afetados: ${question.ruleIds.join(', ')}` : question.requirementIds.length ? `Requisitos afetados: ${question.requirementIds.join(', ')}` : 'Afeta todo o material';
+    item.append(el('h3', question.id), el('p', question.description, 'text-content'),
+      el('p', `${scope}. ${question.blocking ? 'Bloqueia apenas esse escopo.' : 'Não bloqueia o planejamento.'}`, 'hint'));
+    for (const source of question.sources) item.append(el('p', `${source.artifactId} · ${source.locator}`, 'hint'), el('blockquote', source.quote, 'text-content'));
+    const key = `${accountId}:${run.id}:${question.outputId}:${question.outputRevision}:${question.id}`;
+    const answer = run.answers?.find(value => value.id === question.answerId);
+    if (answer) {
+      if (answerDrafts.get(key)?.text === answer.text) answerDrafts.delete(key);
+      item.append(el('p', `Resposta registrada em ${date(answer.at)}`, 'hint'), el('p', answer.text, 'text-content'));
+    } else if (editable && question.outputId) {
+      const form = el('form'); form.noValidate = true;
+      const response = field(form, `answer-${index}`, `Resposta para ${question.id}`, { textarea: true, hint: 'Até 4.000 caracteres. Confirme o comportamento esperado; não inclua senhas.' });
+      response.input.value = answerDrafts.get(key)?.text || '';
+      const remember = () => answerDrafts.set(key, { text: response.input.value, questionId: question.id, outputRevision: question.outputRevision });
+      response.input.addEventListener('input', remember);
+      const notice = message(); const save = button('Registrar resposta'); save.type = 'submit'; form.append(save, notice); item.append(form);
+      let sending = false;
+      form.addEventListener('submit', async event => {
+        event.preventDefault(); if (sending) return;
+        const payload = { outputId: question.outputId, outputRevision: question.outputRevision, questionId: question.id, text: response.input.value };
+        const problem = !payload.text.trim() ? 'Informe a resposta.' : count(payload.text) > 4000 ? 'Use até 4.000 caracteres.' : bytes(JSON.stringify(payload)) > limit ? 'O envio excede 16 KiB. Reduza a resposta.' : '';
+        if (invalid(response, problem)) { response.input.focus(); return; }
+        remember(); const planComment = pendingPlanComment(run, accountId, pending);
+        sending = true; save.disabled = response.input.readOnly = true; tell(notice, 'Registrando resposta…');
+        try {
+          await sameAccount(accountId); if (user?.id !== accountId) return;
+          await api(`/runs/${encodeURIComponent(run.id)}/answer`, { accountId, method: 'POST', body: JSON.stringify(payload) });
+          answerDrafts.delete(key); await detailPage('Resposta registrada. Confira as demais dúvidas antes de retomar.', false, planComment);
+        } catch (error) {
+          if (user?.id !== accountId) return;
+          if (error.status === 409 || !error.status || error.status >= 500) {
+            tell(notice, `${errorText(error)} Consulte o registro antes de tentar novamente. A resposta digitada está preservada nesta aba; não será reenviada automaticamente.`, true);
+            item.append(button('Consultar registro atualizado', () => detailPage('', false, planComment), 'secondary'));
+          } else { tell(notice, errorText(error), true); sending = false; save.disabled = response.input.readOnly = false; }
+        }
+      });
+    }
+    panel.append(item);
+  }
+  return panel;
+}
 async function detailPage(noticeText = '', isError = false, pending = null) {
   if (!user) return;
+  clearTimeout(detailTimer); const sequence = ++detailSequence;
   const accountId = user.id;
   main.replaceChildren(); main.append(message('Carregando execução…')); main.setAttribute('aria-busy', 'true');
   const id = location.pathname.split('/')[2]; let run;
   if (pending && (pending.accountId !== accountId || pending.runId !== id)) pending = null;
-  try { run = await api(`/runs/${encodeURIComponent(id)}`, { accountId }); if (user?.id !== accountId) return; }
+  try { run = await api(`/runs/${encodeURIComponent(id)}`, { accountId }); if (user?.id !== accountId || sequence !== detailSequence) return; }
   catch (error) {
-    if (user) { main.replaceChildren(link('← Minhas execuções', '/execucoes', 'back-link'), message([noticeText, errorText(error)].filter(Boolean).join(' '), true));
+    if (user && sequence === detailSequence) { main.replaceChildren(link('← Minhas execuções', '/execucoes', 'back-link'), message([noticeText, errorText(error)].filter(Boolean).join(' '), true));
       if (pending) main.append(preservedComment(pending));
       if (error.status !== 404) main.append(button('Tentar novamente', () => detailPage(noticeText, isError, pending), 'secondary')); }
     main.setAttribute('aria-busy', 'false'); return;
@@ -349,6 +428,61 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   const metadata = el('dl', null, 'metadata');
   for (const [title, value] of [['Criada em', date(run.createdAt)], ['Etapa', phases[run.phase] || run.phase], ['Situação', statuses[run.status] || run.status]]) { const item = el('div'); item.append(el('dt', title), el('dd', value)); metadata.append(item); }
   const summary = el('section', null, 'panel'); summary.append(metadata, el('p', `Identificação: ${run.id}`, 'run-id')); main.append(summary);
+  if (run.progress?.activeRole || run.progress?.activity) {
+    summary.append(message([roles[run.progress.activeRole] || run.progress.activeRole, activities[run.progress.activity] || run.progress.activity].filter(Boolean).join(' · ')));
+  }
+  if (run.stopReason) main.append(message(run.stopReason.message, ['error', 'interrupted'].includes(run.status)));
+  if (run.curation) main.append(curationPanel(run.curation));
+  if (run.questions?.length) main.append(questionPanel(run, accountId, pending));
+  for (const [key, draft] of answerDrafts) {
+    if (!key.startsWith(`${accountId}:${id}:`) || !draft.text.trim()) continue;
+    if (canAnswer(run) && run.questions.some(question => question.outputId && !question.answerId && key === `${accountId}:${id}:${question.outputId}:${question.outputRevision}:${question.id}`)) continue;
+    const copy = el('section', null, 'panel'); copy.append(el('h3', `Texto não enviado · ${draft.questionId} · Curadoria r${draft.outputRevision}`),
+      el('p', 'A pergunta ou sua resposta mudou. Este texto foi preservado para consulta e cópia; não será reaplicado.'), el('blockquote', draft.text, 'text-content'),
+      button('Descartar este texto não enviado', () => { answerDrafts.delete(key); copy.remove(); }, 'secondary'));
+    main.append(copy);
+  }
+  if (run.answers?.length) main.append(planSection('Histórico de esclarecimentos', run.answers,
+    value => `${value.questionId} · Curadoria r${value.outputRevision} · ${date(value.at)} — ${value.text}`));
+  if (run.canResume) {
+    const notice = message(); const resume = button('Retomar preparação com as respostas', async () => {
+      if ([...answerDrafts].some(([key, draft]) => key.startsWith(`${accountId}:${id}:`) && draft.text.trim())) {
+        tell(notice, 'Há uma resposta digitada que ainda não foi registrada. Registre-a ou apague o texto antes de retomar.', true); return;
+      }
+      const planComment = pendingPlanComment(run, accountId, pending);
+      resume.disabled = true; tell(notice, 'Solicitando nova curadoria e planejamento…');
+      try {
+        await sameAccount(accountId); if (user?.id !== accountId) return;
+        await api(`/runs/${encodeURIComponent(id)}/resume`, { accountId, method: 'POST', body: '{}' });
+        await detailPage('Retomada aceita. As novas revisões aparecerão abaixo.', false, planComment);
+      } catch (error) { if (user?.id === accountId) await detailPage(errorText(error), true, planComment); }
+    });
+    summary.append(resume, notice);
+  }
+  if ((run.status === 'draft' && run.phase === 'intake') || run.status === 'running') {
+    const operation = run.status === 'draft' ? 'start' : 'cancel';
+    const notice = message(); const action = button(operation === 'start' ? 'Preparar plano' : 'Cancelar preparação', async () => {
+      action.disabled = true; clearTimeout(detailTimer); detailSequence++;
+      tell(notice, operation === 'start' ? 'Solicitando a preparação do plano…' : 'Solicitando cancelamento…');
+      try {
+        await sameAccount(accountId); if (user?.id !== accountId) return;
+        await api(`/runs/${encodeURIComponent(id)}/${operation}`, { accountId, method: 'POST', body: '{}' });
+        await detailPage(operation === 'start' ? 'Preparação aceita. Acompanhe o progresso abaixo.' : 'Cancelamento registrado.');
+      } catch (error) {
+        if (user?.id === accountId) await detailPage(errorText(error), true);
+      }
+    }, operation === 'cancel' ? 'secondary' : '');
+    summary.append(action, notice);
+  }
+  if (run.status === 'running') {
+    // ponytail: consulta simples durante o trabalho; a revisão humana não reconstrói formulários.
+    const poll = () => {
+      if (user?.id !== accountId || sequence !== detailSequence) return;
+      if (document.hidden) detailTimer = setTimeout(poll, 2000);
+      else void detailPage('', false, pending);
+    };
+    detailTimer = setTimeout(poll, 2000);
+  }
   if (pending && run.approvals.some(decision => decision.outputId === pending.outputId &&
       decision.outputRevision === pending.outputRevision && decision.decision === pending.decision &&
       (pending.decision === 'approved' || decision.comment === pending.comment))) pending = null;
@@ -424,7 +558,7 @@ async function boot() {
   }
 }
 // Limpa o snapshot privado antes de entrar no cache de navegação do navegador.
-addEventListener('pagehide', () => { if (rememberForm) rememberForm(); main.replaceChildren(); account.replaceChildren(); });
+addEventListener('pagehide', () => { if (rememberForm) rememberForm(); clearTimeout(detailTimer); detailSequence++; main.replaceChildren(); account.replaceChildren(); });
 addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
 document.addEventListener('visibilitychange', () => {
   if (!user) return;

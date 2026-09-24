@@ -91,7 +91,9 @@ Cada execução fica em `DATA_DIR/runs/<runId>.json`, com o registro completo e 
 histórico de intenções de trabalho autorizado. A entrada textual de T3.3 fica em
 `run.artifacts[].text`, preservada literalmente, com referência em
 `run.input.artifactIds`; `run.creation.requestHash` permite repetir a criação.
-Esses dados usam o volume existente, sem diretório ou índice adicional.
+Respostas de esclarecimento ficam em `run.answers`, com texto citável separado
+em `run.answerArtifacts`; os originais não são substituídos. Esses dados usam
+o volume existente, sem diretório ou índice adicional.
 Os diretórios usam modo `0700` e
 os arquivos, `0600`; credenciais permanecem referências, sem segredos no JSON.
 Esses arquivos já integram o backup do volume descrito acima. Restaurar uma cópia
@@ -106,7 +108,7 @@ trabalho é executado ou reenviado automaticamente. Como o backup existente para
 e reinicia o container, seu reinício também segue essa recuperação.
 
 A atualização protege a sequência de leitura, mudança e gravação com uma trava
-compartilhada pelo processo, inclusive para futuras operações de cancelamento.
+compartilhada pelo processo, inclusive para o cancelamento de T4.1.
 O registro completo é escrito e sincronizado em arquivo temporário no mesmo
 diretório antes da renomeação; falhas anteriores preservam o arquivo definitivo.
 Um arquivo inválido causa erro e não é substituído por uma execução vazia.
@@ -272,7 +274,8 @@ separadamente. No ambiente pelo túnel, abra sua origem configurada seguida de
 `/acesso`; a porta do navegador pode diferir da porta interna do container.
 
 Em “Nova execução”, preencha nome, aplicação, objetivo opcional e texto das
-histórias de usuário e critérios de aceite. “Salvar rascunho” persiste a entrada
+requisitos: US/CA, prosa, requisitos funcionais ou Gherkin textual opcional.
+“Salvar rascunho” persiste a entrada
 e abre o detalhe. O rascunho informa que o processamento ainda não começou.
 O histórico permite busca, filtro por situação e reabertura após recarregar ou
 entrar novamente. Quando o armazenamento já contém um plano, o detalhe mostra
@@ -281,8 +284,9 @@ reconsultadas depois de salvas. Aprovar o plano mantém a espera.
 
 Os nomes têm limite de 120 caracteres, o objetivo de 2.000, e **todo o JSON de
 entrada** de 16 KiB UTF-8. Não há upload ou campo de credenciais neste formulário.
-Texto de US/CA é preservado como digitado. O detalhe ainda não devolve o texto
-original, board ou perguntas.
+O texto é preservado como digitado. O detalhe não devolve originais completos;
+a preparação apresenta curadoria, regras, exemplos, perguntas e progresso.
+O ajuste de 24/09 acrescenta resposta e retomada explícitas descritas abaixo.
 
 Antes de enviar, a interface guarda em `sessionStorage` a chave UUID v4, o corpo
 exato e o ID da conta. Se a resposta se perder, use “Tentar confirmar salvamento”
@@ -333,8 +337,10 @@ endereço realmente aberto no Chromium, sem contornar a conferência de `Origin`
 Inclui cadastro/entrada, criação, histórico, detalhe, atualização, novo login,
 resposta perdida após persistência, repetição sem duplicação, isolamento entre
 contas, texto semelhante a HTML, aprovação e pedido de alteração persistidos.
-Planos e pareceres são sintéticos e preparados somente nos dados temporários do
-teste; não há geração por IA, chamada paga ou carga automática na aplicação.
+Planos e pareceres são sintéticos. Em T4.1, o smoke também percorre “Preparar
+plano”, polling, pendências e cancelamento pelo coordenador real, substituindo
+explicitamente a chamada de modelo apenas na criação do servidor de teste.
+Não há geração por IA, chamada paga ou carga automática na aplicação.
 
 As regressões de BUG-T2.1-01 são reproduzidas no mesmo smoke, com navegador,
 API e arquivos de persistência reais:
@@ -398,6 +404,220 @@ escrita para UID 1000 e acrescente `-e SMOKE_ARTIFACT_DIR=/evidence` e
 dados dos participantes. A CI verifica ambos os smokes na imagem de runtime;
 desenvolvimento executa os mesmos checks antes de publicar. A promoção para
 produção continua usando a imagem já validada em desenvolvimento.
+
+## Modelos e preparação do plano — T4.1
+
+Use Node.js 24, `package-lock.json` e Pi 0.87.0. Cada ambiente tem sua própria
+configuração privada; o padrão é o par `PI_PROVIDER` / `PI_MODEL`. Os três papéis
+podem usar esse mesmo modelo em sessões independentes. Substituições opcionais:
+
+| Papel | Par completo de substituição |
+| --- | --- |
+| Curador | `PI_CURATOR_PROVIDER` / `PI_CURATOR_MODEL` |
+| Planejador | `PI_PLANNER_PROVIDER` / `PI_PLANNER_MODEL` |
+| Validador | `PI_VALIDATOR_PROVIDER` / `PI_VALIDATOR_MODEL` |
+
+Deixar ambos vazios herda o padrão. Definir somente metade do par recusa o início;
+não há modelo alternativo automático. Use identificadores disponíveis no catálogo
+da versão instalada do Pi. Por padrão, credenciais vêm somente do ambiente do
+processo, como `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` ou `GEMINI_API_KEY`, conforme
+o provedor. Para OAuth de assinatura, `PI_AUTH_PATH` habilita explicitamente um
+`auth.json` privado desse ambiente. Sem esse caminho, nenhum arquivo pessoal do
+Pi é procurado. Sessões e modelos pessoais não são carregados. Nunca coloque
+chaves ou tokens nas skills, no registro da execução ou no repositório.
+
+Para autorizar uma assinatura OpenAI pelo fluxo nativo do Pi, na raiz do projeto:
+
+```sh
+umask 077
+mkdir -p .data/pi
+PI_CODING_AGENT_DIR="$PWD/.data/pi" npm run pi
+```
+
+No Pi, use `/login`, selecione o provedor OpenAI Codex e conclua a autorização
+no navegador com a conta pretendida. Não envie prompts durante essa configuração.
+O Pi salva e renova OAuth no `auth.json` desse diretório. Em seguida, configure
+privadamente `PI_AUTH_PATH` com o caminho absoluto para `.data/pi/auth.json`,
+`PI_PROVIDER=openai-codex` e `PI_MODEL` com o identificador explícito disponível
+no catálogo instalado. Cada substituição por papel continua exigindo par completo.
+Não copie a autenticação pessoal do Codex/Pi para completar esse fluxo.
+
+Na VPS, a autorização deve usar o diretório privado do ambiente correspondente
+(`PI_CODING_AGENT_DIR=/data/pi` dentro daquele container); configure
+`PI_AUTH_PATH=/data/pi/auth.json` somente nesse ambiente. Diretório com modo
+`0700`, arquivo com `0600`, gravável pelo usuário do serviço para renovação nativa
+dos tokens. Não monte diretórios pessoais do host nem compartilhe esse arquivo
+entre dev/prod. Se guardado no volume `/data`, o arquivo OAuth também entra no
+backup privado do volume. `PI_CODING_AGENT_DIR` configura a CLI de login;
+`PI_AUTH_PATH` é a autorização explícita para o runtime da aplicação usar o arquivo.
+Isso não habilita tools, histórico compartilhado ou escolha automática de modelo.
+
+Localmente, mantenha a configuração em `.env` ignorado, com modo `0600`, incluindo
+`DATA_DIR=.data`, origem local exata e participantes habilitados. O servidor não
+lê `.env` sozinho: carregue-o explicitamente pelo Node ou injete as variáveis no
+processo. Após preencher privadamente os pares e a credencial:
+
+```sh
+npm ci
+npm run check
+npm test
+npm run build
+node --env-file=.env dist/server.js
+```
+
+Na VPS, use o `development/runtime.env` ou `production/runtime.env` correspondente,
+com modo `0600`; recrie somente aquele container. Não altere outros serviços.
+Promova para produção a mesma imagem já validada em dev pelo procedimento existente;
+mudança de credencial/configuração é separada da promoção da imagem.
+
+Salvar rascunho continua possível sem modelo configurado. “Preparar plano” confere
+configuração, modelo no catálogo e credencial antes do aceite. Mensagens legíveis
+`MODEL_NOT_CONFIGURED`, `MODEL_UNAVAILABLE` e `CREDENTIAL_UNAVAILABLE` preservam o
+rascunho; exceções do provedor são sanitizadas. Credencial presente não garante
+aceitação pelo serviço remoto: uma recusa na inferência fica como falha técnica.
+
+`allowModelNetwork: false` impede atualização do catálogo, **não impede inferência
+paga**. Os testes substituem explicitamente `modelCall`/`modelPreflight` na montagem
+interna; não existe opção de simulação na API, no site ou no ambiente de produção.
+O smoke de runtime continua criando sessão sem inferência. Os testes de runtime
+substituem execução/autenticação deliberadamente para não chamar provedores.
+
+### Demonstração com modelo real pelo site
+
+**Configuração da demonstração local:** em 24/09/2026, o responsável concluiu o
+OAuth da assinatura OpenAI no Pi. `openai-codex/gpt-6-astra` foi selecionado
+explicitamente para os três papéis e usado em inferências reais. A configuração
+privada local não configura dev/prod automaticamente. Resultados, revisões e
+pendências humanas estão em [evidencias/t4.1](evidencias/t4.1/README.md).
+Testes com respostas programadas não atendem CA-12 nem a definição de pronto.
+
+1. Registrar commit/imagem e os pares usados, sem chaves. Abrir o site na origem
+   configurada e entrar com participante habilitado. Criar execução sintética e
+   colar integralmente [artefato-demo.md](requisitos/exemplos/artefato-demo.md),
+   que contém somente US-01 e CA-01/CA-02. Notas de avaliação e identificação
+   sintética ficam fora do texto enviado; não fornecer percurso nem gabarito.
+   Objetivo é opcional; não exigir URL/credencial da aplicação testada.
+2. Salvar rascunho e clicar **Preparar plano**. Conferir aceite `202`, atualização
+   de fase/papel e registro do processamento. Curador, validador da curadoria,
+   planejador e validador do plano fazem chamadas reais; correções podem ampliar
+   essa sequência dentro dos limites.
+3. Em `awaiting_approval/planning`, a frente C compara plano e revisões com os
+   originais e confere as duas validações. O registro privado em
+   `DATA_DIR/runs/<id>.json` permite auditar revisões, pareceres, dependência exata
+   e `preparation.calls`; a consulta HTTP devolve somente a projeção pública.
+4. Conferir quantidade **inteira de 1 a 10 inclusive**, sucesso e rejeição sem
+   reserva conforme CA-01, **comentário opcional** e persistido quando informado
+   conforme CA-02, fontes literais, cobertura e exclusões justificadas. Nenhum
+   percurso foi fornecido; não deve haver navegação presumida ou casos detalhados.
+5. A pessoa revisora aprova pelo botão **Aprovar plano**. Reconsultar e confirmar
+   autor, horário e revisão da decisão, mantendo `awaiting_approval/planning`.
+   Recarregar não perde a decisão; não iniciar `/continue` ou criação de casos.
+6. Preencher [evidencias/t4.1](evidencias/t4.1/README.md) com os dados sintéticos,
+   revisões/pareceres, avaliação assinada pela frente C, duração e consumo
+   disponível. Custo por API do Pi deve ser identificado como estimativa; com
+   assinatura OAuth, `estimatedCost` é omitido, pois a tarifa por token do catálogo
+   não representa a cobrança da assinatura. Tokens disponíveis continuam registrados.
+   Não publicar arquivo de conta, sessão, credencial ou material privado.
+
+### Avaliação real do validador com erro conhecido
+
+A frente C mantém seu gabarito fora do contexto do agente. Em diretório privado,
+copie **somente o payload** de uma curadoria real e altere deliberadamente um
+enunciado: limite superior de 10 para 11 ou comentário opcional para obrigatório.
+Mantenha IDs, fontes e originais intactos; não envie o motivo da adulteração,
+resultado esperado ou notas do avaliador. O ensaio não modifica a execução nem
+suas aprovações. Execute uma tarefa real independente de `output-validator` com
+envelope `{task: 'validation', artifacts, objective, output, previousVerdicts: []}`:
+
+```sh
+# Caminhos privados e ID da execução sintética; nunca usar documento de participante.
+export QA_DEMO_RUN_ID='<id-da-execucao-sintetica>'
+export QA_NEGATIVE_PAYLOAD='<caminho-absoluto-do-payload-alterado.json>'
+export QA_NEGATIVE_RESULT='<caminho-absoluto-do-parecer.json>'
+node --env-file=.env --input-type=module <<'JS'
+import { randomUUID } from 'node:crypto';
+import { readFile, writeFile } from 'node:fs/promises';
+import { readConfig, resolvePreparationModels } from './dist/config.js';
+import { RunStore } from './dist/storage/runs.js';
+import { parseCuration, parseVerdict } from './dist/domain/preparation.js';
+import { executeSpecialistTask, preflightSpecialists } from './dist/runtime/pi.js';
+const config = readConfig();
+const models = resolvePreparationModels(config);
+await preflightSpecialists(models, config.piAuthPath);
+const { run } = await new RunStore(config.dataDir).read(process.env.QA_DEMO_RUN_ID);
+const original = run.outputs.filter(item => item.phase === 'curation').at(-1);
+if (!original) throw new Error('Curadoria real ausente.');
+const altered = parseCuration(JSON.parse(await readFile(process.env.QA_NEGATIVE_PAYLOAD, 'utf8')), run.artifacts);
+const output = { ...original, id: randomUUID(), revision: 1, createdAt: new Date().toISOString(), payload: altered };
+const result = await executeSpecialistTask({ role: 'output-validator',
+  model: models['output-validator'], signal: new AbortController().signal, timeoutMs: 120000,
+  ...(config.piAuthPath ? { authPath: config.piAuthPath } : {}),
+  prompt: JSON.stringify({ task: 'validation', artifacts: run.artifacts,
+    objective: run.input.objective ?? '', output, previousVerdicts: [] }) });
+await writeFile(process.env.QA_NEGATIVE_RESULT,
+  JSON.stringify({ output, verdict: parseVerdict(result.payload), metadata: result.metadata }, null, 2),
+  { mode: 0o600, flag: 'wx' });
+JS
+```
+
+O parser aceitar o payload adulterado comprova apenas estrutura/fontes válidas.
+O resultado esperado pela pessoa avaliadora é um parecer que detecte e localize a
+alteração sem aprová-la. Registrar o parecer efetivo, inclusive eventual falsa
+aprovação; uma resposta programada ou esta expectativa escrita não comprovam o
+validador. Comparar depois da chamada, fora do contexto do modelo. Os ensaios
+reais de 24/09/2026 e suas versões estão registrados em
+[evidencias/t4.1](evidencias/t4.1/README.md); avaliação automatizada não substitui
+a decisão da pessoa responsável pela frente C.
+
+### Cancelamento, limites e recuperação da preparação
+
+Durante `running`, “Cancelar preparação” persiste o cancelamento e aborta a sessão
+ativa. Não apaga saídas/pareceres e não permite avanço por resposta tardia. Outro
+rascunho só começa após o encerramento liberar o ambiente; não há fila. Repetir
+`/start` retorna o processamento existente, sem reiniciar execução encerrada ou
+seu orçamento. Após reinício, trabalho ativo fica interrompido, sem retomada.
+
+Até dez histórias/requisitos, três produções/revisões automáticas por saída em
+cada ciclo, duas tentativas técnicas do validador por revisão e 120 segundos por
+chamada. Os **45 minutos ativos são cumulativos na execução**, sem espera humana.
+Perguntas podem bloquear apenas uma regra da mesma história; o restante
+independente continua. Sem trabalho elegível, a execução aguarda informação e
+libera o ambiente. Criação de casos, navegador e relatório permanecem pendentes.
+Os comandos de container e o fluxo de publicação anteriores continuam aplicáveis.
+
+### Responder e retomar a preparação
+
+1. Abra a execução e confira a pergunta, seus requisitos/regras e a revisão.
+   Escreva a decisão de negócio e salve a resposta (até 4.000 caracteres). A API
+   recebe `{outputId, outputRevision, questionId, text}`, referentes à curadoria.
+   O original permanece intacto; a resposta ganha autor, horário e fonte própria.
+2. Confira a resposta salva. O estado muda para `awaiting_input/curation` e o plano
+   anterior deixa de autorizar avanço. Use a ação de **retomar a preparação**
+   quando estiver disponível; salvar respostas não chama os modelos. Ambiente
+   ocupado ou configuração indisponível preserva a resposta para nova tentativa.
+3. Acompanhe curadoria e plano revistos, com validações independentes. Confira
+   se a resposta realmente resolveu a dúvida, compare a nova cobertura e aprove
+   a nova versão somente após revisão humana. A aprovação anterior fica no
+   histórico e não libera essa versão. Aprovar ainda não inicia criação de casos.
+
+Repetir o envio da mesma pergunta/revisão com o mesmo texto não duplica o registro.
+Texto diferente nessa referência é recusado com `ANSWER_CONFLICT`; não se edita
+uma resposta salva neste recorte. Se a pergunta mudou, reconsulte a nova revisão
+antes de responder. Uma resposta insuficiente pode gerar pergunta na revisão
+seguinte. `/resume` exige resposta nova ainda não consumida e não reinicia execução
+cancelada, interrompida ou com erro. Reinício do serviço não retoma automaticamente.
+
+A retomada abre novo ciclo limitado de produção, conserva as chamadas anteriores,
+mesmos IDs e revisões crescentes. Não zera os 45 minutos acumulados; esgotado o
+limite, a retomada é recusada. O estado persistido informa o motivo.
+
+Não há requisito de Gherkin: faltando esse formato, os agentes trabalham com o
+comportamento descrito. Cenários novos pertencem à etapa futura de casos. Não há
+upload, parser completo de `.feature` nem executor Cucumber neste ajuste.
+A avaliação das skills e seus limites estão em
+[ajuste de entradas](evidencias/ajuste-entradas/README.md); a demonstração limpa
+anterior de [T4.1](evidencias/t4.1/README.md) permanece como registro histórico,
+sem comprovar por si só a versão atual das skills.
 
 ## Referências
 

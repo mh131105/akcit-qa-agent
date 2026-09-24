@@ -195,7 +195,8 @@ test('T3.3: entrar, criar por HTTP, abrir rascunho literal e reencontrar após r
   const raw = await h.raw(id);
   const opened = await h.request(`/api/runs/${id}`, undefined, cookie);
   assert.equal(opened.status, 200);
-  assert.deepEqual(opened.body, { ...created.body, plan: null, approvals: [] });
+  assert.deepEqual(opened.body, { ...created.body, plan: null, curation: null, answers: [], canResume: false, approvals: [], questions: [], stopReason: null,
+    progress: { processingId: null, activeRole: null, activity: null, startedAt: null, finishedAt: null } });
   error(await h.request(`/api/runs/${id}/approve`, { outputId: 'inexistente', outputRevision: 1 }, cookie), 409, 'INVALID_STATE');
   assert.equal(await h.raw(id), raw, 'recusa de aprovação preserva todo o rascunho');
   error(await h.request(`/api/runs/${id}`, undefined, other.cookie), 404, 'RUN_NOT_FOUND');
@@ -250,6 +251,36 @@ test('T3.3: concorrência, chave por conta e conflitos com conteúdo original no
   const repeat = await h.create(owner.cookie, emptyObjectiveKey, { ...withoutObjective, objective: ' \n\t' });
   assert.equal(repeat.status, 200);
   assert.deepEqual(repeat.body, empty.body);
+});
+
+test('T4.1: iniciar e cancelar exigem sessão, origem, identidade original, propriedade e corpo vazio', async t => {
+  const h = await harness(t);
+  const owner = await h.register();
+  const other = await h.register(1);
+  const created = await h.create(owner.cookie);
+  assert.equal(created.status, 201);
+  const original = await h.raw(created.body.id);
+  for (const operation of ['start', 'cancel']) {
+    const path = `/api/runs/${created.body.id}/${operation}`;
+    error(await h.request(path, {}), 401, 'INVALID_SESSION');
+    error(await h.request(path, {}, 'akcit_session=inventada'), 401, 'INVALID_SESSION');
+    error(await h.request(path, {}, owner.cookie, { headers: { Origin: 'https://other.example.test' } }), 403, 'ORIGIN_REJECTED');
+    for (const identity of [[], ['X-Expected-User-Id', 'invalid'],
+      ['X-Expected-User-Id', owner.user.id, 'x-expected-user-id', owner.user.id]]) {
+      error(await wireRequest(`${h.base}${path}`, 'POST', owner.cookie, {}, identity), 400, 'INVALID_EXPECTED_USER_ID');
+    }
+    const switched = await h.request(path, {}, other.cookie, { headers: { 'X-Expected-User-Id': owner.user.id } });
+    error(switched, 409, 'ACCOUNT_CHANGED');
+    error(await h.request(path, {}, other.cookie), 404, 'RUN_NOT_FOUND');
+    error(await h.request(`/api/runs/absent/${operation}`, {}, owner.cookie), 404, 'RUN_NOT_FOUND');
+    for (const forged of [{ ownerId: owner.user.id }, { model: 'simulated' }, { fixture: true }, { status: 'running' }]) {
+      error(await h.request(path, forged, owner.cookie), 400, 'INVALID_INPUT');
+    }
+    for (const privateValue of [created.body.id, input.text, owner.user.id, other.user.id]) {
+      assert.ok(!JSON.stringify(switched.body).includes(privateValue));
+    }
+    assert.equal(await h.raw(created.body.id), original, 'recusas não alteram rascunho, orçamento ou processamento');
+  }
 });
 
 test('T3.3: repetição preserva trabalho posterior e compara o hash original', async t => {

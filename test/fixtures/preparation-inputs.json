@@ -1,0 +1,37 @@
+[
+  {
+    "id": "prosa-completa",
+    "text": "Como bibliotecária, quero renovar empréstimos.\nUm empréstimo pode ser renovado até duas vezes, desde que não exista reserva pendente para o livro. Se essas condições forem atendidas, a renovação acrescenta sete dias à data de devolução. Caso contrário, a renovação é recusada e a data não muda.",
+    "expected": "Preservar duas renovações, condição de ausência de reserva, sete dias e recusa sem mudar data. Sem dúvida bloqueante por falta de CA rotulado."
+  },
+  {
+    "id": "gherkin-com-contexto",
+    "text": "Funcionalidade: Renovar empréstimo\nRegra: São permitidas até duas renovações por empréstimo, desde que o livro não tenha reserva pendente. Cada renovação permitida acrescenta sete dias à devolução. Caso contrário, recusar sem alterar a data.\nContexto:\n  Dado que a bibliotecária está autenticada\nCenário: Primeira renovação\n  Dado um empréstimo sem renovação anterior e sem reserva pendente\n  Quando a bibliotecária solicita a renovação\n  Então a data de devolução aumenta em sete dias",
+    "expected": "Preservar a mesma regra da prosa e o exemplo recebido com autenticação, ausência de reserva, ação e resultado; não confundir um cenário com todo o domínio."
+  },
+  {
+    "id": "rf-sem-us",
+    "text": "RF-12: O sistema deve permitir cancelar um agendamento até 24 horas antes de seu início, inclusive. Dentro desse prazo, o status muda para Cancelado e o horário volta a ficar disponível. Com menos de 24 horas, recusar o cancelamento e manter o agendamento.",
+    "expected": "Planejável sem persona, US ou Gherkin. Preservar fronteira inclusiva de 24h, status, disponibilidade e recusa sem alteração."
+  },
+  {
+    "id": "historia-vaga",
+    "text": "Como organizador, quero configurar descontos nos ingressos para incentivar as vendas.",
+    "expected": "Pedir decisões sobre elegibilidade, cálculo ou limites; não inventar percentuais nem considerar intenção vaga regra testável."
+  },
+  {
+    "id": "fontes-em-conflito",
+    "text": "US-01: Como cliente, quero cancelar meu pedido.\nCA-01: Cancelar pedido sem cobrança até 30 minutos após a compra.\nPolítica de cancelamento: Todo cancelamento gera taxa de 10 reais, inclusive imediatamente após a compra.",
+    "expected": "Expor conflito entre gratuidade e taxa, pedir decisão sem eleger fonte vencedora silenciosamente; bloquear escopo contraditório."
+  },
+  {
+    "id": "exemplo-isolado",
+    "text": "Caso manual: cupom de desconto\nDado um carrinho de 200 reais com o cupom FESTA\nQuando o cliente aplica o cupom\nEntão o total passa a ser 180 reais.",
+    "expected": "Preservar apenas o exemplo 200→180 com FESTA; não inferir desconto geral de 10%, limites ou condições de outros carrinhos. kind=example."
+  },
+  {
+    "id": "bloqueio-parcial",
+    "text": "US-01: Como visitante, quero enviar uma avaliação.\nCA-01: A nota deve ser um número inteiro de 1 a 5, inclusive. Fora desse intervalo ou se não inteira, recusar a avaliação.\nCA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido.",
+    "expected": "Pergunta bloqueia somente CA-02 (ou a sub-regra de limite), mantém CA-01 elegível. Sem limite inventado."
+  }
+]

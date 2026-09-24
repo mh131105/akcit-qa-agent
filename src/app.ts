@@ -4,6 +4,7 @@ import { constants } from 'node:fs';
 import type { readConfig } from './config.js';
 import { RunStore } from './storage/runs.js';
 import { AuthService } from './auth.js';
+import { PreparationCoordinator, type PreparationOptions } from './application/prepare-plan.js';
 import { handleApi } from './http/api.js';
 
 const pages = new Set(['/acesso', '/execucoes', '/execucoes/nova']);
@@ -15,11 +16,12 @@ const webFiles = new Map([
 const indexFile = new URL('../src/web/index.html', import.meta.url);
 const contentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
-export async function createApp(config: ReturnType<typeof readConfig>, options: { now?: () => number } = {}) {
+export async function createApp(config: ReturnType<typeof readConfig>, options: Pick<PreparationOptions, 'modelCall' | 'modelPreflight'> & { now?: () => number } = {}) {
   const runs = new RunStore(config.dataDir);
   await runs.initialize();
   await runs.recoverInterrupted();
   const auth = new AuthService(config, options.now);
+  const preparation = new PreparationCoordinator(runs, config, options);
   return createServer(async (request, response) => {
     try {
       response.setHeader('Cache-Control', 'no-store');
@@ -27,7 +29,7 @@ export async function createApp(config: ReturnType<typeof readConfig>, options: 
       response.setHeader('Content-Security-Policy', contentSecurityPolicy);
       response.setHeader('Referrer-Policy', 'same-origin');
       if (request.url === '/api' || request.url?.startsWith('/api/')) {
-        await handleApi(request, response, runs, auth, config);
+        await handleApi(request, response, runs, auth, config, preparation);
         return;
       }
       if (request.method !== 'GET' && request.method !== 'HEAD') {

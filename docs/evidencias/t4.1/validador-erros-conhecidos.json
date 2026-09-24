@@ -1,0 +1,187 @@
+{
+  "synthetic": true,
+  "sourceRunId": "run-d72dfb41ac3881c9a64ab2329001219d26f9b72c5042be15b94ce244eed64b6a",
+  "inputSha256": "309893107995392957fee7f37c0eff1040d3f9434f6cc6dd3c9b39e0d5605998",
+  "tests": [
+    {
+      "name": "Limite superior 10 → 11",
+      "request": {
+        "task": "validation",
+        "artifacts": [
+          {
+            "id": "a13480e4-7700-479a-9b53-8074ff8d1823",
+            "name": "historias-e-criterios.txt",
+            "version": "1",
+            "text": "## US-01\n\nComo usuário autenticado, quero reservar itens para informar a quantidade desejada.\n\n## CA-01\n\nA quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva.\n\n## CA-02\n\nO comentário é opcional. Quando informado, deve ser salvo junto à reserva.\n"
+          }
+        ],
+        "objective": "",
+        "output": {
+          "id": "91979130-4d07-4254-b9b1-adc241a35db2",
+          "phase": "curation",
+          "revision": 1,
+          "producer": "artifact-curator",
+          "createdAt": "2026-09-24T16:03:44.648Z",
+          "budgetCycleId": "46f548a4-a0dd-4158-b9a0-87996357f687",
+          "dependsOn": [],
+          "answerRefs": [],
+          "payload": {
+            "requirements": [
+              {
+                "id": "US-01",
+                "statement": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada.",
+                "sources": [
+                  {
+                    "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                    "locator": "L3",
+                    "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+                  }
+                ],
+                "rules": [
+                  {
+                    "id": "CA-01",
+                    "statement": "A quantidade deve ser um número inteiro entre 1 e 11, inclusive. Ao confirmar uma quantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora desse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não criar a reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                        "locator": "L7-L10",
+                        "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                      }
+                    ]
+                  },
+                  {
+                    "id": "CA-02",
+                    "statement": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                        "locator": "L14",
+                        "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "questions": []
+          }
+        },
+        "previousVerdicts": []
+      },
+      "verdict": {
+        "status": "changes_requested",
+        "findings": [
+          {
+            "code": "SOURCE_MISMATCH",
+            "message": "CA-01 altera o limite superior de 10 para 11. Corrigir o intervalo para números inteiros entre 1 e 10, inclusive, conforme o original; 11 deve ser considerado inválido.",
+            "location": "requirements[0].rules[0].statement"
+          }
+        ],
+        "reason": "O limite superior da quantidade diverge do CA-01 original, alterando indevidamente as condições de criação da reserva."
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 5123,
+        "usage": {
+          "input": 1651,
+          "output": 107,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 1758
+        }
+      },
+      "evaluatorExpectationNotSent": "Detectar a alteração sem aprovar a saída; expectativa fora do prompt."
+    },
+    {
+      "name": "Comentário opcional → obrigatório",
+      "request": {
+        "task": "validation",
+        "artifacts": [
+          {
+            "id": "a13480e4-7700-479a-9b53-8074ff8d1823",
+            "name": "historias-e-criterios.txt",
+            "version": "1",
+            "text": "## US-01\n\nComo usuário autenticado, quero reservar itens para informar a quantidade desejada.\n\n## CA-01\n\nA quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva.\n\n## CA-02\n\nO comentário é opcional. Quando informado, deve ser salvo junto à reserva.\n"
+          }
+        ],
+        "objective": "",
+        "output": {
+          "id": "329534f8-0bac-47c2-a66a-8494dcca6600",
+          "phase": "curation",
+          "revision": 1,
+          "producer": "artifact-curator",
+          "createdAt": "2026-09-24T16:03:49.774Z",
+          "budgetCycleId": "46f548a4-a0dd-4158-b9a0-87996357f687",
+          "dependsOn": [],
+          "answerRefs": [],
+          "payload": {
+            "requirements": [
+              {
+                "id": "US-01",
+                "statement": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada.",
+                "sources": [
+                  {
+                    "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                    "locator": "L3",
+                    "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+                  }
+                ],
+                "rules": [
+                  {
+                    "id": "CA-01",
+                    "statement": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma quantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora desse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não criar a reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                        "locator": "L7-L10",
+                        "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                      }
+                    ]
+                  },
+                  {
+                    "id": "CA-02",
+                    "statement": "O comentário é obrigatório. Quando informado, deve ser salvo junto à reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                        "locator": "L14",
+                        "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "questions": []
+          }
+        },
+        "previousVerdicts": []
+      },
+      "verdict": {
+        "status": "changes_requested",
+        "findings": [
+          {
+            "code": "SOURCE_MISMATCH",
+            "message": "CA-02 torna o comentário obrigatório, mas o original determina que ele é opcional. Restaurar a opcionalidade, mantendo que, quando informado, deve ser salvo junto à reserva.",
+            "location": "requirements[0].rules[1].statement"
+          }
+        ],
+        "reason": "A curadoria inverte a opcionalidade do comentário definida em CA-02, linha 14 do artefato original."
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 5691,
+        "usage": {
+          "input": 1650,
+          "output": 103,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 1753
+        }
+      },
+      "evaluatorExpectationNotSent": "Detectar a alteração sem aprovar a saída; expectativa fora do prompt."
+    }
+  ]
+}
