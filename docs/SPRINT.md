@@ -364,7 +364,8 @@ humana nem encerra T4, T5, T6 ou T10. O código foi integrado pelo PR #22 em
 História técnica de prioridade alta, um desenvolvedor com atuação backend/agentes;
 revisão de integração pela frente B e conferência metodológica pela frente C.
 Recorte de [T6 #9](https://github.com/mh131105/akcit-qa-agent/issues/9), sobre
-`origin/develop` em `71781a2`, branch `feat/validated-test-cases`. Avança RF-04/RF-09;
+`origin/develop` em `71781a2`, branch `feat/validated-test-cases`, entrega pelo
+[PR #23](https://github.com/mh131105/akcit-qa-agent/pull/23). Avança RF-04/RF-09;
 **não conclui T6 nem TELA-06**.
 
 A página da execução permite aprovar o plano e, separadamente, acionar **Gerar casos
@@ -396,9 +397,11 @@ Contrato em [CONTRATOS.md](requisitos/CONTRATOS.md#casos-lógicos-a-partir-do-pl
 e roteiro em [OPERACAO.md](OPERACAO.md#gerar-e-consultar-casos-lógicos--t61).
 
 Definição de pronto: novo PR para `develop`, CI aprovada, revisão B, conferência C,
-ajustes e merge. Aprovação de testes ou avaliação por agente não substitui as
-revisões humanas. T6 #9 permanece aberta; o estado dessas pendências será registrado
-no PR e nas evidências.
+ajustes e merge. A pedido explícito do responsável, houve revisões por agentes,
+incluindo revisão cruzada do backend; a revisão C não teve autoria das skills nem
+das saídas reais. Esses pareceres não são apresentados como revisão humana.
+T6 #9 permanece aberta; o estado dessas verificações será registrado no PR e nas
+evidências.
 
 ## Marcos propostos a partir de agora
 

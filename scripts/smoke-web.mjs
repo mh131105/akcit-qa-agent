@@ -151,6 +151,10 @@ async function submitAccess(targetPage, operation, label) {
   try {
     await targetPage.getByRole('button', { name: label, exact: true }).click();
     await targetPage.waitForURL(url => url.pathname.startsWith('/execucoes'));
+    // A navegação termina antes do boot assíncrono. Não desativar a interceptação
+    // enquanto o novo documento ainda carrega o script, a sessão ou os dados.
+    await visible(targetPage.getByRole('button', { name: 'Sair', exact: true }));
+    await targetPage.waitForFunction(() => !document.querySelector('[aria-busy="true"]'));
     return identity;
   } finally { await targetPage.unroute(path, capture); }
 }
@@ -944,7 +948,7 @@ try {
   result = { status: 'passed', scope: 'T2.1/T4.1/T6.1 — navegador, API, coordenador e persistência reais; chamada de modelo substituída, sem inferência paga', checked,
     node: process.versions.node, chromium: browser.version(), durationMs: Date.now() - started };
 } catch (error) {
-  result = { status: 'failed', checked, error: error.message, durationMs: Date.now() - started };
+  result = { status: 'failed', checked, error: error.message, pageUrl: page?.url(), durationMs: Date.now() - started };
   if (artifactDir && page) await page.screenshot({ path: join(artifactDir, 'web-failure.png'), fullPage: true }).catch(() => {});
   console.error(error);
   process.exitCode = 1;
