@@ -480,10 +480,12 @@ substituem execução/autenticação deliberadamente para não chamar provedores
 
 ### Demonstração com modelo real pelo site
 
-**Dependência T0:** no ambiente desta implementação não havia credencial real
-disponível para demonstrar inferência. O responsável deve provisionar o par e a
-credencial privada, confirmar orçamento e executar o roteiro abaixo. Testes com
-respostas programadas não atendem CA-12 nem a definição de pronto de T4.1.
+**Configuração da demonstração local:** em 24/09/2026, o responsável concluiu o
+OAuth da assinatura OpenAI no Pi. `openai-codex/gpt-6-astra` foi selecionado
+explicitamente para os três papéis e usado em inferências reais. A configuração
+privada local não configura dev/prod automaticamente. Resultados, revisões e
+pendências humanas estão em [evidencias/t4.1](evidencias/t4.1/README.md).
+Testes com respostas programadas não atendem CA-12 nem a definição de pronto.
 
 1. Registrar commit/imagem e os pares usados, sem chaves. Abrir o site na origem
    configurada e entrar com participante habilitado. Criar execução sintética e
@@ -556,8 +558,10 @@ O parser aceitar o payload adulterado comprova apenas estrutura/fontes válidas.
 O resultado esperado pela pessoa avaliadora é um parecer que detecte e localize a
 alteração sem aprová-la. Registrar o parecer efetivo, inclusive eventual falsa
 aprovação; uma resposta programada ou esta expectativa escrita não comprovam o
-validador. Comparar depois da chamada, fora do contexto do modelo. Este ensaio e
-a avaliação humana permanecem pendentes até a credencial ser disponibilizada.
+validador. Comparar depois da chamada, fora do contexto do modelo. Os ensaios
+reais de 24/09/2026 e suas versões estão registrados em
+[evidencias/t4.1](evidencias/t4.1/README.md); avaliação automatizada não substitui
+a decisão da pessoa responsável pela frente C.
 
 ### Cancelamento, limites e recuperação da preparação
 

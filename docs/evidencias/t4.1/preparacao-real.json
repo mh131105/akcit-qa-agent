@@ -1,0 +1,436 @@
+{
+  "synthetic": true,
+  "codeCommit": "069a5e716a581295e17b257b5de52a2cb932cbae",
+  "runId": "run-c5ee0c28e6e1d6b56406f924f6b40cb9c38bbaeac6a73931be26a4fbbf77620f",
+  "status": "awaiting_approval",
+  "phase": "planning",
+  "artifacts": [
+    {
+      "id": "4b966fc2-4cf6-428c-88fa-3c3c427f9837",
+      "name": "historias-e-criterios.txt",
+      "version": "1",
+      "text": "# Artefato sintético: reservar itens\n\nDocumento inventado para integrar o protótipo. Não pertence a um cliente.\nVersão: demo-v1. Os resultados do JSON associado também são simulados.\n\n## US-01\n\nComo usuário autenticado, quero reservar itens para informar a quantidade desejada.\n\n## CA-01\n\nA quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva.\n\n## CA-02\n\nO comentário é opcional. Quando informado, deve ser salvo junto à reserva.\n\n## Percurso sugerido para a aplicação controlada\n\nApós o login, a página inicial oferece “Reservas”. A tela de reservas oferece\n“Nova reserva”. O formulário apresenta quantidade, comentário e “Confirmar”.\nO agente ainda precisa observar e registrar esse percurso no navegador real.\n"
+    }
+  ],
+  "outputs": [
+    {
+      "id": "074ab12d-01aa-4ad0-ba59-abbbf7b86c06",
+      "phase": "curation",
+      "revision": 1,
+      "producer": "artifact-curator",
+      "createdAt": "2026-09-24T05:58:31.131Z",
+      "budgetCycleId": "08259dd3-b12e-4f4b-8358-9e1bee5fe89d",
+      "dependsOn": [],
+      "answerRefs": [],
+      "payload": {
+        "requirements": [
+          {
+            "id": "US-01",
+            "statement": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada.",
+            "sources": [
+              {
+                "artifactId": "4b966fc2-4cf6-428c-88fa-3c3c427f9837",
+                "locator": "L8",
+                "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+              }
+            ],
+            "rules": [
+              {
+                "id": "CA-01",
+                "statement": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma quantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora desse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não criar a reserva.",
+                "sources": [
+                  {
+                    "artifactId": "4b966fc2-4cf6-428c-88fa-3c3c427f9837",
+                    "locator": "L12-L15",
+                    "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                  }
+                ]
+              },
+              {
+                "id": "CA-02",
+                "statement": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva.",
+                "sources": [
+                  {
+                    "artifactId": "4b966fc2-4cf6-428c-88fa-3c3c427f9837",
+                    "locator": "L19",
+                    "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "id": "Q-01",
+            "description": "O percurso sugerido por “Reservas” e “Nova reserva” corresponde à navegação real? É necessário observá-lo e registrá-lo antes da execução; essa confirmação não impede planejar as regras de reserva.",
+            "requirementIds": [
+              "US-01"
+            ],
+            "caseIds": [],
+            "blocking": false,
+            "sources": [
+              {
+                "artifactId": "4b966fc2-4cf6-428c-88fa-3c3c427f9837",
+                "locator": "L23-L25",
+                "quote": "Após o login, a página inicial oferece “Reservas”. A tela de reservas oferece\n“Nova reserva”. O formulário apresenta quantidade, comentário e “Confirmar”.\nO agente ainda precisa observar e registrar esse percurso no navegador real."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "81c3337b-1196-4471-a487-7220a72378d0",
+      "phase": "planning",
+      "revision": 1,
+      "producer": "test-designer",
+      "createdAt": "2026-09-24T05:59:06.267Z",
+      "budgetCycleId": "08259dd3-b12e-4f4b-8358-9e1bee5fe89d",
+      "dependsOn": [
+        {
+          "outputId": "074ab12d-01aa-4ad0-ba59-abbbf7b86c06",
+          "revision": 1
+        }
+      ],
+      "answerRefs": [],
+      "payload": {
+        "testPlan": {
+          "objective": "Verificar que usuários autenticados possam criar reservas com quantidades inteiras de 1 a 10, que quantidades inválidas sejam rejeitadas sem criação de reserva e que comentários opcionais sejam salvos quando informados.",
+          "requirementIds": [
+            "US-01"
+          ],
+          "ruleIds": [
+            "CA-01",
+            "CA-02"
+          ],
+          "priorities": [
+            {
+              "ruleId": "CA-01",
+              "reason": "Alta: controla a validade da quantidade, a criação da reserva e as mensagens de confirmação ou rejeição."
+            },
+            {
+              "ruleId": "CA-02",
+              "reason": "Média: garante a opcionalidade do comentário e a preservação da informação fornecida junto à reserva."
+            }
+          ],
+          "exclusions": [
+            {
+              "description": "Q-01: confirmação do percurso real permanece pendente.",
+              "reason": "O percurso informado é apenas sugerido e não foi observado. A pendência não bloqueia o planejamento de CA-01 e CA-02; a navegação deverá ser observada e registrada após as aprovações do plano e dos casos, antes da execução."
+            }
+          ],
+          "approach": [
+            "Aplicar testes caixa preta com base nas US/CA originais, conferidas com a curadoria aprovada, sem divergências identificadas.",
+            "Para CA-01, particionar quantidades em inteiros no intervalo permitido, inteiros abaixo do mínimo, inteiros acima do máximo e números não inteiros. Analisar os limites inclusivos 1 e 10 e seus vizinhos inteiros externos, sem definir passos ou dados detalhados de casos.",
+            "Para CA-01, verificar a mensagem “Reserva criada” e a criação da reserva para quantidades válidas; para quantidades fora do intervalo ou não inteiras, verificar “Quantidade inválida” e a ausência de criação da reserva.",
+            "Para CA-02, cobrir comentário ausente e informado com quantidade válida, verificando que sua ausência não impeça a reserva e que, quando informado, seja salvo junto a ela. Não presumir limites de tamanho ou restrições de conteúdo não especificados."
+          ],
+          "preconditions": [
+            "Usuário autenticado, conforme US-01.",
+            "Disponibilizar acesso à aplicação controlada antes do mapeamento e da execução; URL e credenciais não são necessárias para este planejamento.",
+            "Após aprovação do plano e dos casos, observar e registrar a navegação real para resolver Q-01, usando o percurso sugerido apenas como referência.",
+            "Antes da execução, identificar meios observáveis de verificar a criação ou não criação da reserva e a persistência do comentário, sem presumir telas ou resultados."
+          ],
+          "sources": [
+            {
+              "artifactId": "4b966fc2-4cf6-428c-88fa-3c3c427f9837",
+              "locator": "L8",
+              "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+            },
+            {
+              "artifactId": "4b966fc2-4cf6-428c-88fa-3c3c427f9837",
+              "locator": "L12-L15",
+              "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+            },
+            {
+              "artifactId": "4b966fc2-4cf6-428c-88fa-3c3c427f9837",
+              "locator": "L19",
+              "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+            },
+            {
+              "artifactId": "4b966fc2-4cf6-428c-88fa-3c3c427f9837",
+              "locator": "L23-L25",
+              "quote": "Após o login, a página inicial oferece “Reservas”. A tela de reservas oferece\n“Nova reserva”. O formulário apresenta quantidade, comentário e “Confirmar”.\nO agente ainda precisa observar e registrar esse percurso no navegador real."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "81c3337b-1196-4471-a487-7220a72378d0",
+      "phase": "planning",
+      "revision": 2,
+      "producer": "test-designer",
+      "createdAt": "2026-09-24T05:59:46.795Z",
+      "budgetCycleId": "08259dd3-b12e-4f4b-8358-9e1bee5fe89d",
+      "dependsOn": [
+        {
+          "outputId": "074ab12d-01aa-4ad0-ba59-abbbf7b86c06",
+          "revision": 1
+        }
+      ],
+      "answerRefs": [],
+      "payload": {
+        "testPlan": {
+          "objective": "Verificar que usuários autenticados possam reservar itens com quantidades inteiras de 1 a 10, que quantidades inválidas sejam rejeitadas sem criar reserva e que o comentário seja opcional e salvo quando informado.",
+          "requirementIds": [
+            "US-01"
+          ],
+          "ruleIds": [
+            "CA-01",
+            "CA-02"
+          ],
+          "priorities": [
+            {
+              "ruleId": "CA-01",
+              "reason": "Alta: controla a validade da quantidade, a criação da reserva e as mensagens de confirmação ou rejeição."
+            },
+            {
+              "ruleId": "CA-02",
+              "reason": "Média: garante a opcionalidade do comentário e a preservação da informação fornecida junto à reserva."
+            }
+          ],
+          "exclusions": [
+            {
+              "description": "Q-01: confirmação do percurso real permanece pendente.",
+              "reason": "O percurso é apenas sugerido, não observado. Essa pendência não bloqueia o planejamento de CA-01 e CA-02. Sua confirmação ocorrerá após a validação e aprovação humana do plano e, posteriormente, dos casos, antes da execução."
+            }
+          ],
+          "approach": [
+            "Aplicar testes caixa preta com base nas US/CA originais, conferidas diretamente com a curadoria aprovada, sem divergências identificadas.",
+            "Para CA-01, particionar quantidades em inteiros no intervalo permitido, inteiros abaixo do mínimo, inteiros acima do máximo e números não inteiros. Analisar os limites inclusivos 1 e 10 e seus vizinhos inteiros externos, sem definir dados ou passos detalhados de casos.",
+            "Para CA-01, verificar a criação da reserva e a mensagem “Reserva criada” para quantidades válidas; para quantidades fora do intervalo ou não inteiras, verificar “Quantidade inválida” e a ausência de criação da reserva.",
+            "Para CA-02, cobrir comentário ausente e informado com quantidade válida, verificando que sua ausência não impeça a reserva e que, quando informado, seja salvo junto a ela. Não presumir limites de tamanho ou restrições de conteúdo não especificados."
+          ],
+          "preconditions": [
+            "Usuário autenticado, conforme US-01.",
+            "Disponibilizar acesso à aplicação controlada antes do mapeamento e da execução; URL e credenciais não são necessárias para planejar.",
+            "Seguir obrigatoriamente esta ordem: validar e aprovar humanamente o plano; depois criar, validar e aprovar humanamente os casos; somente então observar e registrar a navegação real para resolver Q-01, usando o percurso sugerido apenas como referência; executar os testes somente após esse registro.",
+            "Antes da execução, identificar meios observáveis de verificar a criação ou não criação da reserva e a persistência do comentário, sem presumir telas ou resultados."
+          ],
+          "sources": [
+            {
+              "artifactId": "4b966fc2-4cf6-428c-88fa-3c3c427f9837",
+              "locator": "L8",
+              "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+            },
+            {
+              "artifactId": "4b966fc2-4cf6-428c-88fa-3c3c427f9837",
+              "locator": "L12-L15",
+              "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+            },
+            {
+              "artifactId": "4b966fc2-4cf6-428c-88fa-3c3c427f9837",
+              "locator": "L19",
+              "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+            },
+            {
+              "artifactId": "4b966fc2-4cf6-428c-88fa-3c3c427f9837",
+              "locator": "L23-L25",
+              "quote": "Após o login, a página inicial oferece “Reservas”. A tela de reservas oferece\n“Nova reserva”. O formulário apresenta quantidade, comentário e “Confirmar”.\nO agente ainda precisa observar e registrar esse percurso no navegador real."
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "validations": [
+    {
+      "id": "1c433b6e-51c2-42a9-94be-d04b91f45e4a",
+      "outputId": "074ab12d-01aa-4ad0-ba59-abbbf7b86c06",
+      "outputRevision": 1,
+      "validator": "output-validator",
+      "at": "2026-09-24T05:58:35.115Z",
+      "attempt": 1,
+      "status": "approved",
+      "findings": [],
+      "reason": "A curadoria preserva integralmente os critérios, limites inclusivos, mensagens e opcionalidade, com fontes literais e localizações corretas. A confirmação do percurso está registrada como pendência não bloqueante para o planejamento."
+    },
+    {
+      "id": "8213f244-4f0f-4a8a-a9fe-0a8676b507f3",
+      "outputId": "81c3337b-1196-4471-a487-7220a72378d0",
+      "outputRevision": 1,
+      "validator": "output-validator",
+      "at": "2026-09-24T05:59:14.439Z",
+      "attempt": 1,
+      "status": "changes_requested",
+      "findings": [
+        {
+          "code": "METHODOLOGY_SEQUENCE_INCOMPLETE",
+          "message": "Explicitar a sequência obrigatória: validar e aprovar humanamente o plano; depois criar, validar e aprovar humanamente os casos; somente então observar e registrar a navegação, antes de executar. A menção genérica à aprovação do plano e dos casos não esclarece essas etapas e sua ordem.",
+          "location": "payload.testPlan.preconditions[2]"
+        }
+      ],
+      "reason": "O plano preserva as regras, limites, mensagens e opcionalidade dos originais e trata Q-01 sem bloquear trabalho independente, mas precisa explicitar integralmente a sequência metodológica RN-04."
+    },
+    {
+      "id": "ec8d4bfc-a49b-42a8-bce5-c51a6fba1ceb",
+      "outputId": "81c3337b-1196-4471-a487-7220a72378d0",
+      "outputRevision": 2,
+      "validator": "output-validator",
+      "at": "2026-09-24T05:59:51.271Z",
+      "attempt": 1,
+      "status": "approved",
+      "findings": [],
+      "reason": "O plano cobre CA-01 e CA-02 fielmente aos originais e à curadoria aprovada, preservando limites inclusivos, mensagens e opcionalidade. Explicita a pendência Q-01 sem bloquear o planejamento independente e respeita a sequência metodológica obrigatória, sem inventar navegação ou detalhar casos."
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-01",
+      "description": "O percurso sugerido por “Reservas” e “Nova reserva” corresponde à navegação real? É necessário observá-lo e registrá-lo antes da execução; essa confirmação não impede planejar as regras de reserva.",
+      "requirementIds": [
+        "US-01"
+      ],
+      "caseIds": [],
+      "blocking": false,
+      "sources": [
+        {
+          "artifactId": "4b966fc2-4cf6-428c-88fa-3c3c427f9837",
+          "locator": "L23-L25",
+          "quote": "Após o login, a página inicial oferece “Reservas”. A tela de reservas oferece\n“Nova reserva”. O formulário apresenta quantidade, comentário e “Confirmar”.\nO agente ainda precisa observar e registrar esse percurso no navegador real."
+        }
+      ]
+    }
+  ],
+  "preparation": {
+    "id": "da7115f5-e75a-45a8-927c-d88256dd9ab7",
+    "budgetCycleId": "08259dd3-b12e-4f4b-8358-9e1bee5fe89d",
+    "startedAt": "2026-09-24T05:58:09.828Z",
+    "finishedAt": "2026-09-24T05:59:51.281Z",
+    "activeRole": null,
+    "activity": null,
+    "stopReason": null,
+    "limits": {
+      "maxRequirements": 10,
+      "maxRevisions": 3,
+      "maxValidatorAttempts": 2,
+      "timeoutMs": 120000,
+      "activeMs": 2700000
+    },
+    "calls": [
+      {
+        "id": "0eda8f26-8dad-40ee-aadb-02593cf6c88d",
+        "role": "artifact-curator",
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "phase": "curation",
+        "attempt": 1,
+        "outputRevision": 1,
+        "startedAt": "2026-09-24T05:58:09.837Z",
+        "status": "completed",
+        "finishedAt": "2026-09-24T05:58:31.118Z",
+        "durationMs": 21281,
+        "usage": {
+          "input": 1275,
+          "output": 618,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 1893
+        }
+      },
+      {
+        "id": "53b4c1fd-fa41-4aec-8e99-d6296affdf49",
+        "role": "output-validator",
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "phase": "curation",
+        "attempt": 1,
+        "outputRevision": 1,
+        "startedAt": "2026-09-24T05:58:31.141Z",
+        "status": "completed",
+        "finishedAt": "2026-09-24T05:58:35.105Z",
+        "durationMs": 3965,
+        "usage": {
+          "input": 1928,
+          "output": 62,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 1990
+        }
+      },
+      {
+        "id": "a90f8b25-67ed-4f1c-996e-b2e5e4c34818",
+        "role": "test-designer",
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "phase": "planning",
+        "attempt": 1,
+        "outputRevision": 1,
+        "startedAt": "2026-09-24T05:58:35.123Z",
+        "status": "completed",
+        "finishedAt": "2026-09-24T05:59:06.258Z",
+        "durationMs": 31135,
+        "usage": {
+          "input": 1725,
+          "output": 934,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 2659
+        }
+      },
+      {
+        "id": "18892680-4898-4b0f-9875-ca75b953e20c",
+        "role": "output-validator",
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "phase": "planning",
+        "attempt": 1,
+        "outputRevision": 1,
+        "startedAt": "2026-09-24T05:59:06.275Z",
+        "status": "completed",
+        "finishedAt": "2026-09-24T05:59:14.424Z",
+        "durationMs": 8149,
+        "usage": {
+          "input": 2866,
+          "output": 182,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 3048
+        }
+      },
+      {
+        "id": "d382c747-65ce-4d1f-9334-44f259ba5bcb",
+        "role": "test-designer",
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "phase": "planning",
+        "attempt": 2,
+        "outputRevision": 2,
+        "startedAt": "2026-09-24T05:59:14.448Z",
+        "status": "completed",
+        "finishedAt": "2026-09-24T05:59:46.783Z",
+        "durationMs": 32335,
+        "usage": {
+          "input": 2796,
+          "output": 963,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 3759
+        }
+      },
+      {
+        "id": "1747f6b2-11b4-4c0e-a78c-c67bd0fde82b",
+        "role": "output-validator",
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "phase": "planning",
+        "attempt": 1,
+        "outputRevision": 2,
+        "startedAt": "2026-09-24T05:59:46.808Z",
+        "status": "completed",
+        "finishedAt": "2026-09-24T05:59:51.258Z",
+        "durationMs": 4450,
+        "usage": {
+          "input": 3123,
+          "output": 84,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 3207
+        }
+      }
+    ]
+  },
+  "approvals": []
+}

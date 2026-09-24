@@ -1,0 +1,237 @@
+{
+  "commit": "069a5e716a581295e17b257b5de52a2cb932cbae",
+  "validatorSkillSha256": "eb2634f09aa475f7b1a006208e830082baa701ffb3d4a7194baf80eb043fe860",
+  "sourceEvidence": "/tmp/akcit-t41-negative.json",
+  "runId": "run-fd21c2ddb73161b3862237a94c8447eaa6a7160aff574654baaabfd055479cbe",
+  "sourceOutput": {
+    "id": "62558b45-a2f5-426d-bcf5-656684c39f6b",
+    "revision": 1
+  },
+  "synthetic": true,
+  "tests": [
+    {
+      "name": "upper-bound",
+      "request": {
+        "task": "validation",
+        "artifacts": [
+          {
+            "id": "fa4b764f-cb75-4eb9-9e75-af472d0db912",
+            "name": "historias-e-criterios.txt",
+            "version": "1",
+            "text": "# Artefato sintético: reservar itens\n\nDocumento inventado para integrar o protótipo. Não pertence a um cliente.\nVersão: demo-v1. Os resultados do JSON associado também são simulados.\n\n## US-01\n\nComo usuário autenticado, quero reservar itens para informar a quantidade desejada.\n\n## CA-01\n\nA quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva.\n\n## CA-02\n\nO comentário é opcional. Quando informado, deve ser salvo junto à reserva.\n\n## Percurso sugerido para a aplicação controlada\n\nApós o login, a página inicial oferece “Reservas”. A tela de reservas oferece\n“Nova reserva”. O formulário apresenta quantidade, comentário e “Confirmar”.\nO agente ainda precisa observar e registrar esse percurso no navegador real.\n"
+          }
+        ],
+        "objective": "",
+        "output": {
+          "id": "62558b45-a2f5-426d-bcf5-656684c39f6b",
+          "phase": "curation",
+          "revision": 1,
+          "producer": "artifact-curator",
+          "createdAt": "2026-09-24T05:54:54.131Z",
+          "budgetCycleId": "ce96a661-86b8-4c81-bcf5-5c96774b261d",
+          "dependsOn": [],
+          "answerRefs": [],
+          "payload": {
+            "requirements": [
+              {
+                "id": "US-01",
+                "statement": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada.",
+                "sources": [
+                  {
+                    "artifactId": "fa4b764f-cb75-4eb9-9e75-af472d0db912",
+                    "locator": "L8",
+                    "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+                  }
+                ],
+                "rules": [
+                  {
+                    "id": "CA-01",
+                    "statement": "A quantidade deve ser um número inteiro entre 1 e 11, inclusive. Ao confirmar uma quantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora desse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não criar a reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "fa4b764f-cb75-4eb9-9e75-af472d0db912",
+                        "locator": "L12-L15",
+                        "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                      }
+                    ]
+                  },
+                  {
+                    "id": "CA-02",
+                    "statement": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "fa4b764f-cb75-4eb9-9e75-af472d0db912",
+                        "locator": "L19",
+                        "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "questions": [
+              {
+                "id": "Q-01",
+                "description": "O percurso sugerido corresponde à navegação real até o formulário de reserva? É necessário observá-lo e registrá-lo antes da execução, sem impedir o planejamento das regras descritas.",
+                "requirementIds": [
+                  "US-01"
+                ],
+                "caseIds": [],
+                "blocking": false,
+                "sources": [
+                  {
+                    "artifactId": "fa4b764f-cb75-4eb9-9e75-af472d0db912",
+                    "locator": "L23-L25",
+                    "quote": "Após o login, a página inicial oferece “Reservas”. A tela de reservas oferece\n“Nova reserva”. O formulário apresenta quantidade, comentário e “Confirmar”.\nO agente ainda precisa observar e registrar esse percurso no navegador real."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "previousVerdicts": []
+      },
+      "verdict": {
+        "status": "changes_requested",
+        "findings": [
+          {
+            "code": "SOURCE_MISMATCH",
+            "message": "O limite superior foi alterado para 11, mas o CA-01 original permite somente inteiros entre 1 e 10, inclusive. Corrigir o limite superior para 10, preservando o ID do critério.",
+            "location": "requirements[0].rules[0].statement"
+          }
+        ],
+        "reason": "A revisão diverge do CA-01 original ao aceitar quantidade 11, que deve ser rejeitada com “Quantidade inválida” e sem criar reserva."
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 5971,
+        "usage": {
+          "input": 1911,
+          "output": 116,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 2027
+        }
+      },
+      "humanControlNotSent": {
+        "path": "requirements[0].rules[0].statement",
+        "before": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma quantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora desse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não criar a reserva.",
+        "after": "A quantidade deve ser um número inteiro entre 1 e 11, inclusive. Ao confirmar uma quantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora desse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não criar a reserva.",
+        "expected": "changes_requested ou blocked; apontar limite superior divergente do original"
+      }
+    },
+    {
+      "name": "optional-comment",
+      "request": {
+        "task": "validation",
+        "artifacts": [
+          {
+            "id": "fa4b764f-cb75-4eb9-9e75-af472d0db912",
+            "name": "historias-e-criterios.txt",
+            "version": "1",
+            "text": "# Artefato sintético: reservar itens\n\nDocumento inventado para integrar o protótipo. Não pertence a um cliente.\nVersão: demo-v1. Os resultados do JSON associado também são simulados.\n\n## US-01\n\nComo usuário autenticado, quero reservar itens para informar a quantidade desejada.\n\n## CA-01\n\nA quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva.\n\n## CA-02\n\nO comentário é opcional. Quando informado, deve ser salvo junto à reserva.\n\n## Percurso sugerido para a aplicação controlada\n\nApós o login, a página inicial oferece “Reservas”. A tela de reservas oferece\n“Nova reserva”. O formulário apresenta quantidade, comentário e “Confirmar”.\nO agente ainda precisa observar e registrar esse percurso no navegador real.\n"
+          }
+        ],
+        "objective": "",
+        "output": {
+          "id": "62558b45-a2f5-426d-bcf5-656684c39f6b",
+          "phase": "curation",
+          "revision": 1,
+          "producer": "artifact-curator",
+          "createdAt": "2026-09-24T05:54:54.131Z",
+          "budgetCycleId": "ce96a661-86b8-4c81-bcf5-5c96774b261d",
+          "dependsOn": [],
+          "answerRefs": [],
+          "payload": {
+            "requirements": [
+              {
+                "id": "US-01",
+                "statement": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada.",
+                "sources": [
+                  {
+                    "artifactId": "fa4b764f-cb75-4eb9-9e75-af472d0db912",
+                    "locator": "L8",
+                    "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+                  }
+                ],
+                "rules": [
+                  {
+                    "id": "CA-01",
+                    "statement": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma quantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora desse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não criar a reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "fa4b764f-cb75-4eb9-9e75-af472d0db912",
+                        "locator": "L12-L15",
+                        "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                      }
+                    ]
+                  },
+                  {
+                    "id": "CA-02",
+                    "statement": "O comentário é obrigatório. Quando informado, deve ser salvo junto à reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "fa4b764f-cb75-4eb9-9e75-af472d0db912",
+                        "locator": "L19",
+                        "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "questions": [
+              {
+                "id": "Q-01",
+                "description": "O percurso sugerido corresponde à navegação real até o formulário de reserva? É necessário observá-lo e registrá-lo antes da execução, sem impedir o planejamento das regras descritas.",
+                "requirementIds": [
+                  "US-01"
+                ],
+                "caseIds": [],
+                "blocking": false,
+                "sources": [
+                  {
+                    "artifactId": "fa4b764f-cb75-4eb9-9e75-af472d0db912",
+                    "locator": "L23-L25",
+                    "quote": "Após o login, a página inicial oferece “Reservas”. A tela de reservas oferece\n“Nova reserva”. O formulário apresenta quantidade, comentário e “Confirmar”.\nO agente ainda precisa observar e registrar esse percurso no navegador real."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "previousVerdicts": []
+      },
+      "verdict": {
+        "status": "changes_requested",
+        "findings": [
+          {
+            "code": "SOURCE_MISMATCH",
+            "message": "CA-02 declara o comentário obrigatório, mas o original o define como opcional. Restaurar a opcionalidade, mantendo a exigência de salvá-lo junto à reserva quando informado.",
+            "location": "requirements[0].rules[1].statement"
+          }
+        ],
+        "reason": "A curadoria inverte a opcionalidade do comentário estabelecida em CA-02, linha 19 do artefato original."
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 5786,
+        "usage": {
+          "input": 1910,
+          "output": 104,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 2014
+        }
+      },
+      "humanControlNotSent": {
+        "path": "requirements[0].rules[1].statement",
+        "before": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva.",
+        "after": "O comentário é obrigatório. Quando informado, deve ser salvo junto à reserva.",
+        "expected": "changes_requested ou blocked; apontar obrigatoriedade divergente do original"
+      }
+    }
+  ]
+}

@@ -283,8 +283,8 @@ pela frente C e integração por outro desenvolvedor. Recorte de
 [T6 #9](https://github.com/mh131105/akcit-qa-agent/issues/9) e
 [T10 #14](https://github.com/mh131105/akcit-qa-agent/issues/14), sem encerrá-las.
 Branch `feat/prepare-validated-plan`, a partir de `origin/develop` contendo
-`04f8b01`. [PR #22](https://github.com/mh131105/akcit-qa-agent/pull/22) aberto como rascunho para `develop`.
-**Implementação em revisão; entrega não concluída.**
+`04f8b01`. [PR #22](https://github.com/mh131105/akcit-qa-agent/pull/22) para revisão em `develop`.
+**Implementação e demonstração real prontas; decisão humana e revisão/merge pendentes.**
 
 O site permite salvar rascunho, preparar plano, acompanhar fase/papel e cancelar.
 O coordenador persiste trabalho/orçamento antes do aceite HTTP, executa curador,
@@ -298,20 +298,25 @@ ferramentas de terminal/navegador nesses especialistas.
 Cobertura pretendida: CA-01 a CA-12 do card; RF-02, RF-08, RF-09, RF-13, RF-14
 e partes de RF-15/RF-16; RN-01, RN-02, RN-05, RN-06, RN-08, RN-12 e RN-15;
 RNF-04, RNF-06, RNF-07, RNF-08 e RNF-10. Os testes automáticos substituem a chamada
-de modelo e não comprovam CA-12. Código `be5aad2`: check/build aprovados,
-**84/84 testes** (59 anteriores preservados), seis testes operacionais e ambos os
-smokes aprovados no container final. O smoke web passou em 24 verificações com
-Node.js 24.21.0 e Chromium 153.0.8010.52. Resultados e limites estão em
-[evidencias/t4.1](evidencias/t4.1/README.md).
+de modelo e não comprovam CA-12. Código final `069a5e7`: check/build aprovados,
+**87/87 testes** (59 anteriores preservados), seis testes operacionais e ambos os
+smokes aprovados no container final; smoke web com 24 verificações. Node.js
+24.21.0 e Chromium 153.0.8010.52.
 
-**Dependência aberta em T0 #3:** o responsável ainda precisa disponibilizar
-credencial real, confirmar provedor/modelos e orçamento no ambiente privado.
-Nenhuma inferência paga foi executada nesta implementação. A demonstração real
-com o artefato sintético, as duas validações e aprovação pelo site permanece
-pendente, assim como avaliação humana da frente C de limites, comentário
-opcional, fontes/cobertura e ensaio do validador com saída deliberadamente errada.
-O gabarito humano fica fora do contexto do agente. Revisão de integração, PR
-aprovado e merge em `develop` também são necessários para a definição de pronto.
+A dependência de credencial local em **T0 #3 foi resolvida** com OAuth de assinatura
+OpenAI autorizado pelo responsável. Curador, planejador e validador usam
+`openai-codex/gpt-6-astra`, com sessões separadas. A demonstração real pelo site
+produziu curadoria r1 e plano r2 aprovados pelo validador: seis chamadas,
+101.453 ms ativos e 16.556 tokens. Dois ensaios reais da skill final detectaram
+limite 10→11 e comentário opcional→obrigatório, sem gabarito no contexto.
+
+A avaliação técnica independente confirmou conteúdo/fontes/dependências e
+registrou falsos positivos anteriores e conservadorismo excessivo do validador.
+Em 24/09/2026, o responsável informou que **outra pessoa fará a avaliação humana**;
+portanto o plano permanece em `awaiting_approval/planning`, sem decisão fabricada.
+Faltam essa avaliação da frente C, aprovação pelo site, revisão de integração
+por outro desenvolvedor e merge em `develop`. Evidências completas, limitações
+e roteiro da pessoa revisora: [evidencias/t4.1](evidencias/t4.1/README.md).
 
 Limite do recorte: termina na revisão humana do plano; `/continue`, criação de
 casos, mapeamento, navegação, execução, vídeos, relatório, upload e `/answer`
