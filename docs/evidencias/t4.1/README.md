@@ -1,165 +1,101 @@
-# T4.1 — Preparação e validação do plano
+# T4.1 — Preparação com somente US e critérios de aceite
 
-**Implementação e demonstração real executadas; decisão humana e revisão/merge do PR pendentes.**
-Em 24/09/2026, o Pi produziu curadoria e plano pelo provedor OpenAI Codex com
-OAuth de assinatura. O site recebeu o artefato, iniciou o processamento e chegou
-a `awaiting_approval/planning`. A avaliação técnica dos agentes não substitui a
-avaliação humana da frente C nem fabrica a decisão no produto.
+**Nova inferência real concluída em 24/09/2026; avaliação humana e revisão/merge pendentes.**
+Esta avaliação substitui as amostras anteriores, cujo material incluía notas sobre
+a demonstração e um percurso sugerido. Os JSON, a revisão e a captura anteriores
+foram removidos/substituídos nesta branch; não são evidência deste resultado.
+O histórico Git permanece preservado. As verificações automatizadas sem modelo
+não dependiam desses trechos e são identificadas separadamente.
 
-## Identificação e reprodução
+## Entrada e isolamento
 
-| Campo | Registro |
+- Entrada integral: [artefato-demo.md](../../requisitos/exemplos/artefato-demo.md),
+  somente **US-01, CA-01 e CA-02**. A fixture de testes foi sincronizada.
+- Objetivo vazio; nenhum percurso, comentário sobre simulação, resultado esperado
+  da avaliação ou plano anterior fornecido como artefato.
+- SHA-256 da entrada: `309893107995392957fee7f37c0eff1040d3f9434f6cc6dd3c9b39e0d5605998`.
+- Material fictício: esta identificação pertence ao relatório, fora da entrada.
+- Nova conta/execução em armazenamento local isolado; novas sessões Pi por tarefa.
+  As skills metodológicas existentes foram mantidas integralmente.
+- Código/skills: `b7b01023dcea5af99769eb9d498d7b6b8964dc46`, com a alteração documental
+  de entrada acima. Nenhum código de produção ou skill alterado nesta correção.
+- Pi **0.87.0**, Node.js **24.19.0**, três papéis com `openai-codex/gpt-6-astra`.
+  OAuth existente configurado privadamente; nenhum segredo publicado.
+
+## Percurso exercitado e resultado
+
+Cadastro/login → criação do rascunho pela API HTTP real → `/start` **202** →
+curador → validador → planejador → validador → correção do plano → validador.
+`createApp` usou o runtime real, sem `modelCall` ou `modelPreflight` substituídos.
+O acompanhamento final foi feito no armazenamento persistido. A automação de
+coleta corrigiu a leitura do envelope HTTP após o início; o coordenador continuou
+a mesma execução, sem repetir `/start`, inferência ou substituir respostas.
+Esta repetição foi pela API; não há nova captura nem alegação de jornada pela UI.
+
+| Campo | Resultado |
 | --- | --- |
-| Branch / PR | `feat/prepare-validated-plan` · [PR #22](https://github.com/mh131105/akcit-qa-agent/pull/22), base `develop` |
-| Base | `04f8b0176d8aa458f4eee75d95fc1a49e9270a21`, merge do PR #21 |
-| Código final avaliado | `069a5e716a581295e17b257b5de52a2cb932cbae` |
-| Pi | `@earendil-works/pi-coding-agent` **0.87.0**, lockfile preservado |
-| Papéis / modelo | Curador, planejador e validador: **`openai-codex/gpt-6-astra`**, sessões novas e independentes |
-| Entrada | [artefato-demo.md](../../requisitos/exemplos/artefato-demo.md), sintético `demo-v1`, texto integral; objetivo opcional vazio |
-| Ambiente real | Local, Node.js 24.21.0, site em `127.0.0.1:3170`; Chromium com interface, operado pelo Playwright |
-| Credencial | OAuth autorizado pelo responsável no navegador; arquivo privado explícito via `PI_AUTH_PATH`, fora do Git |
-| Execução final | `run-c5ee0c28e6e1d6b56406f924f6b40cb9c38bbaeac6a73931be26a4fbbf77620f` |
-| Processamento | `2026-09-24T05:58:09.828Z` → `05:59:51.281Z`, **101.453 ms**, seis chamadas |
+| Execução | `run-d72dfb41ac3881c9a64ab2329001219d26f9b72c5042be15b94ce244eed64b6a` |
+| Intervalo UTC | `2026-09-24T16:02:26.198Z` → `2026-09-24T16:03:42.938Z` |
+| Duração ativa | **76,740 s** |
+| Chamadas / tokens | **6 / 13.632** |
+| Curadoria | `0857784e-cdcb-4d23-947f-0f0659f4800a`, r1, aprovada |
+| Plano vigente | `9a1e0a99-8138-4a40-bfc8-bb79cd93670e`, r2, aprovado pelo validador |
+| Estado | `awaiting_approval/planning` |
+| Perguntas / aprovação humana | Nenhuma pergunta / **pendente**, zero decisões |
 
-A configuração local resolveu a dependência de credencial registrada em
-[T0 #3](https://github.com/mh131105/akcit-qa-agent/issues/3); ela não configura
-credenciais em dev/prod. O [roteiro operacional](../../OPERACAO.md#demonstração-com-modelo-real-pelo-site)
-inclui login, execução e avaliação. Não houve fallback ou inferência extra para
-escolher a etapa seguinte. Nenhuma URL/credencial do alvo foi exigida.
+[Saídas, fontes, revisões e consumo](preparacao-real.json) ·
+[Plano legível para revisão humana](plano-para-revisao.md).
+A projeção contém somente dados sintéticos e metadados técnicos; não contém
+contas, cookies, credenciais, histórico de conversas ou raciocínio interno.
+Custo em moeda indisponível: preço por token do catálogo não representa a assinatura.
 
-## Resultados reais e histórico
+| Papel | Saída | Duração | Tokens |
+| --- | --- | --- | --- |
+| artifact-curator | curation r1 | 15638 ms | 1588 |
+| output-validator | curation r1 | 4075 ms | 1719 |
+| test-designer | planning r1 | 23205 ms | 2133 |
+| output-validator | planning r1 | 7721 ms | 2562 |
+| test-designer | planning r2 | 21636 ms | 2924 |
+| output-validator | planning r2 | 4329 ms | 2706 |
 
-O percurso observado foi **salvar rascunho → preparar plano → curadoria → validação
-da curadoria → plano r1 → pedido de alteração → plano r2 → validação aprovada**.
-Durante o processamento o site mostrou a fase, papel ativo e opção de cancelar;
-ao aguardar aprovação, apresentou o plano e os controles humanos existentes.
-[Captura do site com dados sintéticos](plano-no-site.png).
+## Qualidade e limites observados
 
-| Saída / parecer | Resultado |
-| --- | --- |
-| Curadoria `074ab12d-01aa-4ad0-ba59-abbbf7b86c06`, r1 | US-01, CA-01 e CA-02 preservados; Q-01 não bloqueante |
-| Validação da curadoria `1c433b6e-51c2-42a9-94be-d04b91f45e4a` | `approved`, sem achados |
-| Plano `81c3337b-1196-4471-a487-7220a72378d0`, r1 | Cobertura de CA-01/CA-02, fontes e condições corretas |
-| Validação do plano r1 `8213f244-4f0f-4a8a-a9fe-0a8676b507f3` | `changes_requested`; pediu detalhar a sequência metodológica em `preconditions[2]` |
-| Mesmo plano, r2 | Preserva r1 e explicita as duas validações/aprovações antes do mapeamento |
-| Validação do plano r2 `ec8d4bfc-a49b-42a8-bce5-c51a6fba1ceb` | `approved`, sem achados |
-| Dependência do plano | Exatamente curadoria `074ab12d-01aa-4ad0-ba59-abbbf7b86c06`, r1 |
-| Decisão humana | Pendente; nenhum registro de aprovação fabricado |
+A curadoria preservou o inteiro de **1 a 10 inclusive**, as mensagens
+“Reserva criada” e “Quantidade inválida”, rejeição sem criar reserva e comentário
+**opcional**, salvo quando informado. Fontes atuais: **L3, L7-L10 e L14**.
+O plano cobre CA-01/CA-02, mantém AVL/PCE sustentadas pelas regras e não apresenta
+nomes de telas ou percurso descoberto. A antiga Q-01 não foi gerada.
 
-[Revisão técnica independente, por agente](revisao-tecnica.md) ·
-[Plano legível para revisão](plano-para-revisao.md) ·
-[Projeção sintética com todas as revisões, pareceres e chamadas](preparacao-real.json).
-A projeção publicada seleciona campos; não contém conta, sessão, credencial,
-configuração privada ou raciocínio interno.
+O plano r1 recebeu `changes_requested` por não explicitar cada validação e aprovação
+na sequência metodológica. Ele já previa aprovar plano/casos antes de definir o
+percurso: permanece uma limitação de conservadorismo do validador. O plano r2
+explicita a sequência e foi aprovado. A expressão condicional “qualquer percurso
+sugerido” é compatível com a orientação metodológica existente; não identifica um percurso
+recebido ou observado nesta entrada. As duas revisões e pareceres estão preservados.
+A comparação feita por agente não substitui a revisão humana da frente C.
 
-| Chamada | Revisão / tentativa | Duração | Entrada | Saída | Tokens totais |
-| --- | --- | ---: | ---: | ---: | ---: |
-| Curador | r1 / 1 | 21.281 ms | 1.275 | 618 | 1.893 |
-| Validador da curadoria | r1 / 1 | 3.965 ms | 1.928 | 62 | 1.990 |
-| Planejador | r1 / 1 | 31.135 ms | 1.725 | 934 | 2.659 |
-| Validador do plano | r1 / 1 | 8.149 ms | 2.866 | 182 | 3.048 |
-| Planejador | r2 / 2 | 32.335 ms | 2.796 | 963 | 3.759 |
-| Validador do plano | r2 / 1 | 4.450 ms | 3.123 | 84 | 3.207 |
-| Total | seis chamadas | 101.315 ms nas chamadas | 13.713 | 2.843 | **16.556** |
+## Ensaios independentes com erros conhecidos
 
-A duração total inclui persistência e coordenação. Contadores de cache informados
-pelo Pi foram zero. **Custo por token não foi registrado:** tarifas de API do
-catálogo não representam a cobrança da assinatura. Isso não significa custo
-zero nem informa saldo/quota. O teste de conectividade anterior consumiu 1.178
-tokens em 5.888 ms e não integra os totais da execução.
+Repetidos sobre a **nova curadoria e os novos originais**. Alterações deliberadas
+foram aceitas pelo parser estrutural e enviadas a sessões independentes do validador.
+Nomes dos ensaios e gabarito ficaram fora do prompt. A execução principal não foi alterada.
 
-## Revisão metodológica e limitações observadas
+| Alteração | Parecer real | Duração | Tokens |
+| --- | --- | --- | --- |
+| Limite superior 10 → 11 | `changes_requested` | 5123 ms | 1758 |
+| Comentário opcional → obrigatório | `changes_requested` | 5691 ms | 1753 |
 
-A revisão técnica independente conferiu inteiro de **1 a 10 inclusive**, mensagens
-“Reserva criada” e “Quantidade inválida”, ausência de reserva inválida, comentário
-**opcional** e persistência quando informado. As fontes literais correspondem a
-L8, L12–L15, L19 e L23–L25. O plano cobre os dois critérios, prioriza, justifica
-exclusões, apresenta abordagem e pré-condições, sem detalhar casos ou alegar
-navegação observada. Q-01 registra futura observação do percurso e não bloqueia
-planejamento; não exige resposta para avançar neste recorte.
+[Requests exatas, pareceres e consumo](validador-erros-conhecidos.json).
+Dois resultados corretos nesta amostra não estabelecem precisão geral.
 
-A primeira execução real, no código `818ffdd`, encontrou **dois falsos positivos**:
-o validador solicitou remover a aprovação de plano/casos antes do mapeamento por
-não constar do artefato do usuário. Essa é uma regra do produto (RN-04), não do
-alvo. O histórico foi preservado em [diagnostico-real.json](diagnostico-real.json)
-(curadoria r1 e plano r1/r2/r3; oito chamadas; nenhuma decisão humana).
-O commit `069a5e7` esclareceu essa distinção na skill do validador, sem mudar o
-coordenador nem converter pareceres antigos em aprovações.
+## Verificação e pendências
 
-Na execução final, o pedido de alteração de r1 para r2 foi **excessivamente
-conservador**: r1 já respeitava as duas aprovações, mas o validador exigiu listar
-cada etapa metodológica. A revisão adicional foi limitada, rastreada e produziu
-plano correto. Não se declara precisão perfeita do validador. A avaliação humana
-continua necessária.
+Nesta correção: **check aprovado, 87/87 testes aprovados e build aprovado** em
+Node.js 24.19.0. [Verificações automatizadas](verificacao-automatizada.md).
+Não houve alteração de infraestrutura nem repetição dos smokes locais; o registro
+anterior identifica explicitamente a versão na qual eles foram executados.
 
-## Ensaios reais com erros conhecidos
-
-Dois payloads derivados da curadoria sintética foram aceitos estruturalmente e
-enviados ao validador em sessões novas. Somente originais e saída sob análise
-entraram no prompt; mudança deliberada, hipótese, gabarito e resultado esperado
-ficaram fora do contexto. A execução original não foi modificada.
-
-| Erro deliberado | Parecer real final | Localização | Duração | Tokens entrada + saída |
-| --- | --- | --- | ---: | ---: |
-| Limite superior 10 → 11 | `changes_requested`, `SOURCE_MISMATCH` | `requirements[0].rules[0].statement` | 5.971 ms | 1.911 + 116 = 2.027 |
-| Comentário opcional → obrigatório | `changes_requested`, `SOURCE_MISMATCH` | `requirements[0].rules[1].statement` | 5.786 ms | 1.910 + 104 = 2.014 |
-
-Total final: **11.757 ms / 4.041 tokens**, `openai-codex/gpt-6-astra`, código
-`069a5e7`; SHA-256 da skill:
-`eb2634f09aa475f7b1a006208e830082baa701ffb3d4a7194baf80eb043fe860`.
-[Requests exatas, pareceres e metadados](validador-erros-conhecidos.json).
-Os ensaios anteriores à correção também detectaram os dois erros, em 10.289 ms /
-3.776 tokens; foram repetidos com a skill final para verificar a versão entregue.
-A detecção foi observada em inferência real, não em respostas programadas.
-
-## Avaliação humana da frente C
-
-O plano r2 e os pareceres foram apresentados ao responsável nesta conversa,
-com pedido explícito de avaliação do conteúdo antes da decisão pelo site.
-Em 24/09/2026, o responsável respondeu **“Outra pessoa fará a revisão”**. O plano
-permanece aguardando essa pessoa; nenhuma aprovação foi registrada por automação.
-
-| Avaliação exigida | Registro humano |
-| --- | --- |
-| Limites, mensagens e comentário opcional | Pendente |
-| Fontes, cobertura, exclusões e pré-condições | Pendente |
-| Revisões e dois pareceres independentes | Pendente |
-| Ensaios com erros conhecidos e limitações do validador | Pendente |
-| Nome/data e conclusão da pessoa responsável | Pendente |
-| Aprovação pelo site, revisão e horário | Pendente |
-
-## Verificação automatizada
-
-Versão `069a5e7`, Node.js **24.21.0**, Chromium **153.0.8010.52**:
-
-| Verificação | Resultado |
-| --- | --- |
-| `npm run check` | Aprovado |
-| `npm test` | **87/87**; todos os 59 da base preservados |
-| `npm run build` | Aprovado |
-| `python3 -m unittest discover -s deploy -p 'test_*.py'` | **6/6** |
-| Smoke runtime/container | Aprovado, 4.245 ms internos |
-| Smoke web/container | **24 verificações**, 19.008 ms internos |
-
-[Registro completo da verificação](verificacao-automatizada.md). Imagem local:
-`sha256:4bfed495bb5cf4668b78b9d68b776c17a540bdda3c335c756ba4bb40b55d96a2`.
-Ambos os smokes finais passaram na primeira execução, em container restrito,
-CPU=1, memória=2 GiB, filesystem somente leitura, capabilities removidas e sem
-credenciais. A versão anterior teve um timeout intermitente no cenário legado
-de relogin do smoke web; duas repetições passaram, causa não determinada. Esse
-registro não foi ocultado. A imagem não foi publicada/promovida para dev/prod.
-
-As suítes substituem explicitamente a chamada de modelo. Cobrem sequência,
-sessões independentes, gates de validação/aprovação, correções/histórico, limites,
-JSON/parecer inválido, timeout com abort, cancelamento/resposta tardia, repetição,
-reserva exclusiva, recuperação e isolamento entre contas. Não existe opção de
-modelo simulado na API ou no formulário.
-
-## Pendências e limite do recorte
-
-Faltam a decisão humana da frente C, revisão de integração por outro desenvolvedor
-e merge do PR para concluir a definição de pronto. T4 #7, T5 #8, T6 #9 e T10 #14
-permanecem abertas. O fluxo termina na revisão humana do plano; aprovação não
-inicia casos. `/continue`, `/answer`, casos, mapeamento, execução, vídeos,
-relatório e upload pertencem aos próximos recortes. Um único processo escritor
-por ambiente é necessário; não há fila distribuída.
+Faltam avaliação humana da frente C, decisão pelo site, revisão de integração e
+merge do [PR #22](https://github.com/mh131105/akcit-qa-agent/pull/22).
+T4 #7, T5 #8, T6 #9 e T10 #14 continuam abertas. Casos, mapeamento, execução,
+vídeos, relatório, upload e `/answer` não fazem parte desta demonstração.

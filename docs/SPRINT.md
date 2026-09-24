@@ -305,18 +305,22 @@ smokes aprovados no container final; smoke web com 24 verificações. Node.js
 
 A dependência de credencial local em **T0 #3 foi resolvida** com OAuth de assinatura
 OpenAI autorizado pelo responsável. Curador, planejador e validador usam
-`openai-codex/gpt-6-astra`, com sessões separadas. A demonstração real pelo site
-produziu curadoria r1 e plano r2 aprovados pelo validador: seis chamadas,
-101.453 ms ativos e 16.556 tokens. Dois ensaios reais da skill final detectaram
-limite 10→11 e comentário opcional→obrigatório, sem gabarito no contexto.
+`openai-codex/gpt-6-astra`, com sessões separadas. Em 24/09/2026 a avaliação foi
+refeita com **somente US-01 e CA-01/CA-02**, objetivo vazio e execução nova.
+As evidências anteriores com notas de demonstração e percurso sugerido foram
+removidas/substituídas; código de produção e skills não foram alterados.
 
-A avaliação técnica independente confirmou conteúdo/fontes/dependências e
-registrou falsos positivos anteriores e conservadorismo excessivo do validador.
-Em 24/09/2026, o responsável informou que **outra pessoa fará a avaliação humana**;
-portanto o plano permanece em `awaiting_approval/planning`, sem decisão fabricada.
-Faltam essa avaliação da frente C, aprovação pelo site, revisão de integração
-por outro desenvolvedor e merge em `develop`. Evidências completas, limitações
-e roteiro da pessoa revisora: [evidencias/t4.1](evidencias/t4.1/README.md).
+A nova preparação pela API HTTP real produziu curadoria r1 e plano r2 aprovados
+pelo validador: **6 chamadas, 76,740 s e 13.632 tokens**. Não há nova captura
+nem alegação de nova jornada pela UI. Dois ensaios independentes detectaram
+limite 10→11 e comentário opcional→obrigatório com os originais limpos.
+O conservadorismo do validador sobre a sequência metodológica permaneceu registrado.
+Check, 87/87 testes e build passaram novamente após a limpeza do artefato/fixture.
+
+O plano permanece em `awaiting_approval/planning`, sem decisão humana fabricada.
+Faltam avaliação da frente C, aprovação pelo site, revisão de integração por outro
+desenvolvedor e merge em `develop`. Evidências atuais e limitações:
+[evidencias/t4.1](evidencias/t4.1/README.md).
 
 Limite do recorte: termina na revisão humana do plano; `/continue`, criação de
 casos, mapeamento, navegação, execução, vídeos, relatório, upload e `/answer`

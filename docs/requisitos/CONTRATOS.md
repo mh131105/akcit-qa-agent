@@ -1023,9 +1023,10 @@ não encerra T2 nem comprova os cenários completos de aceitação do produto.
 
 Recorte implementado de T4 #7, T5 #8, T6 #9 e T10 #14: rascunho textual →
 curadoria → validação independente → plano → validação independente → revisão
-humana existente. A integração usa Pi **0.87.0**. A demonstração com inferência
-real e a avaliação humana da frente C ainda dependem de credencial em T0; o estado
-da verificação está em [evidencias/t4.1](../evidencias/t4.1/README.md).
+humana existente. A integração usa Pi **0.87.0**. A credencial local foi configurada;
+a demonstração real usa somente US/CA, mantendo notas de avaliação fora da entrada.
+A avaliação humana segue pendente; o estado da verificação está em
+[evidencias/t4.1](../evidencias/t4.1/README.md).
 
 ### Início, repetição e cancelamento
 

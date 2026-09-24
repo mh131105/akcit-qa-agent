@@ -489,7 +489,9 @@ Testes com respostas programadas não atendem CA-12 nem a definição de pronto.
 
 1. Registrar commit/imagem e os pares usados, sem chaves. Abrir o site na origem
    configurada e entrar com participante habilitado. Criar execução sintética e
-   colar integralmente [artefato-demo.md](requisitos/exemplos/artefato-demo.md).
+   colar integralmente [artefato-demo.md](requisitos/exemplos/artefato-demo.md),
+   que contém somente US-01 e CA-01/CA-02. Notas de avaliação e identificação
+   sintética ficam fora do texto enviado; não fornecer percurso nem gabarito.
    Objetivo é opcional; não exigir URL/credencial da aplicação testada.
 2. Salvar rascunho e clicar **Preparar plano**. Conferir aceite `202`, atualização
    de fase/papel e registro do processamento. Curador, validador da curadoria,
@@ -501,8 +503,8 @@ Testes com respostas programadas não atendem CA-12 nem a definição de pronto.
    e `preparation.calls`; a consulta HTTP devolve somente a projeção pública.
 4. Conferir quantidade **inteira de 1 a 10 inclusive**, sucesso e rejeição sem
    reserva conforme CA-01, **comentário opcional** e persistido quando informado
-   conforme CA-02, fontes literais, cobertura e exclusões justificadas. Navegação
-   sugerida não equivale a observação; não deve haver casos detalhados.
+   conforme CA-02, fontes literais, cobertura e exclusões justificadas. Nenhum
+   percurso foi fornecido; não deve haver navegação presumida ou casos detalhados.
 5. A pessoa revisora aprova pelo botão **Aprovar plano**. Reconsultar e confirmar
    autor, horário e revisão da decisão, mantendo `awaiting_approval/planning`.
    Recarregar não perde a decisão; não iniciar `/continue` ou criação de casos.

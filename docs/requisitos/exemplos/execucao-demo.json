@@ -21,7 +21,7 @@
         "id": "artifact-demo",
         "name": "artefato-demo.md",
         "version": "demo-v1",
-        "text": "# Artefato sintético: reservar itens\n\nDocumento inventado para integrar o protótipo. Não pertence a um cliente.\nVersão: demo-v1. Os resultados do JSON associado também são simulados.\n\n## US-01\n\nComo usuário autenticado, quero reservar itens para informar a quantidade desejada.\n\n## CA-01\n\nA quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva.\n\n## CA-02\n\nO comentário é opcional. Quando informado, deve ser salvo junto à reserva.\n\n## Percurso sugerido para a aplicação controlada\n\nApós o login, a página inicial oferece “Reservas”. A tela de reservas oferece\n“Nova reserva”. O formulário apresenta quantidade, comentário e “Confirmar”.\nO agente ainda precisa observar e registrar esse percurso no navegador real.\n"
+        "text": "## US-01\n\nComo usuário autenticado, quero reservar itens para informar a quantidade desejada.\n\n## CA-01\n\nA quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva.\n\n## CA-02\n\nO comentário é opcional. Quando informado, deve ser salvo junto à reserva.\n"
       }
     ],
     "outputs": [
