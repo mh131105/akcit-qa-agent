@@ -17,9 +17,14 @@
     "navegação por Tab entre campos com foco visível",
     "limite do JSON em bytes bloqueia o envio e preserva o preenchimento",
     "sessionStorage indisponível impede envio e mantém o formulário",
-    "desktop 1366px e celular 390px sem transbordamento; nenhum token ou senha no storage"
+    "desktop 1366px e celular 390px sem transbordamento; nenhum token ou senha no storage",
+    "BUG-T2.1-01: duas abas compartilham cookie; /me de A atrasado + login B → ACCOUNT_CHANGED, nenhum rascunho para B; logout divergente mantém B; A recupera chave/corpo/conta originais",
+    "BUG-T2.1-01: logout 503/rede conserva conta/chave/corpo após reload; repetir encontra execução original; logout com resposta perdida mantém recuperação e sessão inválida oculta material",
+    "BUG-T2.1-01: logout 204 limpa recuperação sem regravação por pagehide; falha de limpeza após 204 mantém saída confirmada e informa problema local",
+    "BUG-T2.1-01: comentário literal preservado após falha antes da gravação e na reconsulta; nova ação explícita registra uma única decisão",
+    "BUG-T2.1-01: resposta de decisão perdida após gravação recupera confirmação sem novo POST; revisão nova/conflito preservam cópia da revisão original sem preencher revisão nova"
   ],
   "node": "24.21.0",
   "chromium": "153.0.8010.52",
-  "durationMs": 6629
+  "durationMs": 13111
 }

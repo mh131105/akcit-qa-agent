@@ -204,7 +204,7 @@ textual é preservado e o limite é medido no JSON completo em bytes. A tentativ
 salva em `sessionStorage`, vinculada ao ID da conta, permite confirmar resposta
 incerta com chave e corpo originais após atualizar a página, sem duplicação.
 Sessão inválida remove dados privados da tela; outra conta não restaura o
-formulário. Logout explícito limpa a tentativa.
+formulário. Logout confirmado limpa a tentativa.
 
 O detalhe mostra somente o que a API retorna. Sem plano, informa que o
 processamento não começou. Com plano, apresenta conteúdo, validação e revisão;
@@ -221,7 +221,7 @@ Planos/pareceres são sintéticos, preparados somente no armazenamento temporár
 esse teste não comprova geração por IA. Capturas de 1366 px e 390 px integram a
 evidência sintética do PR.
 
-Verificações realizadas: `npm run check`, `npm test` com 55 testes aprovados
+Verificações da implementação inicial: `npm run check`, `npm test` com 55 testes aprovados
 (preservando os 54 testes da base), `npm run build`, seis testes Python de
 publicação e os dois smokes dentro da imagem final. O smoke web passou nas 16
 verificações com Node.js 24.21.0 e Chromium 153.0.8010.52, incluindo as jornadas
@@ -232,6 +232,37 @@ Comandos e artefatos estão em [OPERACAO.md](OPERACAO.md#jornada-pelo-navegador-
 comportamento em [CONTRATOS.md](requisitos/CONTRATOS.md#interface-inicial--t21).
 A definição de pronto exige PR revisado e integrado em `develop`; checks locais
 não substituem essa revisão.
+
+#### BUG-T2.1-01 · Isolamento da conta e recuperação durante falhas
+
+Correção P1 no próprio [PR #21](https://github.com/mh131105/akcit-qa-agent/pull/21),
+branch `feat/web-intake-review`, sobre `fa91ad2`. Commit de correção:
+[`fe61190`](https://github.com/mh131105/akcit-qa-agent/commit/fe6119096f056076e07eb9d05aa9f941422780b6).
+Responsável: integração frontend/backend; nova revisão: frente B.
+
+A revisão apontou três bloqueios: troca de cookie entre `/auth/me` e o POST podia
+salvar material na conta errada; logout malsucedido apagava a tentativa; falha na
+decisão reconstruía a página sem o comentário. As operações de execuções e logout
+agora exigem `X-Expected-User-Id`, validado centralmente contra a sessão, sem
+atribuir propriedade pelo cliente. A recuperação só é apagada após logout `204`;
+falha de limpeza local não desfaz a saída confirmada. Comentários ficam em memória
+com conta, execução e revisão originais, inclusive nas reconsultas malsucedidas;
+revisão nova ou conflito conserva uma cópia para leitura, sem POST automático.
+
+Antes das correções, quatro testes HTTP novos falharam. Os três cenários de
+navegador também falharam na imagem de `fa91ad2`: criação indevida `201` em vez de
+`409`, tentativa apagada no logout `503` e comentário vazio após falha de envio.
+Depois das correções, `npm run check`, `npm test` (**59/59**, preservando os 55
+anteriores) e `npm run build` passaram com Node.js 24.19.0. Os seis testes Python
+de publicação passaram. A imagem final local, com Node.js 24.21.0 e Chromium
+153.0.8010.52, passou no smoke de infraestrutura e nas **21 verificações do smoke
+web**, incluindo os três cenários de regressão, com API e persistência reais,
+sem modelo pago. [Evidências e limites](evidencias/t2.1/README.md).
+
+**T2.1 permanece pendente de nova revisão da frente B e merge em `develop`.**
+A CI deve aprovar o commit enviado; os resultados locais e a revisão técnica da
+correção não substituem a revisão da frente B. **T2 #5 permanece aberta.**
+Design definitivo e implementação de agentes estão fora deste card.
 
 **T2 continua aberta.** Upload, edição, exclusão, duplicação, board de US/CA,
 perguntas, início dos agentes, curadoria, geração do plano, casos e relatório
