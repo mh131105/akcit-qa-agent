@@ -283,7 +283,8 @@ pela frente C e integração por outro desenvolvedor. Recorte de
 [T6 #9](https://github.com/mh131105/akcit-qa-agent/issues/9) e
 [T10 #14](https://github.com/mh131105/akcit-qa-agent/issues/14), sem encerrá-las.
 Branch `feat/prepare-validated-plan`, a partir de `origin/develop` contendo
-`04f8b01`. **Implementação em revisão; entrega não concluída.**
+`04f8b01`. [PR #22](https://github.com/mh131105/akcit-qa-agent/pull/22) aberto como rascunho para `develop`.
+**Implementação em revisão; entrega não concluída.**
 
 O site permite salvar rascunho, preparar plano, acompanhar fase/papel e cancelar.
 O coordenador persiste trabalho/orçamento antes do aceite HTTP, executa curador,

@@ -12,7 +12,7 @@ passar em testes automatizados.
 | Branch | `feat/prepare-validated-plan` |
 | Base | `04f8b0176d8aa458f4eee75d95fc1a49e9270a21`, merge do PR #21 em `develop` |
 | Commit de código avaliado | `be5aad2ec4e4d938102e69ee802bd8f073838084`; documentação registrada em commit posterior |
-| PR para `develop` | Rascunho a abrir; referencia T4 #7, T5 #8, T6 #9 e T10 #14 sem encerramento automático |
+| PR para `develop` | [PR #22](https://github.com/mh131105/akcit-qa-agent/pull/22), rascunho; referencia T4 #7, T5 #8, T6 #9 e T10 #14 sem encerramento automático |
 | Pi | `@earendil-works/pi-coding-agent` 0.87.0, preservado no lockfile |
 | Entrada da demonstração real | [artefato-demo.md](../../requisitos/exemplos/artefato-demo.md), sintético, versão `demo-v1` |
 | Responsável pela integração | Frente B; revisão por outro desenvolvedor pendente |
@@ -56,9 +56,9 @@ de correção não demonstram que um modelo detecta esses erros.
 
 ## Demonstração real — dependência T0
 
-A credencial real não estava disponível no ambiente desta implementação. Registrar
-em **T0 #3** a provisão de credencial privada, os pares provedor/modelo escolhidos
-e o orçamento autorizado. Não copiar credenciais de outros projetos. A frente B
+A credencial real não estava disponível no ambiente desta implementação. A dependência
+foi registrada em [T0 #3](https://github.com/mh131105/akcit-qa-agent/issues/3):
+provisão de credencial privada, pares provedor/modelo e orçamento autorizado. Não copiar credenciais de outros projetos. A frente B
 executa o [roteiro pelo site](../../OPERACAO.md#demonstração-com-modelo-real-pelo-site)
 após a configuração; a frente C avalia os resultados efetivos.
 
