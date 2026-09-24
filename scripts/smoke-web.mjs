@@ -29,7 +29,7 @@ let page;
 let result;
 let clock = Date.now();
 let releaseResponse = () => {};
-const preparationText = 'US-01: Como pessoa, quero reservar itens.\nCA-01: Quantidade inteira de 1 a 10.\nUS-02: Como pessoa, quero registrar uma observação.\nCA-02: Observação opcional com limite a definir.';
+const preparationText = 'US-01: Como pessoa, quero reservar itens.\nCA-01: Quantidade inteira de 1 a 10.\nUS-02: Como pessoa, quero registrar uma observação.\nCA-02: Observação opcional com limite a definir.\nCA-03: A observação deve ser persistida; local de consulta a definir.';
 const preparationCalls = [];
 let holdPreparation = false;
 let releasePreparation = () => {};
@@ -47,21 +47,37 @@ async function modelCall(task) {
     });
   }
   const source = line => ({ artifactId: input.artifacts[0].id, locator: `L${line}`, quote: preparationText.split('\n')[line - 1] });
+  const answer = id => input.answers?.filter(item => item.questionId === id).at(-1);
+  const answerSource = item => {
+    const artifact = input.artifacts.find(artifact => artifact.id === item.artifactId);
+    assert.equal(artifact.text, item.text, 'Resposta vira fonte literal para cada especialista.');
+    assert.equal(item.question.id, item.questionId, 'Resposta conserva a pergunta da revisão original.');
+    return { artifactId: artifact.id, locator: `L1-L${artifact.text.split('\n').length}`, quote: artifact.text };
+  };
+  for (const item of input.answers ?? []) answerSource(item);
+  const questions = [
+    { id: 'Q-01', description: 'Qual é o limite da observação opcional?', requirementIds: ['US-02'], ruleIds: ['CA-02'], caseIds: [], blocking: true, sources: [source(4)] },
+    { id: 'Q-02', description: 'Onde consultar a observação persistida?', requirementIds: ['US-02'], ruleIds: ['CA-03'], caseIds: [], blocking: true, sources: [source(5)] },
+  ].filter(item => !answer(item.id));
+  const resolvedRules = ['Q-01', 'Q-02'].flatMap((id, index) => answer(id) ? [`CA-0${index + 2}`] : []);
   const payload = task.role === 'artifact-curator' ? {
     requirements: [
       { id: 'US-01', statement: 'Reservar itens.', sources: [source(1)],
         rules: [{ id: 'CA-01', statement: 'Quantidade inteira de 1 a 10.', sources: [source(2)] }] },
       { id: 'US-02', statement: 'Registrar uma observação.', sources: [source(3)],
-        rules: [{ id: 'CA-02', statement: 'Observação opcional com limite a definir.', sources: [source(4)] }] },
+        rules: ['Q-01', 'Q-02'].map((id, index) => ({ id: `CA-0${index + 2}`, kind: 'rule',
+          statement: answer(id)?.text.trim() ?? preparationText.split('\n')[index + 3],
+          sources: [source(index + 4), ...(answer(id) ? [answerSource(answer(id))] : [])] })) },
     ],
-    questions: [{ id: 'Q-01', description: 'Qual é o limite da observação opcional?', requirementIds: ['US-02'], caseIds: [], blocking: true, sources: [source(4)] }],
+    questions,
   } : task.role === 'test-designer' ? { testPlan: {
-    objective: 'Conferir a quantidade de itens segundo o material recebido.',
-    requirementIds: ['US-01'], ruleIds: ['CA-01'],
-    priorities: [{ ruleId: 'CA-01', reason: 'Verificar os limites e a quantidade inteira.' }],
-    exclusions: [{ description: 'US-02 / CA-02: observação opcional.', reason: 'Q-01: o limite não foi informado.' }],
+    objective: 'Conferir reservas segundo os comportamentos esclarecidos.',
+    requirementIds: ['US-01', ...(resolvedRules.length ? ['US-02'] : [])], ruleIds: ['CA-01', ...resolvedRules],
+    priorities: ['CA-01', ...resolvedRules].map(ruleId => ({ ruleId, reason: 'Conferir o comportamento documentado.' })),
+    exclusions: questions.map(question => ({ description: `US-02 / ${question.ruleIds[0]}: observação opcional.`, reason: `${question.id}: ${question.description}` })),
     approach: ['Análise dos limites 1 e 10, valores externos e quantidade não inteira; sem detalhar casos ou navegação.'],
-    preconditions: ['Disponibilizar ambiente controlado antes da execução.'], sources: [source(1), source(2), source(4)],
+    preconditions: ['Disponibilizar ambiente controlado antes da execução.'], sources: [source(1), source(2), source(4),
+      ...(input.answers ?? []).map(answerSource)],
   } } : { status: 'approved', reason: 'O material e as pendências localizadas foram preservados.', findings: [] };
   return { payload, metadata: { provider: task.model.provider, model: task.model.model, durationMs: 1 } };
 }
@@ -131,7 +147,7 @@ async function fillRun(runName, content) {
   await page.getByLabel('Nome da execução', { exact: true }).fill(runName);
   await page.getByLabel('Aplicação', { exact: true }).fill('Reservas de exemplo');
   await page.getByLabel('Objetivo (opcional)', { exact: true }).fill('Verificar os limites documentados.');
-  await page.getByLabel('Histórias de usuário e critérios de aceite', { exact: true }).fill(content);
+  await page.getByLabel('Material de requisitos', { exact: true }).fill(content);
 }
 async function api(context, path, accountId) {
   assert.ok(accountId, 'A consulta conserva a identidade obtida no cadastro/login.');
@@ -336,7 +352,7 @@ async function logoutRecovery(context, store, owner) {
   assert.equal((await cleanFailure).status(), 204);
   await bodyIncludes(/limpar|limpeza/i);
   assert.equal(await page.getByRole('button', { name: 'Sair', exact: true }).count(), 0);
-  assert.equal(await page.getByLabel('Histórias de usuário e critérios de aceite', { exact: true }).count(), 0);
+  assert.equal(await page.getByLabel('Material de requisitos', { exact: true }).count(), 0);
   assert.equal((await context.request.get('/api/auth/me')).status(), 401);
   assert.deepEqual(await attemptFor(owner.id), retained);
   await page.evaluate(() => dispatchEvent(new Event('pagehide')));
@@ -464,7 +480,7 @@ async function preparationJourney(context, store, owner) {
   assert.equal(await page.getByRole('button', { name: 'Cancelar preparação', exact: true }).count(), 0);
   const review = await api(context, `/api/runs/${id}`, owner.id);
   assert.equal(review.status, 'awaiting_approval'); assert.equal(review.phase, 'planning');
-  assert.equal(review.questions.length, 1); assert.deepEqual(review.approvals, []);
+  assert.equal(review.questions.length, 2); assert.deepEqual(review.approvals, []);
   assert.deepEqual(review.plan.payload.testPlan.requirementIds, ['US-01']);
   const persisted = (await store.read(id)).run;
   assert.equal(persisted.outputs.length, 2);
@@ -479,11 +495,81 @@ async function preparationJourney(context, store, owner) {
   assert.equal(await page.getByLabel('Comentário', { exact: true }).inputValue(), 'Comentário em edição preservado.');
   page.off('request', counted);
   await screenshot('web-generated-plan.png', 1366);
+
+  const answerForm = questionId => page.locator('form').filter({ has: page.getByLabel(`Resposta para ${questionId}`, { exact: true }) });
+  const firstAnswer = '  A observação é opcional e aceita até 120 caracteres.\n  ';
+  const localAnswer = '  Minha resposta ainda não registrada.\n  ';
+  const concurrentAnswer = 'A observação pode ser consultada nos detalhes da reserva.';
+  await page.getByLabel('Resposta para Q-01', { exact: true }).fill(firstAnswer);
+  await page.getByLabel('Resposta para Q-02', { exact: true }).fill(localAnswer);
+  const answerResponse = page.waitForResponse(response => response.url().endsWith(`/api/runs/${id}/answer`));
+  await answerForm('Q-01').getByRole('button', { name: 'Registrar resposta', exact: true }).click();
+  assert.equal((await answerResponse).status(), 200);
+  await bodyIncludes('Resposta registrada. Confira as demais dúvidas antes de retomar.');
+  assert.equal(await page.getByLabel('Resposta para Q-02', { exact: true }).inputValue(), localAnswer);
+  assert.equal(await page.getByLabel('Comentário preservado da revisão 1', { exact: true }).inputValue(), 'Comentário em edição preservado.');
+  assert.equal(await page.getByRole('button', { name: 'Aprovar plano', exact: true }).count(), 0);
+  const answered = await api(context, `/api/runs/${id}`, owner.id);
+  assert.equal(answered.status, 'awaiting_input'); assert.equal(answered.phase, 'curation');
+  assert.equal(answered.canResume, true); assert.equal(answered.answers[0].text, firstAnswer);
+  assert.equal((await store.read(id)).run.artifacts[0].text, preparationText);
+  const headers = { Origin: new URL(page.url()).origin, 'X-Expected-User-Id': owner.id };
+  const oldGate = await context.request.post(`/api/runs/${id}/approve`, { headers,
+    data: { outputId: review.plan.id, outputRevision: review.plan.revision } });
+  assert.equal(oldGate.status(), 409, 'Resposta invalida a aprovação do plano anterior antes da retomada.');
+  let resumes = 0;
+  const countResume = request => { if (request.method() === 'POST' && request.url().endsWith(`/api/runs/${id}/resume`)) resumes++; };
+  page.on('request', countResume);
+  await page.getByRole('button', { name: 'Retomar preparação com as respostas', exact: true }).click();
+  await bodyIncludes('Há uma resposta digitada que ainda não foi registrada.');
+  assert.equal(resumes, 0, 'Texto pendente não pode ser perdido ao retomar.');
+  assert.equal(preparationCalls.length, 4, 'Salvar resposta não dispara inferência.');
+
+  // Envio concorrente da mesma conta registra Q-02 antes do formulário local.
+  const concurrent = await context.request.post(`/api/runs/${id}/answer`, { headers,
+    data: { outputId: review.curation.id, outputRevision: review.curation.revision, questionId: 'Q-02', text: concurrentAnswer } });
+  assert.equal(concurrent.status(), 200);
+  const conflictResponse = page.waitForResponse(response => response.url().endsWith(`/api/runs/${id}/answer`));
+  await answerForm('Q-02').getByRole('button', { name: 'Registrar resposta', exact: true }).click();
+  assert.equal((await conflictResponse).status(), 409);
+  await page.getByRole('button', { name: 'Consultar registro atualizado', exact: true }).click();
+  const preserved = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Texto não enviado · Q-02 · Curadoria r1', exact: true }) });
+  await visible(preserved);
+  assert.equal(await preserved.locator('blockquote').textContent(), localAnswer);
+  assert.equal((await api(context, `/api/runs/${id}`, owner.id)).answers.length, 2);
+  await page.getByRole('button', { name: 'Retomar preparação com as respostas', exact: true }).click();
+  await bodyIncludes('Há uma resposta digitada que ainda não foi registrada.');
+  assert.equal(resumes, 0);
+  await preserved.getByRole('button', { name: 'Descartar este texto não enviado', exact: true }).click();
+
+  holdPreparation = true;
+  const resumeResponse = page.waitForResponse(response => response.url().endsWith(`/api/runs/${id}/resume`));
+  await page.getByRole('button', { name: 'Retomar preparação com as respostas', exact: true }).click();
+  const resumedResponse = await resumeResponse;
+  assert.equal(resumedResponse.status(), 202);
+  assert.deepEqual(resumedResponse.request().postDataJSON(), {});
+  assert.equal(resumedResponse.request().headers()['x-expected-user-id'], owner.id);
+  await visible(page.getByRole('button', { name: 'Cancelar preparação', exact: true }));
+  holdPreparation = false; releasePreparation();
+  await visible(page.getByRole('button', { name: 'Aprovar plano', exact: true }));
+  await bodyIncludes('Plano de testes / Revisão 2');
+  assert.equal(await page.getByLabel('Comentário', { exact: true }).inputValue(), '', 'Não aplicar comentário da revisão antiga na revisão nova.');
+  assert.equal(await page.getByLabel('Comentário preservado da revisão 1', { exact: true }).inputValue(), 'Comentário em edição preservado.');
+  const resumed = await api(context, `/api/runs/${id}`, owner.id);
+  assert.equal(resumed.curation.id, review.curation.id); assert.equal(resumed.curation.revision, 2);
+  assert.equal(resumed.plan.id, review.plan.id); assert.equal(resumed.plan.revision, 2);
+  assert.deepEqual(resumed.questions, []); assert.deepEqual(resumed.approvals, []);
+  assert.deepEqual(resumed.plan.payload.testPlan.ruleIds, ['CA-01', 'CA-02', 'CA-03']);
+  assert.equal(preparationCalls.length, 8); assert.equal(resumes, 1); page.off('request', countResume);
+  await screenshot('web-clarified-plan.png', 1366);
   await page.getByRole('button', { name: 'Aprovar plano', exact: true }).click();
-  await visible(page.getByText('Plano aprovado · Revisão 1', { exact: true }));
-  assert.equal((await api(context, `/api/runs/${id}`, owner.id)).approvals.length, 1);
+  await visible(page.getByText('Plano aprovado · Revisão 2', { exact: true }));
+  const approved = await api(context, `/api/runs/${id}`, owner.id);
+  assert.equal(approved.approvals.length, 1); assert.equal(approved.approvals[0].outputRevision, 2);
   checked.push('T4.1: rascunho → iniciar 202 → curador → validador → planejador → validador → aprovação pelo site; chamada de modelo substituída explicitamente no teste');
   checked.push('T4.1: repetição não duplica chamada; pendência localizada permite plano independente; consulta periódica para na revisão e conserva comentário em edição');
+  checked.push('Esclarecimentos: resposta literal preserva originais, comentário e outra resposta digitada; plano antigo não aceita aprovação e texto pendente impede retomada');
+  checked.push('Esclarecimentos: resposta concorrente preserva cópia local; retomada explícita mantém IDs, cria revisões 2 validadas, incorpora fontes das respostas e exige nova aprovação');
 
   const cancelledId = await createDraft('Preparação cancelada pelo site');
   const callsBefore = preparationCalls.length;
@@ -588,17 +674,17 @@ try {
   assert.equal((await api(context, '/api/runs', owner.id)).items.length, 2);
   const storedAttempt = await page.evaluate(id => JSON.parse(sessionStorage.getItem(`akcit.intake.v1:${id}`)), owner.id);
   assert.deepEqual(storedAttempt, { accountId: owner.id, key: sent[0].key, body: sent[0].body });
-  assert.equal(await page.getByLabel('Histórias de usuário e critérios de aceite', { exact: true }).inputValue(), pendingText);
+  assert.equal(await page.getByLabel('Material de requisitos', { exact: true }).inputValue(), pendingText);
   assert.equal(await page.getByLabel('Nome da execução', { exact: true }).isEditable(), false);
   await page.reload();
   await visible(page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }));
-  assert.equal(await page.getByLabel('Histórias de usuário e critérios de aceite', { exact: true }).inputValue(), pendingText);
+  assert.equal(await page.getByLabel('Material de requisitos', { exact: true }).inputValue(), pendingText);
   clock += 8 * 60 * 60 * 1000 + 1;
   await page.reload();
   await page.waitForURL('**/acesso*');
   assert.ok(!(await page.locator('body').innerText()).includes(pendingText));
   await login(accounts[1]);
-  assert.equal(await page.getByLabel('Histórias de usuário e critérios de aceite', { exact: true }).inputValue(), '');
+  assert.equal(await page.getByLabel('Material de requisitos', { exact: true }).inputValue(), '');
   assert.equal(await page.getByLabel('Nome da execução', { exact: true }).inputValue(), '');
   assert.equal(await page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }).count(), 0);
   assert.deepEqual(await page.evaluate(id => JSON.parse(sessionStorage.getItem(`akcit.intake.v1:${id}`)), owner.id), storedAttempt);
@@ -607,7 +693,7 @@ try {
   await page.waitForURL('**/acesso*');
   await login(accounts[0]);
   await visible(page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }));
-  assert.equal(await page.getByLabel('Histórias de usuário e critérios de aceite', { exact: true }).inputValue(), pendingText);
+  assert.equal(await page.getByLabel('Material de requisitos', { exact: true }).inputValue(), pendingText);
   await page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }).click();
   await page.waitForURL(url => /^\/execucoes\/run-/.test(url.pathname));
   // A URL muda antes de o novo documento confirmar a sessão e carregar o detalhe.
@@ -643,7 +729,7 @@ try {
   assert.ok(!(await page.locator('body').innerText()).includes(name));
   assert.equal((await context.request.get(`/api/runs/${draftId}`, { headers: { 'X-Expected-User-Id': other.id } })).status(), 404);
   await page.goto('/execucoes/nova');
-  assert.equal(await page.getByLabel('Histórias de usuário e critérios de aceite', { exact: true }).inputValue(), '');
+  assert.equal(await page.getByLabel('Material de requisitos', { exact: true }).inputValue(), '');
   await page.getByRole('button', { name: 'Sair', exact: true }).click();
   await page.waitForURL('**/acesso*');
   await login(accounts[0]);
@@ -783,11 +869,11 @@ try {
   checked.push('navegação por Tab entre campos com foco visível');
   const beforeOversize = creationCount;
   const oversized = 'á'.repeat(8200);
-  await page.getByLabel('Histórias de usuário e critérios de aceite', { exact: true }).fill(oversized);
+  await page.getByLabel('Material de requisitos', { exact: true }).fill(oversized);
   await page.getByRole('button', { name: 'Salvar rascunho', exact: true }).click();
   await bodyIncludes(/JSON completo excede 16 KiB/i);
   assert.equal(creationCount, beforeOversize, 'JSON acima de 16 KiB não deve ser enviado.');
-  assert.equal(await page.getByLabel('Histórias de usuário e critérios de aceite', { exact: true }).inputValue(), oversized);
+  assert.equal(await page.getByLabel('Material de requisitos', { exact: true }).inputValue(), oversized);
   checked.push('limite do JSON em bytes bloqueia o envio e preserva o preenchimento');
   await fillRun('Armazenamento indisponível', 'US-04: Preservar o formulário.\nCA-04: Sem storage, não enviar.');
   await page.evaluate(() => {

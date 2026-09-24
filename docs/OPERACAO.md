@@ -91,7 +91,9 @@ Cada execução fica em `DATA_DIR/runs/<runId>.json`, com o registro completo e 
 histórico de intenções de trabalho autorizado. A entrada textual de T3.3 fica em
 `run.artifacts[].text`, preservada literalmente, com referência em
 `run.input.artifactIds`; `run.creation.requestHash` permite repetir a criação.
-Esses dados usam o volume existente, sem diretório ou índice adicional.
+Respostas de esclarecimento ficam em `run.answers`, com texto citável separado
+em `run.answerArtifacts`; os originais não são substituídos. Esses dados usam
+o volume existente, sem diretório ou índice adicional.
 Os diretórios usam modo `0700` e
 os arquivos, `0600`; credenciais permanecem referências, sem segredos no JSON.
 Esses arquivos já integram o backup do volume descrito acima. Restaurar uma cópia
@@ -272,7 +274,8 @@ separadamente. No ambiente pelo túnel, abra sua origem configurada seguida de
 `/acesso`; a porta do navegador pode diferir da porta interna do container.
 
 Em “Nova execução”, preencha nome, aplicação, objetivo opcional e texto das
-histórias de usuário e critérios de aceite. “Salvar rascunho” persiste a entrada
+requisitos: US/CA, prosa, requisitos funcionais ou Gherkin textual opcional.
+“Salvar rascunho” persiste a entrada
 e abre o detalhe. O rascunho informa que o processamento ainda não começou.
 O histórico permite busca, filtro por situação e reabertura após recarregar ou
 entrar novamente. Quando o armazenamento já contém um plano, o detalhe mostra
@@ -281,8 +284,9 @@ reconsultadas depois de salvas. Aprovar o plano mantém a espera.
 
 Os nomes têm limite de 120 caracteres, o objetivo de 2.000, e **todo o JSON de
 entrada** de 16 KiB UTF-8. Não há upload ou campo de credenciais neste formulário.
-Texto de US/CA é preservado como digitado. O detalhe não devolve originais completos
-ou board; T4.1 acrescenta as perguntas, progresso e preparação descritos abaixo.
+O texto é preservado como digitado. O detalhe não devolve originais completos;
+a preparação apresenta curadoria, regras, exemplos, perguntas e progresso.
+O ajuste de 24/09 acrescenta resposta e retomada explícitas descritas abaixo.
 
 Antes de enviar, a interface guarda em `sessionStorage` a chave UUID v4, o corpo
 exato e o ID da conta. Se a resposta se perder, use “Tentar confirmar salvamento”
@@ -573,13 +577,47 @@ rascunho só começa após o encerramento liberar o ambiente; não há fila. Rep
 `/start` retorna o processamento existente, sem reiniciar execução encerrada ou
 seu orçamento. Após reinício, trabalho ativo fica interrompido, sem retomada.
 
-Até dez US, três produções/revisões automáticas por saída, duas tentativas técnicas
-do validador por revisão, 120 segundos por chamada e 45 minutos ativos. Perguntas
-bloqueiam seus dependentes; requisitos independentes podem compor o plano. Sem
-trabalho elegível, a execução aguarda informação e libera o ambiente. Resposta e
-retomada de perguntas, criação de casos, navegador e relatório não fazem parte
-de T4.1. Testes e smokes reproduzem limites e recusas sem inferência paga; os
-comandos de container e o fluxo de publicação anteriores permanecem aplicáveis.
+Até dez histórias/requisitos, três produções/revisões automáticas por saída em
+cada ciclo, duas tentativas técnicas do validador por revisão e 120 segundos por
+chamada. Os **45 minutos ativos são cumulativos na execução**, sem espera humana.
+Perguntas podem bloquear apenas uma regra da mesma história; o restante
+independente continua. Sem trabalho elegível, a execução aguarda informação e
+libera o ambiente. Criação de casos, navegador e relatório permanecem pendentes.
+Os comandos de container e o fluxo de publicação anteriores continuam aplicáveis.
+
+### Responder e retomar a preparação
+
+1. Abra a execução e confira a pergunta, seus requisitos/regras e a revisão.
+   Escreva a decisão de negócio e salve a resposta (até 4.000 caracteres). A API
+   recebe `{outputId, outputRevision, questionId, text}`, referentes à curadoria.
+   O original permanece intacto; a resposta ganha autor, horário e fonte própria.
+2. Confira a resposta salva. O estado muda para `awaiting_input/curation` e o plano
+   anterior deixa de autorizar avanço. Use a ação de **retomar a preparação**
+   quando estiver disponível; salvar respostas não chama os modelos. Ambiente
+   ocupado ou configuração indisponível preserva a resposta para nova tentativa.
+3. Acompanhe curadoria e plano revistos, com validações independentes. Confira
+   se a resposta realmente resolveu a dúvida, compare a nova cobertura e aprove
+   a nova versão somente após revisão humana. A aprovação anterior fica no
+   histórico e não libera essa versão. Aprovar ainda não inicia criação de casos.
+
+Repetir o envio da mesma pergunta/revisão com o mesmo texto não duplica o registro.
+Texto diferente nessa referência é recusado com `ANSWER_CONFLICT`; não se edita
+uma resposta salva neste recorte. Se a pergunta mudou, reconsulte a nova revisão
+antes de responder. Uma resposta insuficiente pode gerar pergunta na revisão
+seguinte. `/resume` exige resposta nova ainda não consumida e não reinicia execução
+cancelada, interrompida ou com erro. Reinício do serviço não retoma automaticamente.
+
+A retomada abre novo ciclo limitado de produção, conserva as chamadas anteriores,
+mesmos IDs e revisões crescentes. Não zera os 45 minutos acumulados; esgotado o
+limite, a retomada é recusada. O estado persistido informa o motivo.
+
+Não há requisito de Gherkin: faltando esse formato, os agentes trabalham com o
+comportamento descrito. Cenários novos pertencem à etapa futura de casos. Não há
+upload, parser completo de `.feature` nem executor Cucumber neste ajuste.
+A avaliação das skills e seus limites estão em
+[ajuste de entradas](evidencias/ajuste-entradas/README.md); a demonstração limpa
+anterior de [T4.1](evidencias/t4.1/README.md) permanece como registro histórico,
+sem comprovar por si só a versão atual das skills.
 
 ## Referências
 

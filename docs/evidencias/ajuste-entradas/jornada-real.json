@@ -1,0 +1,709 @@
+{
+  "synthetic": true,
+  "build": "Build intermediária desta alteração sobre 638ab7d; jornada antes dos últimos ajustes técnicos de metadados/limites, cobertos pelos testes automatizados finais.",
+  "transport": "Rascunho pela API; início, resposta e retomada pelo site; modelos reais via Pi sem substituições.",
+  "runId": "run-570398618fd36cd3377864c2cd420d2571c326023db02d31396e8c630c4bdf2e",
+  "status": "awaiting_approval",
+  "phase": "planning",
+  "artifacts": [
+    {
+      "id": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+      "name": "historias-e-criterios.txt",
+      "version": "1",
+      "text": "US-01: Como visitante, quero enviar uma avaliação.\nCA-01: A nota deve ser um número inteiro de 1 a 5, inclusive. Fora desse intervalo ou se não inteira, recusar a avaliação.\nCA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido."
+    }
+  ],
+  "answerArtifacts": [
+    {
+      "id": "f8c4bf44-d81c-42b8-afb4-ed3013ebf77e",
+      "name": "resposta-Q-01-e6546db1-ae99-45c0-8d3d-aeaa848f54a1.txt",
+      "version": "1",
+      "text": "O comentário continua opcional. Quando informado, deve ter no máximo 500 caracteres, contados como pontos de código Unicode. Se exceder 500 caracteres, recusar a avaliação inteira e mostrar “Comentário muito longo”, sem salvá-la."
+    }
+  ],
+  "answers": [
+    {
+      "id": "e6546db1-ae99-45c0-8d3d-aeaa848f54a1",
+      "revision": 1,
+      "outputId": "4f6e9d5f-866d-41db-ae6b-074886192d06",
+      "outputRevision": 1,
+      "questionId": "Q-01",
+      "text": "O comentário continua opcional. Quando informado, deve ter no máximo 500 caracteres, contados como pontos de código Unicode. Se exceder 500 caracteres, recusar a avaliação inteira e mostrar “Comentário muito longo”, sem salvá-la.",
+      "artifactId": "f8c4bf44-d81c-42b8-afb4-ed3013ebf77e",
+      "at": "2026-09-24T16:58:31.799Z"
+    }
+  ],
+  "outputs": [
+    {
+      "id": "4f6e9d5f-866d-41db-ae6b-074886192d06",
+      "phase": "curation",
+      "revision": 1,
+      "producer": "artifact-curator",
+      "createdAt": "2026-09-24T16:57:18.889Z",
+      "budgetCycleId": "b16839c2-76dd-40e3-a649-345cb374bb59",
+      "dependsOn": [],
+      "answerRefs": [],
+      "payload": {
+        "requirements": [
+          {
+            "id": "US-01",
+            "statement": "Como visitante, quero enviar uma avaliação.",
+            "sources": [
+              {
+                "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+                "locator": "L1",
+                "quote": "US-01: Como visitante, quero enviar uma avaliação."
+              }
+            ],
+            "rules": [
+              {
+                "id": "CA-01",
+                "statement": "A nota deve ser um número inteiro de 1 a 5, inclusive. Recusar a avaliação se a nota estiver fora desse intervalo ou não for inteira.",
+                "sources": [
+                  {
+                    "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+                    "locator": "L2",
+                    "quote": "CA-01: A nota deve ser um número inteiro de 1 a 5, inclusive. Fora desse intervalo ou se não inteira, recusar a avaliação."
+                  }
+                ],
+                "kind": "rule"
+              },
+              {
+                "id": "CA-02",
+                "statement": "O comentário é opcional.",
+                "sources": [
+                  {
+                    "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+                    "locator": "L3",
+                    "quote": "CA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido."
+                  }
+                ],
+                "kind": "rule"
+              },
+              {
+                "id": "CA-03",
+                "statement": "Se informado, o comentário deve respeitar um limite máximo de caracteres, cujo valor ainda precisa ser decidido.",
+                "sources": [
+                  {
+                    "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+                    "locator": "L3",
+                    "quote": "CA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido."
+                  }
+                ],
+                "kind": "rule"
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "id": "Q-01",
+            "description": "Qual é o limite máximo de caracteres do comentário e qual deve ser o comportamento quando ele for excedido? O trecho afirma que esse limite ainda precisa ser decidido; essas decisões são necessárias para planejar a validação do tamanho, sem bloquear a opcionalidade do comentário ou a validação da nota.",
+            "requirementIds": [
+              "US-01"
+            ],
+            "caseIds": [],
+            "blocking": true,
+            "sources": [
+              {
+                "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+                "locator": "L3",
+                "quote": "CA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido."
+              }
+            ],
+            "ruleIds": [
+              "CA-03"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "d791d315-ab4d-4891-9090-a68b714e3eaa",
+      "phase": "planning",
+      "revision": 1,
+      "producer": "test-designer",
+      "createdAt": "2026-09-24T16:57:43.047Z",
+      "budgetCycleId": "b16839c2-76dd-40e3-a649-345cb374bb59",
+      "dependsOn": [
+        {
+          "outputId": "4f6e9d5f-866d-41db-ae6b-074886192d06",
+          "revision": 1
+        }
+      ],
+      "answerRefs": [],
+      "payload": {
+        "testPlan": {
+          "objective": "Validar a nota da avaliação enviada por visitante e garantir que a ausência de comentário não impeça o envio.",
+          "requirementIds": [
+            "US-01"
+          ],
+          "ruleIds": [
+            "CA-01",
+            "CA-02"
+          ],
+          "priorities": [
+            {
+              "ruleId": "CA-01",
+              "reason": "Evitar avaliações com notas inválidas e preservar a aceitação dos extremos permitidos."
+            },
+            {
+              "ruleId": "CA-02",
+              "reason": "Evitar que um campo opcional impeça o visitante de enviar uma avaliação válida."
+            }
+          ],
+          "exclusions": [
+            {
+              "description": "CA-03: validação do tamanho do comentário, pendente de Q-01.",
+              "reason": "O limite máximo e o comportamento ao excedê-lo ainda não foram definidos; a pendência não bloqueia CA-01 nem CA-02."
+            }
+          ],
+          "approach": [
+            "CA-01: aplicar partições de equivalência para notas inteiras no intervalo permitido, inteiras fora dele e notas não inteiras; verificar admissibilidade das primeiras e recusa da avaliação nas demais.",
+            "CA-01: aplicar análise de valores limite aos extremos inclusivos de 1 a 5 e aos inteiros imediatamente externos, sem presumir regras para entradas ausentes ou não numéricas.",
+            "CA-02: verificar o envio com nota válida e comentário ausente, isolando a opcionalidade da validação de tamanho ainda pendente."
+          ],
+          "preconditions": [
+            "Funcionalidade de envio de avaliação disponível para um visitante no ambiente de teste."
+          ],
+          "sources": [
+            {
+              "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+              "locator": "L1",
+              "quote": "US-01: Como visitante, quero enviar uma avaliação."
+            },
+            {
+              "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+              "locator": "L2",
+              "quote": "CA-01: A nota deve ser um número inteiro de 1 a 5, inclusive. Fora desse intervalo ou se não inteira, recusar a avaliação."
+            },
+            {
+              "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+              "locator": "L3",
+              "quote": "CA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "4f6e9d5f-866d-41db-ae6b-074886192d06",
+      "phase": "curation",
+      "revision": 2,
+      "producer": "artifact-curator",
+      "createdAt": "2026-09-24T16:59:04.130Z",
+      "budgetCycleId": "28670a0a-1fdf-40f2-a781-2f3e9e81a717",
+      "dependsOn": [],
+      "answerRefs": [
+        {
+          "answerId": "e6546db1-ae99-45c0-8d3d-aeaa848f54a1",
+          "questionId": "Q-01",
+          "revision": 1
+        }
+      ],
+      "payload": {
+        "requirements": [
+          {
+            "id": "US-01",
+            "statement": "Como visitante, quero enviar uma avaliação.",
+            "sources": [
+              {
+                "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+                "locator": "L1",
+                "quote": "US-01: Como visitante, quero enviar uma avaliação."
+              }
+            ],
+            "rules": [
+              {
+                "id": "CA-01",
+                "statement": "A nota deve ser um número inteiro de 1 a 5, inclusive. Recusar a avaliação se a nota estiver fora desse intervalo ou não for inteira.",
+                "sources": [
+                  {
+                    "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+                    "locator": "L2",
+                    "quote": "CA-01: A nota deve ser um número inteiro de 1 a 5, inclusive. Fora desse intervalo ou se não inteira, recusar a avaliação."
+                  }
+                ],
+                "kind": "rule"
+              },
+              {
+                "id": "CA-02",
+                "statement": "O comentário é opcional.",
+                "sources": [
+                  {
+                    "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+                    "locator": "L3",
+                    "quote": "CA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido."
+                  },
+                  {
+                    "artifactId": "f8c4bf44-d81c-42b8-afb4-ed3013ebf77e",
+                    "locator": "L1",
+                    "quote": "O comentário continua opcional."
+                  }
+                ],
+                "kind": "rule"
+              },
+              {
+                "id": "CA-03",
+                "statement": "Quando informado, o comentário deve ter no máximo 500 caracteres, contados como pontos de código Unicode. Se exceder 500 caracteres, recusar a avaliação inteira e mostrar “Comentário muito longo”, sem salvá-la.",
+                "sources": [
+                  {
+                    "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+                    "locator": "L3",
+                    "quote": "CA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido."
+                  },
+                  {
+                    "artifactId": "f8c4bf44-d81c-42b8-afb4-ed3013ebf77e",
+                    "locator": "L1",
+                    "quote": "O comentário continua opcional. Quando informado, deve ter no máximo 500 caracteres, contados como pontos de código Unicode. Se exceder 500 caracteres, recusar a avaliação inteira e mostrar “Comentário muito longo”, sem salvá-la."
+                  }
+                ],
+                "kind": "rule"
+              }
+            ]
+          }
+        ],
+        "questions": []
+      }
+    },
+    {
+      "id": "d791d315-ab4d-4891-9090-a68b714e3eaa",
+      "phase": "planning",
+      "revision": 2,
+      "producer": "test-designer",
+      "createdAt": "2026-09-24T16:59:35.136Z",
+      "budgetCycleId": "28670a0a-1fdf-40f2-a781-2f3e9e81a717",
+      "dependsOn": [
+        {
+          "outputId": "4f6e9d5f-866d-41db-ae6b-074886192d06",
+          "revision": 2
+        }
+      ],
+      "answerRefs": [
+        {
+          "answerId": "e6546db1-ae99-45c0-8d3d-aeaa848f54a1",
+          "questionId": "Q-01",
+          "revision": 1
+        }
+      ],
+      "payload": {
+        "testPlan": {
+          "objective": "Validar o envio de avaliações por visitantes, garantindo nota válida, comentário opcional e recusa integral de comentários acima do limite definido.",
+          "requirementIds": [
+            "US-01"
+          ],
+          "ruleIds": [
+            "CA-01",
+            "CA-02",
+            "CA-03"
+          ],
+          "priorities": [
+            {
+              "ruleId": "CA-01",
+              "reason": "Impedir notas inválidas sem rejeitar os extremos permitidos."
+            },
+            {
+              "ruleId": "CA-03",
+              "reason": "Evitar salvamento de avaliações recusadas e erros de contagem Unicode no limite do comentário."
+            },
+            {
+              "ruleId": "CA-02",
+              "reason": "Garantir que um campo opcional não impeça o envio válido."
+            }
+          ],
+          "exclusions": [
+            {
+              "description": "CA-01: tratamento de nota ausente ou não numérica.",
+              "reason": "O material não define resultados específicos para essas entradas."
+            }
+          ],
+          "approach": [
+            "CA-01: aplicar partições de equivalência para notas inteiras permitidas, inteiras fora do intervalo e números não inteiros; verificar aceitação ou recusa conforme a regra.",
+            "CA-01: aplicar análise de valores limite aos extremos inclusivos de 1 a 5 e aos inteiros imediatamente externos.",
+            "CA-02: verificar envio com nota válida sem comentário e com comentário permitido.",
+            "CA-03: aplicar partições de comprimento permitido e excedido, com análise do limite de 500 pontos de código Unicode e comprimentos imediatamente adjacentes, mantendo a nota válida para isolar o comportamento.",
+            "CA-03: verificar a contagem por pontos de código Unicode, distinguindo-a de bytes, unidades UTF-16 e caracteres visualmente percebidos.",
+            "CA-03: verificar que exceder o limite recusa a avaliação inteira, apresenta exatamente “Comentário muito longo” e não salva a avaliação. A resposta à Q-01 resolve a pendência anterior."
+          ],
+          "preconditions": [
+            "Funcionalidade de envio de avaliação disponível para visitante no ambiente de teste.",
+            "Meio de consultar as avaliações persistidas para verificar a ausência de salvamento após recusa."
+          ],
+          "sources": [
+            {
+              "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+              "locator": "L1",
+              "quote": "US-01: Como visitante, quero enviar uma avaliação."
+            },
+            {
+              "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+              "locator": "L2",
+              "quote": "CA-01: A nota deve ser um número inteiro de 1 a 5, inclusive. Fora desse intervalo ou se não inteira, recusar a avaliação."
+            },
+            {
+              "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+              "locator": "L3",
+              "quote": "CA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido."
+            },
+            {
+              "artifactId": "f8c4bf44-d81c-42b8-afb4-ed3013ebf77e",
+              "locator": "L1",
+              "quote": "O comentário continua opcional. Quando informado, deve ter no máximo 500 caracteres, contados como pontos de código Unicode. Se exceder 500 caracteres, recusar a avaliação inteira e mostrar “Comentário muito longo”, sem salvá-la."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "d791d315-ab4d-4891-9090-a68b714e3eaa",
+      "phase": "planning",
+      "revision": 3,
+      "producer": "test-designer",
+      "createdAt": "2026-09-24T17:00:09.116Z",
+      "budgetCycleId": "28670a0a-1fdf-40f2-a781-2f3e9e81a717",
+      "dependsOn": [
+        {
+          "outputId": "4f6e9d5f-866d-41db-ae6b-074886192d06",
+          "revision": 2
+        }
+      ],
+      "answerRefs": [
+        {
+          "answerId": "e6546db1-ae99-45c0-8d3d-aeaa848f54a1",
+          "questionId": "Q-01",
+          "revision": 1
+        }
+      ],
+      "payload": {
+        "testPlan": {
+          "objective": "Validar o envio de avaliações por visitantes, cobrindo validade da nota, opcionalidade do comentário e recusa integral quando seu limite for excedido.",
+          "requirementIds": [
+            "US-01"
+          ],
+          "ruleIds": [
+            "CA-01",
+            "CA-02",
+            "CA-03"
+          ],
+          "priorities": [
+            {
+              "ruleId": "CA-01",
+              "reason": "Impedir avaliações com notas inválidas, incluindo entradas não numéricas, sem rejeitar os extremos permitidos."
+            },
+            {
+              "ruleId": "CA-03",
+              "reason": "Evitar contagem Unicode incorreta e salvamento de avaliações cujo comentário exceda o limite."
+            },
+            {
+              "ruleId": "CA-02",
+              "reason": "Garantir que a ausência de comentário não impeça um envio válido."
+            }
+          ],
+          "exclusions": [],
+          "approach": [
+            "CA-01: aplicar partições de equivalência para notas inteiras permitidas, inteiras fora do intervalo, números não inteiros e entradas não numéricas; verificar aceitação ou recusa conforme a regra, sem exigir mensagem específica para notas inválidas.",
+            "CA-01: aplicar análise de valores limite aos extremos inclusivos de 1 a 5 e aos inteiros imediatamente externos.",
+            "CA-02: verificar envio com nota válida sem comentário e com comentário de comprimento permitido.",
+            "CA-03: aplicar partições de comprimento permitido e excedido, com análise do limite de 500 pontos de código Unicode e comprimentos imediatamente adjacentes, mantendo a nota válida para isolar o comportamento.",
+            "CA-03: verificar contagem por pontos de código Unicode, distinguindo-a de bytes, unidades UTF-16 e caracteres visualmente percebidos.",
+            "CA-03: verificar que exceder o limite recusa a avaliação inteira, apresenta “Comentário muito longo” e não salva a avaliação, conforme a resposta à Q-01, que resolveu a pendência."
+          ],
+          "preconditions": [
+            "Funcionalidade de envio de avaliação disponível para visitante no ambiente de teste.",
+            "Meio de consultar as avaliações persistidas para verificar a ausência de salvamento após recusa."
+          ],
+          "sources": [
+            {
+              "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+              "locator": "L1",
+              "quote": "US-01: Como visitante, quero enviar uma avaliação."
+            },
+            {
+              "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+              "locator": "L2",
+              "quote": "CA-01: A nota deve ser um número inteiro de 1 a 5, inclusive. Fora desse intervalo ou se não inteira, recusar a avaliação."
+            },
+            {
+              "artifactId": "47ce946d-e83f-4a3e-9538-3b90dc1010dd",
+              "locator": "L3",
+              "quote": "CA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido."
+            },
+            {
+              "artifactId": "f8c4bf44-d81c-42b8-afb4-ed3013ebf77e",
+              "locator": "L1",
+              "quote": "O comentário continua opcional. Quando informado, deve ter no máximo 500 caracteres, contados como pontos de código Unicode. Se exceder 500 caracteres, recusar a avaliação inteira e mostrar “Comentário muito longo”, sem salvá-la."
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "validations": [
+    {
+      "id": "35db9024-0d2b-4759-90b2-54a55928bc80",
+      "outputId": "4f6e9d5f-866d-41db-ae6b-074886192d06",
+      "outputRevision": 1,
+      "validator": "output-validator",
+      "at": "2026-09-24T16:57:22.716Z",
+      "attempt": 1,
+      "status": "approved",
+      "findings": [],
+      "reason": "A curadoria preserva as regras e suas fontes, separa a opcionalidade do comentário do limite indefinido e restringe o bloqueio à regra dependente dessa decisão."
+    },
+    {
+      "id": "0ff4b8d7-17cd-4a31-9f3f-01255dfd872e",
+      "outputId": "d791d315-ab4d-4891-9090-a68b714e3eaa",
+      "outputRevision": 1,
+      "validator": "output-validator",
+      "at": "2026-09-24T16:57:46.970Z",
+      "attempt": 1,
+      "status": "approved",
+      "findings": [],
+      "reason": "O plano cobre CA-01 e CA-02 com abordagem fiel às fontes e explicita a exclusão de CA-03 pela pendência Q-01, sem bloquear regras independentes nem inventar comportamentos."
+    },
+    {
+      "id": "b8d70ff6-438f-4151-86f7-1ca8082fd63b",
+      "outputId": "4f6e9d5f-866d-41db-ae6b-074886192d06",
+      "outputRevision": 2,
+      "validator": "output-validator",
+      "at": "2026-09-24T16:59:08.352Z",
+      "attempt": 1,
+      "status": "approved",
+      "findings": [],
+      "reason": "A curadoria preserva os comportamentos e as fontes originais e incorpora fielmente a resposta vinculada: limite de 500 pontos de código Unicode, recusa integral sem salvar e mensagem exata. A dúvida Q-01 foi resolvida."
+    },
+    {
+      "id": "2d016c1f-bf1f-465a-a814-bc2a19ecbbf6",
+      "outputId": "d791d315-ab4d-4891-9090-a68b714e3eaa",
+      "outputRevision": 2,
+      "validator": "output-validator",
+      "at": "2026-09-24T16:59:42.512Z",
+      "attempt": 1,
+      "status": "changes_requested",
+      "findings": [
+        {
+          "code": "COVERAGE_GAP",
+          "message": "A exclusão de notas não numéricas é justificada incorretamente: CA-01 exige um número inteiro de 1 a 5 e determina recusa se a nota não for inteira. Incluir a validação de entradas não numéricas na abordagem, sem exigir mensagem específica não definida nas fontes.",
+          "location": "testPlan.exclusions[0]"
+        }
+      ],
+      "reason": "O plano preserva as regras do comentário, mas exclui uma classe de notas inválidas já abrangida por CA-01."
+    },
+    {
+      "id": "2c7d5b71-a80f-49c8-991d-d133d1421976",
+      "outputId": "d791d315-ab4d-4891-9090-a68b714e3eaa",
+      "outputRevision": 3,
+      "validator": "output-validator",
+      "at": "2026-09-24T17:00:13.411Z",
+      "attempt": 1,
+      "status": "approved",
+      "findings": [],
+      "reason": "O plano cobre CA-01, CA-02 e CA-03 fielmente, incluindo notas não numéricas, limites e contagem Unicode, mensagem e ausência de salvamento. A resposta vinculada resolve Q-01; não há regras excluídas ou pendências omitidas."
+    }
+  ],
+  "approvals": [],
+  "activeMs": 144113,
+  "calls": [
+    {
+      "id": "04136335-a98b-4190-b544-f6aa7ac997c3",
+      "role": "artifact-curator",
+      "provider": "openai-codex",
+      "model": "gpt-6-astra",
+      "phase": "curation",
+      "attempt": 1,
+      "outputRevision": 1,
+      "startedAt": "2026-09-24T16:56:55.847Z",
+      "status": "completed",
+      "finishedAt": "2026-09-24T16:57:18.877Z",
+      "durationMs": 23030,
+      "usage": {
+        "input": 1698,
+        "output": 691,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 2389
+      }
+    },
+    {
+      "id": "cf165516-09f6-4468-a9a1-deac73a7b108",
+      "role": "output-validator",
+      "provider": "openai-codex",
+      "model": "gpt-6-astra",
+      "phase": "curation",
+      "attempt": 1,
+      "outputRevision": 1,
+      "startedAt": "2026-09-24T16:57:18.901Z",
+      "status": "completed",
+      "finishedAt": "2026-09-24T16:57:22.702Z",
+      "durationMs": 3801,
+      "usage": {
+        "input": 2019,
+        "output": 53,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 2072
+      }
+    },
+    {
+      "id": "83dca502-9402-470c-992b-4b7c2de55090",
+      "role": "test-designer",
+      "provider": "openai-codex",
+      "model": "gpt-6-astra",
+      "phase": "planning",
+      "attempt": 1,
+      "outputRevision": 1,
+      "startedAt": "2026-09-24T16:57:22.728Z",
+      "status": "completed",
+      "finishedAt": "2026-09-24T16:57:43.036Z",
+      "durationMs": 20308,
+      "usage": {
+        "input": 1811,
+        "output": 585,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 2396
+      }
+    },
+    {
+      "id": "4c9b18e4-1dd3-488a-ad5d-41af235ff159",
+      "role": "output-validator",
+      "provider": "openai-codex",
+      "model": "gpt-6-astra",
+      "phase": "planning",
+      "attempt": 1,
+      "outputRevision": 1,
+      "startedAt": "2026-09-24T16:57:43.058Z",
+      "status": "completed",
+      "finishedAt": "2026-09-24T16:57:46.960Z",
+      "durationMs": 3902,
+      "usage": {
+        "input": 2627,
+        "output": 59,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 2686
+      }
+    },
+    {
+      "id": "7e2b14ee-0a6d-42e5-9f3a-d7c98f5cfd43",
+      "role": "artifact-curator",
+      "provider": "openai-codex",
+      "model": "gpt-6-astra",
+      "phase": "curation",
+      "attempt": 1,
+      "outputRevision": 2,
+      "startedAt": "2026-09-24T16:58:40.465Z",
+      "status": "completed",
+      "finishedAt": "2026-09-24T16:59:04.120Z",
+      "durationMs": 23655,
+      "usage": {
+        "input": 2800,
+        "output": 673,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 3473
+      }
+    },
+    {
+      "id": "554a31ee-0186-4ba4-973f-1d45c35b544b",
+      "role": "output-validator",
+      "provider": "openai-codex",
+      "model": "gpt-6-astra",
+      "phase": "curation",
+      "attempt": 1,
+      "outputRevision": 2,
+      "startedAt": "2026-09-24T16:59:04.139Z",
+      "status": "completed",
+      "finishedAt": "2026-09-24T16:59:08.338Z",
+      "durationMs": 4199,
+      "usage": {
+        "input": 2665,
+        "output": 66,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 2731
+      }
+    },
+    {
+      "id": "8282954e-65a9-420b-bd79-8ffd77589bd7",
+      "role": "test-designer",
+      "provider": "openai-codex",
+      "model": "gpt-6-astra",
+      "phase": "planning",
+      "attempt": 1,
+      "outputRevision": 2,
+      "startedAt": "2026-09-24T16:59:08.362Z",
+      "status": "completed",
+      "finishedAt": "2026-09-24T16:59:35.120Z",
+      "durationMs": 26758,
+      "usage": {
+        "input": 2924,
+        "output": 813,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 3737
+      }
+    },
+    {
+      "id": "6cd27740-7d94-48ed-b14e-acba329aaa53",
+      "role": "output-validator",
+      "provider": "openai-codex",
+      "model": "gpt-6-astra",
+      "phase": "planning",
+      "attempt": 1,
+      "outputRevision": 2,
+      "startedAt": "2026-09-24T16:59:35.146Z",
+      "status": "completed",
+      "finishedAt": "2026-09-24T16:59:42.501Z",
+      "durationMs": 7355,
+      "usage": {
+        "input": 3523,
+        "output": 167,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 3690
+      }
+    },
+    {
+      "id": "cdd586be-fb24-4d65-8198-fab536741c1a",
+      "role": "test-designer",
+      "provider": "openai-codex",
+      "model": "gpt-6-astra",
+      "phase": "planning",
+      "attempt": 2,
+      "outputRevision": 3,
+      "startedAt": "2026-09-24T16:59:42.521Z",
+      "status": "completed",
+      "finishedAt": "2026-09-24T17:00:09.104Z",
+      "durationMs": 26583,
+      "usage": {
+        "input": 3286,
+        "output": 802,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 4088
+      }
+    },
+    {
+      "id": "dd3b5398-1676-4874-b46b-7fd92aa533fb",
+      "role": "output-validator",
+      "provider": "openai-codex",
+      "model": "gpt-6-astra",
+      "phase": "planning",
+      "attempt": 1,
+      "outputRevision": 3,
+      "startedAt": "2026-09-24T17:00:09.127Z",
+      "status": "completed",
+      "finishedAt": "2026-09-24T17:00:13.396Z",
+      "durationMs": 4269,
+      "usage": {
+        "input": 3726,
+        "output": 73,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 3799
+      }
+    }
+  ],
+  "actorRedaction": "Autoria da conta sintética omitida; registro privado preserva autor. Zero aprovações humanas."
+}

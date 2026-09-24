@@ -4,7 +4,7 @@ import { eligibleRequirements, InvalidPreparationOutput, parseCuration, parsePla
   type Artifact, type CurationPayload, type Verdict } from '../domain/preparation.js';
 import { executeSpecialistTask, preflightSpecialists, SpecialistError,
   type SpecialistTask, type SpecialistResult, type PreparationRole } from '../runtime/pi.js';
-import { RunStore, StorageError, type RunRecord, type RunOutput, type Preparation, type PreparationCall } from '../storage/runs.js';
+import { RunStore, StorageError, type RunRecord, type RunOutput, type Preparation, type PreparationCall, type PreparationAnswer } from '../storage/runs.js';
 
 export class PreparationError extends Error {
   constructor(readonly code: string, message: string, readonly status = 409) { super(message); }
@@ -40,6 +40,34 @@ function draft(run: RunRecord) {
   }
   originals(run);
 }
+export type AnswerRequest = { outputId: string; outputRevision: number; questionId: string; text: string };
+export function preparationAnswers(run: RunRecord): PreparationAnswer[] {
+  // Registros anteriores à coleta de respostas continuam legíveis, sem publicar campos livres.
+  return run.answerArtifacts ? run.answers.filter(answer => typeof answer.artifactId === 'string' &&
+    typeof answer.id === 'string' && typeof answer.outputId === 'string') as PreparationAnswer[] : [];
+}
+export function pendingPreparationAnswers(run: RunRecord): PreparationAnswer[] {
+  return preparationAnswers(run).filter(answer => !run.preparation?.consumedAnswerIds?.includes(answer.id));
+}
+function latestOutput(run: RunRecord, phase: string): RunOutput | undefined {
+  const versions = run.outputs.filter(output => output.phase === phase);
+  if (new Set(versions.map(output => output.id)).size > 1 ||
+    new Set(versions.map(output => output.revision)).size !== versions.length ||
+    versions.some(output => !Number.isSafeInteger(output.revision) || output.revision < 1)) {
+    throw new StorageError('AMBIGUOUS_RECORD');
+  }
+  return versions.reduce<RunOutput | undefined>((last, output) =>
+    !last || output.revision > last.revision ? output : last, undefined);
+}
+export function canResumePreparation(run: RunRecord): boolean {
+  return !!run.preparation && run.status === 'awaiting_input' && run.phase === 'curation' && pendingPreparationAnswers(run).length > 0;
+}
+function freezeActiveTime(preparation: Preparation, now: number) {
+  if (preparation.finishedAt === null) preparation.accumulatedActiveMs = (preparation.accumulatedActiveMs ?? 0) +
+    Math.max(0, now - Date.parse(preparation.startedAt));
+  else if (preparation.accumulatedActiveMs === undefined) preparation.accumulatedActiveMs =
+    Math.max(0, Date.parse(preparation.finishedAt) - Date.parse(preparation.startedAt));
+}
 type Active = { runId: string; id: string; controller: AbortController; done: Promise<void> };
 
 /** ponytail: um coordenador por aplicação/processo, sem fila de trabalhos;
@@ -62,16 +90,65 @@ export class PreparationCoordinator {
   private time() { return new Date(this.now()).toISOString(); }
 
   start(runId: string, userId: string): Promise<{ accepted: boolean }> {
-    const result = this.starts.then(() => this.accept(runId, userId));
+    const result = this.starts.then(() => this.accept(runId, userId, false));
     this.starts = result.catch(() => {});
     return result;
   }
-  private async accept(runId: string, userId: string): Promise<{ accepted: boolean }> {
+  resume(runId: string, userId: string): Promise<{ accepted: boolean }> {
+    const result = this.starts.then(() => this.accept(runId, userId, true));
+    this.starts = result.catch(() => {});
+    return result;
+  }
+  async answer(runId: string, userId: string, request: AnswerRequest): Promise<void> {
+    if (typeof request.outputId !== 'string' || !request.outputId || !Number.isSafeInteger(request.outputRevision) ||
+      request.outputRevision < 1 || typeof request.questionId !== 'string' || !request.questionId ||
+      typeof request.text !== 'string' || !request.text.trim() || [...request.text].length > 4000) {
+      throw new PreparationError('INVALID_INPUT', 'Informe uma resposta de até 4000 caracteres para a versão da pergunta.', 400);
+    }
+    await this.store.update(runId, ({ run }) => {
+      authorize(run, userId);
+      if (!run.preparation || !(['awaiting_input', 'awaiting_approval'].includes(run.status)) ||
+        !['curation', 'planning'].includes(run.phase)) {
+        throw new PreparationError('INVALID_STATE', 'Respostas só podem ser registradas durante a revisão da preparação.');
+      }
+      const curation = latestOutput(run, 'curation');
+      if (!curation || curation.id !== request.outputId || curation.revision !== request.outputRevision) {
+        throw new PreparationError('STALE_VERSION', 'A versão da pergunta mudou. Consulte a curadoria atual.');
+      }
+      const question = (curation.payload as CurationPayload).questions.find(item => item.id === request.questionId);
+      if (!question) throw new PreparationError('QUESTION_NOT_FOUND', 'Pergunta não encontrada nesta versão.', 404);
+      const previous = preparationAnswers(run).find(answer => answer.outputId === request.outputId &&
+        answer.outputRevision === request.outputRevision && answer.questionId === request.questionId);
+      if (previous) {
+        if (previous.text !== request.text) throw new PreparationError('ANSWER_CONFLICT', 'Esta pergunta já recebeu outra resposta nesta versão.');
+        return { save: false, value: undefined };
+      }
+      const id = randomUUID(), artifactId = randomUUID();
+      const answer: PreparationAnswer = { id, revision: 1, ...request, artifactId, actorId: userId, at: this.time() };
+      run.answers.push(answer);
+      run.answerArtifacts = [...(run.answerArtifacts ?? []), { id: artifactId,
+        name: `resposta-${request.questionId}-${id}.txt`, version: '1', text: request.text }];
+      // A informação nova invalida a aprovação anterior imediatamente, antes de qualquer chamada paga.
+      run.status = 'awaiting_input'; run.phase = 'curation';
+      run.preparation.stopReason = { code: 'ANSWERS_PENDING', message: 'Resposta registrada. Retome a preparação para revisar a curadoria e o plano.' };
+      return { save: true, value: undefined };
+    });
+  }
+  private async accept(runId: string, userId: string, resume: boolean): Promise<{ accepted: boolean }> {
     const { run } = await this.store.read(runId);
     authorize(run, userId);
     // Repetição consulta o processamento original, inclusive após cancelamento/erro.
-    if (run.preparation) return { accepted: false };
-    draft(run);
+    if (!resume && run.preparation) return { accepted: false };
+    if (resume) {
+      if (run.status === 'running' && this.active?.runId === runId &&
+        run.budgetCycles.some(cycle => cycle.id === run.preparation?.budgetCycleId && cycle.reason === 'user_answer')) return { accepted: false };
+      if (!canResumePreparation(run)) throw new PreparationError('INVALID_STATE', 'A retomada exige respostas novas e preparação aguardando entrada.');
+      freezeActiveTime(run.preparation!, this.now());
+      if (run.preparation!.accumulatedActiveMs! >= run.preparation!.limits.activeMs) {
+        throw new PreparationError('ACTIVE_LIMIT', 'O orçamento ativo desta execução foi esgotado.');
+      }
+      originals(run);
+    } else draft(run);
     let models: ReturnType<typeof resolvePreparationModels>;
     try { models = resolvePreparationModels(this.config); }
     catch { throw new PreparationError('MODEL_NOT_CONFIGURED', 'Configure PI_PROVIDER e PI_MODEL; substituições por papel exigem o par completo.', 503); }
@@ -86,16 +163,28 @@ export class PreparationCoordinator {
     try {
       await this.store.update(runId, ({ run: current }) => {
         authorize(current, userId);
-        draft(current);
+        if (resume) {
+          if (!canResumePreparation(current)) throw new PreparationError('INVALID_STATE', 'A preparação não está mais disponível para retomada.');
+          freezeActiveTime(current.preparation!, this.now());
+          if (current.preparation!.accumulatedActiveMs! >= current.preparation!.limits.activeMs) {
+            throw new PreparationError('ACTIVE_LIMIT', 'O orçamento ativo desta execução foi esgotado.');
+          }
+        } else draft(current);
+        const previous = current.preparation;
+        const newAnswers = pendingPreparationAnswers(current);
         const startedAt = this.time();
         const budgetCycleId = randomUUID();
         current.status = 'running'; current.phase = 'curation';
-        current.validationPolicy = { maxValidationRevisions: this.limits.maxRevisions,
-          maxValidatorAttempts: this.limits.maxValidatorAttempts, timeoutMs: this.limits.timeoutMs };
-        current.budgetCycles.push({ id: budgetCycleId, startedAt, reason: 'initial_preparation',
-          answerRef: null, affectedCaseIds: [], limits: { ...this.limits } });
+        const limits = previous?.limits ?? this.limits;
+        current.validationPolicy = { maxValidationRevisions: limits.maxRevisions,
+          maxValidatorAttempts: limits.maxValidatorAttempts, timeoutMs: limits.timeoutMs };
+        current.budgetCycles.push({ id: budgetCycleId, startedAt, reason: resume ? 'user_answer' : 'initial_preparation',
+          answerRef: null, ...(resume ? { answerRefs: newAnswers.map(answer => answer.id) } : {}),
+          affectedCaseIds: [], limits: { ...(previous?.limits ?? this.limits) } });
         current.preparation = { id: active.id, budgetCycleId, startedAt, finishedAt: null,
-          activeRole: 'artifact-curator', activity: 'curating', stopReason: null, limits: { ...this.limits }, calls: [] };
+          activeRole: 'artifact-curator', activity: 'curating', stopReason: null, limits: { ...(previous?.limits ?? this.limits) },
+          calls: previous?.calls ?? [], accumulatedActiveMs: previous?.accumulatedActiveMs ?? 0,
+          consumedAnswerIds: preparationAnswers(current).map(answer => answer.id) };
         return { save: true, value: undefined };
       });
       active.done = new Promise<void>(resolve => setImmediate(resolve))
@@ -119,6 +208,7 @@ export class PreparationCoordinator {
       }
       run.status = 'cancelled';
       if (run.preparation) {
+        freezeActiveTime(run.preparation, this.now());
         run.preparation.finishedAt = this.time();
         run.preparation.activeRole = null; run.preparation.activity = null;
         run.preparation.stopReason = { code: 'CANCELLED', message: 'Preparação cancelada pelo usuário.' };
@@ -141,7 +231,7 @@ export class PreparationCoordinator {
   private check(run: RunRecord, active: Active) {
     if (active.controller.signal.aborted) throw active.controller.signal.reason;
     if (run.status !== 'running' || run.preparation?.id !== active.id) throw stopped();
-    if (this.now() - Date.parse(run.preparation.startedAt) >= run.preparation.limits.activeMs) {
+    if ((run.preparation.accumulatedActiveMs ?? 0) + this.now() - Date.parse(run.preparation.startedAt) >= run.preparation.limits.activeMs) {
       throw new PreparationError('ACTIVE_LIMIT', 'O orçamento de 45 minutos de processamento ativo foi esgotado.');
     }
   }
@@ -155,6 +245,7 @@ export class PreparationCoordinator {
     await this.store.update(active.runId, ({ run }) => {
       if (run.status !== 'running' || run.preparation?.id !== active.id) return { save: false, value: undefined };
       run.status = status;
+      freezeActiveTime(run.preparation, this.now());
       run.preparation.finishedAt = this.time(); run.preparation.activeRole = null; run.preparation.activity = null;
       run.preparation.stopReason = reason;
       return { save: true, value: undefined };
@@ -166,18 +257,20 @@ export class PreparationCoordinator {
     const started = this.now();
     const call: PreparationCall = { id: randomUUID(), role, ...models[role], phase, attempt,
       outputRevision: revision, startedAt: this.time(), status: 'running' };
-    await this.update(active, run => {
+    const timeoutMs = await this.update(active, run => {
+      call.budgetCycleId = run.preparation!.budgetCycleId;
       run.phase = phase;
       run.preparation!.activeRole = role;
       run.preparation!.activity = role === 'output-validator' ? `validating_${phase}` :
         phase === 'curation' ? 'curating' : 'planning';
       run.preparation!.calls.push(call);
+      return run.preparation!.limits.timeoutMs;
     });
     const controller = new AbortController();
     const abort = () => controller.abort(active.controller.signal.reason);
     active.controller.signal.addEventListener('abort', abort, { once: true });
     if (active.controller.signal.aborted) abort();
-    const timeout = setTimeout(() => controller.abort(new PreparationError('TIMEOUT', 'A chamada excedeu o limite de tempo.')), this.limits.timeoutMs);
+    const timeout = setTimeout(() => controller.abort(new PreparationError('TIMEOUT', 'A chamada excedeu o limite de tempo.')), timeoutMs);
     let result: SpecialistResult | undefined;
     let failure: unknown;
     let failedMetadata: SpecialistResult['metadata'] | undefined;
@@ -186,7 +279,7 @@ export class PreparationCoordinator {
       if (controller.signal.aborted) throw controller.signal.reason;
       result = await this.modelCall({ role, model: models[role], prompt: JSON.stringify(input),
         ...(this.config.piAuthPath ? { authPath: this.config.piAuthPath } : {}),
-        signal: controller.signal, timeoutMs: this.limits.timeoutMs });
+        signal: controller.signal, timeoutMs });
       if (controller.signal.aborted) throw controller.signal.reason;
       payload = parse(result.payload);
     } catch (error) {
@@ -236,16 +329,20 @@ export class PreparationCoordinator {
       const initial = (await this.store.read(active.runId)).run;
       deadline = setTimeout(() => active.controller.abort(new PreparationError('ACTIVE_LIMIT',
         'O orçamento de processamento ativo foi esgotado.')), Math.max(1,
-        this.limits.activeMs - (this.now() - Date.parse(initial.preparation!.startedAt))));
+        initial.preparation!.limits.activeMs - (initial.preparation!.accumulatedActiveMs ?? 0) - (this.now() - Date.parse(initial.preparation!.startedAt))));
       this.check(initial, active);
-      const artifacts = originals(initial);
-      const common = { artifacts, objective: typeof initial.input.objective === 'string' ? initial.input.objective : '' };
+      const artifacts = [...originals(initial), ...(initial.answerArtifacts ?? []) as Artifact[]];
+      const answers = preparationAnswers(initial).map(answer => ({ ...answer,
+        question: (initial.outputs.find(output => output.id === answer.outputId && output.revision === answer.outputRevision)
+          ?.payload as CurationPayload | undefined)?.questions.find(question => question.id === answer.questionId),
+      }));
+      const common = { artifacts, answers, objective: typeof initial.input.objective === 'string' ? initial.input.objective : '' };
       const curation = await this.produce(active, models, 'curation', common, artifacts);
       if (!curation) return;
       const curated = curation.payload as CurationPayload;
       if (!eligibleRequirements(curated).length) {
         await this.finish(active, 'awaiting_input', { code: 'INSUFFICIENT_INFORMATION',
-          message: 'Falta informação para planejar requisitos independentes. Consulte as perguntas; resposta e retomada ainda não estão disponíveis.' });
+          message: 'Falta informação para planejar requisitos independentes. Responda às perguntas e retome a preparação.' });
         return;
       }
       const plan = await this.produce(active, models, 'planning', { ...common, approvedCuration: curation }, artifacts, curation);
@@ -259,10 +356,11 @@ export class PreparationCoordinator {
 
   private async produce(active: Active, models: ReturnType<typeof resolvePreparationModels>, phase: 'curation' | 'planning',
     common: Record<string, unknown>, artifacts: Artifact[], curation?: RunOutput): Promise<RunOutput | null> {
-    const id = randomUUID();
-    let previous: RunOutput | null = null;
+    const initial = (await this.store.read(active.runId)).run;
+    let previous: RunOutput | null = latestOutput(initial, phase) ?? null;
+    const id = previous?.id ?? randomUUID();
     let feedback: unknown = null;
-    for (let attempt = 1; attempt <= this.limits.maxRevisions; attempt++) {
+    for (let attempt = 1; attempt <= initial.preparation!.limits.maxRevisions; attempt++) {
       const revision = (previous?.revision ?? 0) + 1;
       let payload: Record<string, unknown>;
       try {
@@ -288,14 +386,15 @@ export class PreparationCoordinator {
         }
         const output: RunOutput = { id, phase, revision, producer: phase === 'curation' ? 'artifact-curator' : 'test-designer',
           createdAt: this.time(), budgetCycleId: run.preparation!.budgetCycleId,
-          dependsOn: curation ? [{ outputId: curation.id, revision: curation.revision }] : [], answerRefs: [], payload };
+          dependsOn: curation ? [{ outputId: curation.id, revision: curation.revision }] : [],
+          answerRefs: preparationAnswers(run).map(answer => ({ answerId: answer.id, questionId: answer.questionId, revision: answer.revision })), payload };
         run.outputs.push(output);
         if (phase === 'curation') run.questions = (payload as CurationPayload).questions;
         return output;
       });
       previous = output;
       let verdict: Verdict | undefined;
-      for (let validatorAttempt = 1; validatorAttempt <= this.limits.maxValidatorAttempts; validatorAttempt++) {
+      for (let validatorAttempt = 1; validatorAttempt <= initial.preparation!.limits.maxValidatorAttempts; validatorAttempt++) {
         try {
           const { run } = await this.store.read(active.runId);
           verdict = await this.call(active, models, 'output-validator', phase, validatorAttempt, revision,
@@ -314,7 +413,7 @@ export class PreparationCoordinator {
               validator: 'output-validator', at: this.time(), attempt: validatorAttempt, status: 'error',
               reason: reason.message, findings: [{ code: reason.code, message: reason.message, location: null }] });
           });
-          if (validatorAttempt === this.limits.maxValidatorAttempts) {
+          if (validatorAttempt === initial.preparation!.limits.maxValidatorAttempts) {
             if (reason.code === 'INVALID_MODEL_OUTPUT' || reason.code === 'INVALID_OUTPUT') {
               throw new PreparationError('VALIDATOR_LIMIT', 'O limite de tentativas técnicas do validador foi esgotado sem parecer válido.');
             }

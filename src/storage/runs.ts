@@ -10,14 +10,18 @@ export type RunOutput = JsonObject & {
   dependsOn: { outputId: string; revision: number }[];
   payload: JsonObject;
   producer?: string; createdAt?: string; budgetCycleId?: string;
-  answerRefs?: { questionId: string; revision: number }[];
+  answerRefs?: { questionId: string; revision: number; answerId?: string }[];
 };
 export type PreparationCall = {
   id: string; role: 'artifact-curator' | 'test-designer' | 'output-validator';
   provider: string; model: string; phase: 'curation' | 'planning'; attempt: number;
   outputRevision: number; startedAt: string; finishedAt?: string; durationMs?: number;
   status: 'running' | 'completed' | 'invalid' | 'error' | 'cancelled' | 'interrupted';
-  errorCode?: string; usage?: Record<string, number>; estimatedCost?: number;
+  budgetCycleId?: string; errorCode?: string; usage?: Record<string, number>; estimatedCost?: number;
+};
+export type PreparationAnswer = {
+  id: string; revision: number; outputId: string; outputRevision: number; questionId: string;
+  text: string; artifactId: string; actorId: string; at: string;
 };
 export type Preparation = {
   id: string; budgetCycleId: string; startedAt: string; finishedAt: string | null;
@@ -26,6 +30,9 @@ export type Preparation = {
   limits: { maxRequirements: number; maxRevisions: number; maxValidatorAttempts: number;
     timeoutMs: number; activeMs: number };
   calls: PreparationCall[];
+  // Tempo consumido em ciclos encerrados; espera por respostas não entra no limite.
+  accumulatedActiveMs?: number;
+  consumedAnswerIds?: string[];
 };
 export type RunValidation = PlanApprovalState['validations'][number] & {
   id?: string; at?: string; attempt?: number; reason?: string;
@@ -39,6 +46,7 @@ export type RunRecord = JsonObject & {
   approvals: PlanDecision[]; questions: JsonObject[]; answers: JsonObject[];
   validationPolicy: JsonObject; budgetCycles: JsonObject[];
   preparation?: Preparation;
+  answerArtifacts?: JsonObject[];
   creation?: { requestHash: string };
   interruptions?: Interruption[];
 };
@@ -99,6 +107,10 @@ function validPreparation(value: unknown): boolean {
     ![null, 'artifact-curator', 'test-designer', 'output-validator'].includes(value.activeRole as string | null) ||
     (value.activity !== null && typeof value.activity !== 'string') ||
     (value.stopReason !== null && (!object(value.stopReason) || !strings(value.stopReason, ['code', 'message']))) ||
+    (value.accumulatedActiveMs !== undefined && !nonnegative(value.accumulatedActiveMs)) ||
+    (value.consumedAnswerIds !== undefined && (!Array.isArray(value.consumedAnswerIds) ||
+      !value.consumedAnswerIds.every(id => typeof id === 'string' && !!id) ||
+      new Set(value.consumedAnswerIds).size !== value.consumedAnswerIds.length)) ||
     !object(value.limits) || !['maxRequirements', 'maxRevisions', 'maxValidatorAttempts', 'timeoutMs', 'activeMs']
       .every(key => positive((value.limits as JsonObject)[key])) ||
     Object.entries({ maxRequirements: 10, maxRevisions: 3, maxValidatorAttempts: 2, timeoutMs: 120000, activeMs: 2700000 })
@@ -110,6 +122,7 @@ function validPreparation(value: unknown): boolean {
     utc(call.startedAt) && (call.finishedAt === undefined || utc(call.finishedAt)) &&
     (call.durationMs === undefined || nonnegative(call.durationMs)) &&
     ['running', 'completed', 'invalid', 'error', 'cancelled', 'interrupted'].includes(call.status as string) &&
+    (call.budgetCycleId === undefined || (typeof call.budgetCycleId === 'string' && !!call.budgetCycleId)) &&
     (call.errorCode === undefined || typeof call.errorCode === 'string') &&
     (call.estimatedCost === undefined || nonnegative(call.estimatedCost)) &&
     (call.usage === undefined || (object(call.usage) && Object.keys(call.usage).every(key =>
@@ -140,7 +153,8 @@ function validate(record: unknown, runId: string): asserts record is StoredRun {
       (output.createdAt === undefined || utc(output.createdAt)) &&
       (output.budgetCycleId === undefined || (typeof output.budgetCycleId === 'string' && !!output.budgetCycleId)) &&
       (output.answerRefs === undefined || (objects(output.answerRefs) && output.answerRefs.every(ref =>
-        typeof ref.questionId === 'string' && !!ref.questionId && positive(ref.revision)))) &&
+        typeof ref.questionId === 'string' && !!ref.questionId && positive(ref.revision) &&
+        (ref.answerId === undefined || (typeof ref.answerId === 'string' && !!ref.answerId))))) &&
       object(output.payload) && objects(output.dependsOn) && output.dependsOn.every(ref =>
         typeof ref.outputId === 'string' && Number.isFinite(ref.revision))) ||
     !objects(run.validations) || !run.validations.every(verdict =>
@@ -157,10 +171,23 @@ function validate(record: unknown, runId: string): asserts record is StoredRun {
       Number.isFinite(decision.outputRevision)) ||
     (run.preparation !== undefined && (!validPreparation(run.preparation) ||
       !(run.budgetCycles as JsonObject[]).some(cycle => cycle.id === (run.preparation as JsonObject).budgetCycleId &&
-        utc(cycle.startedAt) && cycle.reason === 'initial_preparation' && cycle.answerRef === null &&
+        utc(cycle.startedAt) && ((cycle.reason === 'initial_preparation' && cycle.answerRef === null) ||
+          (cycle.reason === 'user_answer' && Array.isArray(cycle.answerRefs) && cycle.answerRefs.length > 0 &&
+            cycle.answerRefs.every(id => typeof id === 'string' && (run.answers as JsonObject[]).some(answer => answer.id === id)))) &&
         Array.isArray(cycle.affectedCaseIds) && cycle.affectedCaseIds.length === 0 && object(cycle.limits) &&
         Object.entries((run.preparation as JsonObject).limits as JsonObject).every(([key, value]) =>
           (cycle.limits as JsonObject)[key] === value)))) ||
+    (run.answerArtifacts !== undefined && (!objects(run.answerArtifacts) ||
+      !run.answerArtifacts.every(artifact => strings(artifact, ['id', 'name', 'version', 'text']) &&
+        !!artifact.id && !!artifact.name && artifact.version === '1' && !!(artifact.text as string).trim()) ||
+      new Set(run.answerArtifacts.map(artifact => artifact.id)).size !== run.answerArtifacts.length ||
+      !(run.answers as JsonObject[]).every(answer => answer.artifactId === undefined || (strings(answer,
+        ['id', 'outputId', 'questionId', 'text', 'artifactId', 'actorId']) && !!answer.id &&
+        answer.revision === 1 && positive(answer.outputRevision) && utc(answer.at) &&
+        !!(answer.text as string).trim() && [...answer.text as string].length <= 4000 &&
+        (run.answerArtifacts as JsonObject[]).some(artifact => artifact.id === answer.artifactId && artifact.text === answer.text))) ||
+      new Set((run.answers as JsonObject[]).filter(answer => answer.artifactId !== undefined).map(answer => answer.id)).size !==
+        (run.answers as JsonObject[]).filter(answer => answer.artifactId !== undefined).length)) ||
     (run.creation !== undefined && (!object(run.creation) ||
       typeof run.creation.requestHash !== 'string' || !/^[a-f0-9]{64}$/.test(run.creation.requestHash))) ||
     (run.interruptions !== undefined && (!Array.isArray(run.interruptions) || !run.interruptions.every(interruption))) ||
@@ -328,6 +355,8 @@ export class RunStore {
         record.run.status = 'interrupted';
         if (record.run.preparation) {
           const preparation = record.run.preparation;
+          preparation.accumulatedActiveMs = (preparation.accumulatedActiveMs ?? 0) +
+            Math.max(0, Date.parse(event.at) - Date.parse(preparation.startedAt));
           preparation.finishedAt = event.at;
           preparation.activeRole = null;
           preparation.activity = null;

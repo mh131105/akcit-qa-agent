@@ -1,8 +1,9 @@
 # Contratos de integração v1
 
 Base para implementar o [produto](PROTOTIPO.md), alinhada ao fluxo aprovado em
-23/09/2026. São contratos propostos; esta documentação não significa que as APIs ou
-agentes já estejam implementados. As seções de entregas implementadas delimitam
+23/09/2026, com ajuste de entradas e esclarecimentos em 24/09/2026. São contratos
+propostos; esta documentação não significa que todas as APIs ou agentes já estejam
+implementados. As seções de entregas implementadas delimitam
 o comportamento disponível. O [exemplo sintético](exemplos/execucao-demo.json)
 apoia os contratos e testes; a interface usa a API e não carrega exemplos.
 
@@ -10,7 +11,7 @@ apoia os contratos e testes; a interface usa a API e não carrega exemplos.
 
 ```mermaid
 flowchart TD
-    I[Conta, aplicação, US e CA] --> C[Curadoria]
+    I[Conta, aplicação e requisitos] --> C[Curadoria]
     C --> V1[Validador]
     V1 --> P[Plano de testes]
     P --> V2[Validador]
@@ -51,8 +52,9 @@ nosso site; o executor controla outro navegador, no ambiente de execução.
 O backend define `ownerId` e `actorId` pela sessão autenticada; não aceita outro
 proprietário ou autor indicado pelo cliente. IDs são estáveis dentro da execução.
 Referências devem existir. Registros usam UTC;
-a interface apresenta horário local. `requirement` corresponde à US e `rule` ao CA
-ou regra complementar com origem. Esses nomes são mantidos para facilitar integração.
+a interface apresenta horário local. `requirement` representa uma história ou requisito;
+`rule` representa um comportamento geral ou exemplo pontual identificado por `kind`.
+Os nomes internos são mantidos; não exigem um template de US/CA na entrada.
 
 | Objeto | Campos essenciais |
 | --- | --- |
@@ -60,12 +62,13 @@ ou regra complementar com origem. Esses nomes são mantidos para facilitar integ
 | Entrada (`input`) | `startUrl`, `credentialRef`, `accessProfile`, `dataPreparation`, `authorizedTarget`, `objective`, `artifactIds` |
 | Artefato (`artifact`) | `id`, `name`, `version`, `text`; original preservado pelo backend |
 | Origem (`source`) | `artifactId`, `locator`, `quote` |
-| US (`requirement`) | `id`, `statement`, `rules`, `sources` |
-| CA/regra (`rule`) | `id`, `statement`, `sources` |
+| História/requisito (`requirement`) | `id`, `statement`, `rules`, `sources` |
+| Comportamento (`rule`) | `id`, `statement`, `sources`; opcionais `kind: rule \| example` e `examples` |
+| Exemplo recebido | `id`, `given: string[]`, `when: string[]`, `then: string[]`, `sources` |
 | Plano (`testPlan`) | `objective`, `requirementIds`, `ruleIds`, `priorities`, `exclusions`, `approach`, `preconditions`, `sources` |
 | Caso (`testCase`) | `id`, `requirementIds`, `ruleIds`, `preconditions`, `setup`, `pathId`, `data`, `techniques`, `expected`, `sources`; detalhado acrescenta `approvedCaseRevision` |
 | Mapa (`navigation`) | `screens`, `transitions`, `paths` |
-| Questão (`question`) | `id`, `description`, `requirementIds`, `caseIds`, `blocking`, `sources` |
+| Questão (`question`) | `id`, `description`, `requirementIds`, `caseIds`, `blocking`, `sources`; opcional `ruleIds` |
 | Resposta (`answer`) | `questionId`, `revision`, `actorId`, `at`, `text`, `affectedCaseIds` |
 | Tentativa (`attempt`) | `id`, `status`, `verdict`, `setupObservation`, `events`, `observed`, `evidenceIds`, `evidenceGaps`, `reason` |
 | Resultado (`result`) | `caseId`, `verdict`, `attempts`, `reason` |
@@ -75,10 +78,11 @@ ou regra complementar com origem. Esses nomes são mantidos para facilitar integ
 | Parecer (`validation`) | `id`, `outputId`, `outputRevision`, `validator`, `status`, `findings`, `reason` |
 | Decisão humana (`approval`) | `id`, `outputId`, `outputRevision`, `actorId`, `at`, `decision`, `comment` |
 
-Uma US com CA permite começar curadoria e planejamento. `startUrl` e `credentialRef`
+Material textual permite iniciar curadoria; ao menos um comportamento esperado
+verificável permite planejar seu escopo. Não se exige US formal, CA rotulado ou Gherkin. `startUrl` e `credentialRef`
 podem ser `null`; perfil e preparo podem ficar pendentes. Completar e confirmar o
 acesso é obrigatório antes do mapeamento. `objective` é opcional: o plano pode
-derivar seu objetivo das US/CA, sem exigir que o usuário repita os documentos.
+derivar seu objetivo dos requisitos, sem exigir que o usuário repita os documentos.
 
 O backend resolve `credentialRef` em armazenamento privado. Senha, token e cookie
 não aparecem em respostas, logs, artefatos ou contexto geral dos agentes. A captura
@@ -111,7 +115,8 @@ justificada. Cobertura planejada, cobertura executada e aprovação são medidas
 
 Toda saída é imutável. Uma correção mantém o `id` e cria outra `revision`, inteira a
 partir de 1, crescente também entre ciclos de orçamento. `dependsOn` lista `{outputId, revision}` das saídas usadas; `answerRefs`
-lista `{questionId, revision}` das respostas usadas. O backend preserva também a cópia
+lista `{questionId, revision}` das respostas usadas; a preparação também inclui
+`answerId` para localizar o registro imutável exato. O backend preserva também a cópia
 original dos artefatos. Os campos de consulta da API não substituem esses snapshots.
 
 O validador recebe a revisão exata, as fontes originais sem segredos, dependências
@@ -1016,7 +1021,8 @@ Cobertura parcial: RF-01, RF-08, RF-10, RF-11, RF-13 e RF-14; RN-05 e RN-06;
 RNF-01, RNF-02, RNF-04 e RNF-06. Upload, edição de conta/execução, exclusão,
 duplicação, board de US/CA, perguntas, início dos agentes, curadoria, geração do
 plano, casos e relatório não fazem parte de T2.1. T4.1 abaixo acrescenta preparação
-e consulta de perguntas; resposta/retomada, casos e relatório continuam pendentes. Este recorte
+e consulta de perguntas; o ajuste de 24/09 descrito abaixo acrescenta resposta e
+retomada. Casos e relatório continuam pendentes. Este recorte
 não encerra T2 nem comprova os cenários completos de aceitação do produto.
 
 ## Preparação do plano com especialistas — T4.1
@@ -1083,27 +1089,39 @@ desabilitados. A sequência das quatro tarefas é código; a qualidade é julgad
 
 | Produtor | Conteúdo JSON aceito |
 | --- | --- |
-| `artifact-curator` | `{requirements: [{id, statement, rules: [{id, statement, sources}], sources}], questions: [{id, description, requirementIds, caseIds: [], blocking, sources}]}` |
+| `artifact-curator` | `{requirements: [{id, statement, rules: [{id, statement, sources, kind?, examples?}], sources}], questions: [{id, description, requirementIds, ruleIds?, caseIds: [], blocking, sources}]}` |
 | `test-designer` | `{testPlan: {objective, requirementIds, ruleIds, priorities: [{ruleId, reason}], exclusions: [{description, reason}], approach: string[], preconditions: string[], sources}}` |
 | `output-validator` | `{status: approved \| changes_requested \| blocked, findings: [{code, message, location: string \| null}], reason}` |
 
 O backend recusa campos extras, inclusive metadados de saída definidos pelo modelo.
 IDs têm até 128 caracteres, começam por letra/número e usam letras, números,
-`_`, `.`, `:`, `-`. Requisitos, critérios e perguntas têm IDs únicos na curadoria;
-referências precisam existir. Há até dez US; excesso interrompe sem truncamento.
+`_`, `.`, `:`, `-`. Requisitos, regras, exemplos e perguntas têm IDs únicos na curadoria;
+referências precisam existir. Há até dez histórias/requisitos; cenários não contam
+automaticamente como histórias distintas. Excesso interrompe sem truncamento.
 Cada fonte exige `artifactId` existente, `locator` **`Lx` ou `Lx-Ly`**, com linhas
 do `artifact.text` contadas desde 1, e `quote` não vazio, literal, contido nas
-linhas indicadas. Cada requisito, critério, pergunta e plano precisa de fontes.
+linhas indicadas. Cada requisito, regra, exemplo, pergunta e plano precisa de fontes.
 O parser limita o JSON serializado a 200 mil caracteres, listas a 300 itens e
 textos individuais a 20 mil caracteres. Rejeição estrutural consome tentativa.
 
-Pergunta sempre identifica os requisitos afetados. Se não há US identificável,
-`requirements: []` exige pergunta bloqueante com `requirementIds: []` e fonte;
-uma US sem CA exige pergunta bloqueante localizada. Não se inventa US ou critério
-para preencher o contrato. Requisitos com CA e sem questão bloqueante são
-elegíveis; dúvidas em outros requisitos não impedem seu planejamento. O plano
-somente referencia requisitos elegíveis e critérios pertencentes a eles. Exclusões
-e pendências precisam aparecer com justificativa, conferida pelo validador.
+`rule.kind` é `rule` (regra geral) ou `example` (comportamento pontual recebido).
+Ausência significa `rule` em registros antigos. `examples`, quando presente,
+contém `{id, given: string[], when: string[], then: string[], sources}`; listas
+preservam ordem, `given` pode ser vazio e `when`/`then` têm ao menos um item.
+São exemplos fornecidos, não casos novos gerados na curadoria. Exemplo não autoriza
+inferir limite, intervalo ou expectativa para outros dados. Uma proposta fica na
+pergunta até receber decisão explícita rastreável. Gherkin não é formato interno
+obrigatório nem promessa de parser completo; não há execução por Cucumber.
+
+Pergunta identifica requisitos afetados e, opcionalmente, `ruleIds`. Ausente ou
+`[]`, uma pergunta bloqueante impede todo requisito referido; não vazio, bloqueia
+somente aquelas regras, que precisam pertencer aos requisitos referidos. O plano
+pode selecionar regras independentes da mesma história, mas o parser recusa IDs
+bloqueados. Se não há requisito identificável, `requirements: []` exige pergunta
+bloqueante com IDs vazios e fonte. Um requisito sem comportamento esperado tem
+`rules: []` e pergunta bloqueante; ausência de rótulo CA não implica essa situação.
+Exclusões e dúvidas aparecem com justificativa. Esclarecimentos resolvidos saem da
+lista ativa, preservados nas revisões anteriores e nos registros de respostas.
 
 Curador preserva condições, valores, exceções e opcionalidade. Planejador recebe
 originais **e** a curadoria aprovada; não cria casos detalhados ou navegação
@@ -1111,7 +1129,9 @@ presumida. O validador recebe a saída exata com ID/revisão e documentos pertin
 em sessão própria. Confere semântica, completude, fontes e cobertura. Justificativa
 é sempre obrigatória; correção/bloqueio exige achados. O backend registra falha
 técnica como `error`, não delega esse estado ao modelo. Validação estrutural não
-prova que um limite ou campo opcional foi preservado.
+prova que um limite ou campo opcional foi preservado. O validador rejeita defeitos
+materiais, não variações de redação ou a ausência de uma lista das etapas internas
+no plano. A sequência permanece obrigatória no backend.
 
 ### Persistência, limites e transições
 
@@ -1124,7 +1144,8 @@ vigentes, com um parecer de qualidade aprovado para cada revisão, autorizam a
 decisão. Aprovar registra a decisão e mantém a espera; `/continue` não é implementado.
 
 `run.preparation` registra `id`, `budgetCycleId`, `startedAt`, `finishedAt`,
-`activeRole`, `activity`, `stopReason`, `limits` e `calls`. Cada chamada registra
+`activeRole`, `activity`, `stopReason`, `limits` e `calls`; o ajuste de retomada
+acrescenta `accumulatedActiveMs` e `consumedAnswerIds`, opcionais em registros antigos. Cada chamada registra
 `id`, `role`, `provider`, `model`, `phase`, `attempt`, `outputRevision`, `startedAt`,
 `status`; ao terminar, `finishedAt`, `durationMs` e `errorCode` quando pertinente.
 Consumo disponível usa `usage.{input,output,cacheRead,cacheWrite,totalTokens}`;
@@ -1135,11 +1156,13 @@ ausentes são omitidas. Não se persistem raciocínio interno ou resposta bruta 
 Pareceres acrescentam `id`, `at` e `attempt` aos vínculos/achados do contrato.
 Novos metadados são opcionais para compatibilidade com registros anteriores.
 
-O ciclo inicial é único: `reason: initial_preparation`, `answerRef: null`,
+O ciclo inicial usa `reason: initial_preparation`, `answerRef: null`,
 `affectedCaseIds: []` e os limites aplicados. Até três tentativas de produção por
 saída, incluindo revisões e respostas inválidas; até duas tentativas técnicas do
 validador por revisão, incluindo a inicial; 120 segundos por chamada e 45 minutos
-de processamento ativo. Não se reinicia orçamento após erro. Parecer válido
+de processamento ativo acumulado por execução. Resposta seguida de retomada
+explícita abre um ciclo limitado de produção, descrito abaixo; não zera o tempo
+ativo nem reinicia orçamento automaticamente após erro. Parecer válido
 `changes_requested` retorna ao produtor; o coordenador não corrige o conteúdo.
 
 | Evento | Estado persistido |
@@ -1150,7 +1173,7 @@ de processamento ativo. Não se reinicia orçamento após erro. Parecer válido
 | Plano aprovado pelo validador | `awaiting_approval/planning`; libera ambiente |
 | Correção solicitada | Permanece na fase, nova revisão dentro do limite |
 | Material insuficiente sem independente elegível | `awaiting_input`, perguntas/motivo preservados |
-| Limite de US, revisões, tentativas inválidas de validação ou tempo ativo excedido | `interrupted`, motivo preservado |
+| Limite de histórias/requisitos, revisões, tentativas inválidas de validação ou tempo ativo excedido | `interrupted`, motivo preservado |
 | Validador bloqueia saída com material elegível | `interrupted`, sem aprovação ou avanço |
 | Falha técnica sem recuperação, inclusive timeout após tentativas permitidas | `error`, motivo preservado |
 | Cancelamento confirmado | `cancelled`; nenhum novo trabalho |
@@ -1160,9 +1183,60 @@ O timeout cancela a sessão e aguarda seu encerramento; não usa apenas uma corr
 de promessas. Espera humana não consome orçamento ativo. `/start` não retoma
 execuções interrompidas/canceladas nem abre ciclo adicional.
 
+### Esclarecimentos e retomada — ajuste de 24/09/2026
+
+São operações implementadas para a preparação, com sessão, proprietário,
+`X-Expected-User-Id`, `Origin` e JSON nas mesmas condições das demais mutações.
+Não iniciam casos nem substituem o futuro `/continue`.
+
+| Operação | Entrada e efeito |
+| --- | --- |
+| `POST /api/runs/:id/answer` | `{outputId, outputRevision, questionId, text}`. `text` literal não vazio, até 4.000 caracteres Unicode; `200` com projeção pública após salvar |
+| `POST /api/runs/:id/resume` | `{}`. `202` após reservar/persistir retomada; `200` se repetida enquanto esse mesmo processamento de retomada está ativo |
+
+`/answer` exige preparação existente, estado `awaiting_input` ou
+`awaiting_approval`, fase `curation` ou `planning`, revisão atual da curadoria e
+pergunta daquela revisão. A referência é da curadoria, não do plano. Repetir a
+mesma referência e texto não duplica resposta; texto diferente para a mesma
+pergunta/revisão recebe `409 / ANSWER_CONFLICT`. Referência antiga recebe
+`409 / STALE_VERSION`; pergunta inexistente, `404 / QUESTION_NOT_FOUND`.
+
+Cada resposta é imutável:
+`{id, revision: 1, outputId, outputRevision, questionId, text, artifactId, actorId, at}`.
+O backend define identidade, autor e horário. Guarda-a em `run.answers` e adiciona
+um artefato com o texto literal em `run.answerArtifacts`; não altera `run.artifacts`
+nem o texto original. Neste recorte não há edição de uma resposta já registrada;
+nova dúvida de uma revisão posterior recebe outro registro. O contrato geral de
+correção versionada de respostas em outras etapas continua proposto.
+
+Salvar a resposta já muda para `awaiting_input/curation`, com `ANSWERS_PENDING`.
+Saídas, pareceres e decisões anteriores permanecem históricas; seu estado deixa
+de autorizar aprovação/avanço antes de qualquer chamada ao modelo. Salvar respostas
+não inicia inferência. `/resume` exige esse estado e respostas ainda não consumidas;
+confere configuração, reserva o ambiente e reconfere as condições ao persistir.
+`RESOURCE_UNAVAILABLE` e falha de configuração preservam respostas pendentes.
+Canceladas, interrompidas e execuções com erro não são reiniciadas por essa rota.
+
+A retomada percorre curadoria, validação, plano e validação, com mesmos IDs de
+saída e revisões crescentes. Os especialistas recebem originais, artefatos das
+respostas e registros ligados às perguntas originais. `output.answerRefs` contém
+`{answerId, questionId, revision}`; o plano depende da nova revisão da curadoria.
+Resolver dúvida requer conteúdo suficiente na resposta, não sua mera existência.
+Plano revisto exige nova decisão humana; uma aprovação antiga não é reaproveitada.
+
+O novo ciclo tem `reason: user_answer`, `answerRefs` com IDs das novas respostas,
+`answerRef: null`, `affectedCaseIds: []` e limites persistidos. Cada ciclo permite
+até três produções por saída e duas tentativas técnicas de validação por revisão;
+respostas inválidas consomem tentativa. `preparation.calls` conserva chamadas
+anteriores e `consumedAnswerIds` registra respostas incorporadas no início do ciclo.
+`accumulatedActiveMs` conserva tempo dos ciclos encerrados: **45 minutos ativos no
+total da execução**, excluindo espera humana. Responder novamente não amplia esse
+teto; ao esgotá-lo, `/resume` recusa com `409 / ACTIVE_LIMIT`.
+
 ### Projeção pública e interface
 
-`GET /api/runs/:id`, `/start` e `/cancel` retornam a projeção de revisão existente
+`GET /api/runs/:id`, `/start`, `/cancel`, `/answer` e `/resume` retornam a
+projeção de revisão existente
 (`id`, `name`, `applicationName`, `createdAt`, `status`, `phase`, `plan`, `approvals`)
 acrescida de:
 
@@ -1170,8 +1244,15 @@ acrescida de:
 progress: { processingId: string | null; activeRole: string | null;
   activity: string | null; startedAt: string | null; finishedAt: string | null };
 stopReason: { code: string; message: string } | null;
-questions: { id: string; description: string; requirementIds: string[];
-  blocking: boolean; sources: { artifactId: string; locator: string; quote: string }[] }[];
+questions: { id: string; description: string; requirementIds: string[]; ruleIds: string[];
+  caseIds: string[]; blocking: boolean; outputId: string | null;
+  outputRevision: number | null; answerId: string | null;
+  sources: { artifactId: string; locator: string; quote: string }[] }[];
+curation: { id: string; revision: number; payload: CurationPayload;
+  validations: { outputId: string; outputRevision: number; validator: string; status: string }[] } | null;
+answers: { id: string; revision: number; outputId: string; outputRevision: number;
+  questionId: string; text: string; artifactId: string; actorId: string; at: string }[];
+canResume: boolean;
 ```
 
 Atividades são `curating`, `validating_curation`, `planning`, `validating_planning`.
@@ -1181,8 +1262,12 @@ isso não autoriza decisão. A interface mostra fase, papel/atividade, motivo e
 pendências; oferece “Preparar plano” no rascunho e “Cancelar preparação” durante
 o trabalho. Consulta a cada dois segundos enquanto `running`, preservando a
 identidade capturada pelo helper HTTP. Em `awaiting_approval/planning`, encerra
-polling e usa os controles existentes sem reconstruir o comentário. Perguntas
-não têm campo de resposta sem função: `/answer` e retomada continuam pendentes.
+polling e usa os controles existentes sem reconstruir o comentário. A curadoria
+é projetada por lista explícita de campos, incluindo regras e exemplos; nunca é
+um repasse do registro privado. Perguntas mostram o escopo e permitem salvar a
+resposta; uma ação separada retoma quando `canResume` for verdadeiro. A consulta
+mostra respostas salvas e revisões, sem aplicar texto antigo a outra pergunta ou
+revisão. Aprovar um plano continua sem iniciar casos.
 
 ## Mapeamento, dúvidas e execução
 
@@ -1224,8 +1309,9 @@ Resposta humana pode abrir novo ciclo limitado somente para itens afetados. Regi
 em `run.budgetCycles` o `id`, `startedAt`, `reason`, `answerRef` (nulo no ciclo inicial),
 `affectedCaseIds` e `limits` utilizados. `output.budgetCycleId` vincula a saída ao ciclo;
 seu número de revisão continua crescendo, sem apagar as antigas. O backend reinicia
-apenas os contadores autorizados pelo novo orçamento explícito e mantém o consumo
-anterior visível. Não reiniciar orçamento automaticamente por erro ou nova tentativa.
+apenas os contadores de produção autorizados pelo novo ciclo explícito e mantém o
+consumo anterior visível. Na preparação, os 45 minutos ativos são cumulativos por
+execução; respostas não zeram esse teto. Não reiniciar orçamento automaticamente por erro ou nova tentativa.
 
 ## Estados, encerramento e evidências
 
@@ -1238,7 +1324,7 @@ fase cuja saída está sendo conferida.
 | `draft` | Configuração salva; processamento ainda não iniciado |
 | `running` | Uma tarefa está sendo processada |
 | `awaiting_approval` | Plano ou casos aguardam decisão humana |
-| `awaiting_input` | Falta esclarecimento/acesso e não há trabalho independente disponível |
+| `awaiting_input` | Falta esclarecimento/acesso sem trabalho independente disponível, ou há resposta registrada aguardando retomada explícita da preparação |
 | `completed` | Processamento encerrado e relatório final validado; pode conter testes reprovados ou bloqueados |
 | `interrupted` | Limite, bloqueio global ou reinício impediu continuar |
 | `error` | Falha técnica sem recuperação |
@@ -1291,8 +1377,9 @@ sem relatório. Cancelamento não dispara chamadas novas para produzir um relat�
 ## API mínima proposta
 
 Esta seção descreve o contrato completo proposto do produto. Estão disponíveis
-as rotas de T3.2, criação/histórico de T3.3 e início/cancelamento de T4.1, nos limites
-documentados acima. A consulta individual entrega projeção de plano, progresso,
+as rotas de T3.2, criação/histórico de T3.3, início/cancelamento de T4.1 e
+resposta/retomada da preparação de 24/09, nos limites documentados acima. A consulta
+individual entrega projeção de plano, progresso,
 motivo e perguntas, incluindo `plan: null` para rascunhos. As demais operações, inclusive `/continue`,
 aguardam a integração correspondente.
 
@@ -1308,10 +1395,11 @@ internos nem segredos. Autenticação e cadastro seguem os RF do produto.
 | `PATCH /api/runs/:id` | Editar rascunho ou completar acesso pendente da mesma aplicação antes do mapeamento; não substituir artefatos após início |
 | `GET /api/runs` | Histórico do proprietário, com estado e data |
 | `GET /api/runs/:id` | Estado, fase, versões, questões, aprovações, pareceres e resultados; distinguir provisório, validado e desatualizado |
-| `POST /api/runs/:id/start` | Validar US/CA e iniciar curadoria/plano, se recurso disponível; acesso pode estar pendente |
+| `POST /api/runs/:id/start` | Conferir entrada textual e iniciar curadoria/plano, se recurso disponível; acesso pode estar pendente |
 | `POST /api/runs/:id/approve` | Registrar aprovação para `outputId` e `outputRevision`; autor vem da sessão |
 | `POST /api/runs/:id/request-changes` | Registrar decisão sobre revisão exata e comentário; análise do pedido aguarda continuidade com recurso reservado |
-| `POST /api/runs/:id/answer` | Registrar resposta versionada para questão e casos afetados |
+| `POST /api/runs/:id/answer` | Implementado para questão da revisão atual da curadoria; demais etapas aguardam integração |
+| `POST /api/runs/:id/resume` | Implementado para reprocessar preparação com respostas novas, reserva e orçamento acumulado |
 | `POST /api/runs/:id/continue` | Retomar trabalho autorizado/clarificado, se recurso disponível |
 | `POST /api/runs/:id/finish-with-pending` | Após casos elegíveis, registrar encerramento das pendências e gerar relatório sujeito à validação |
 | `POST /api/runs/:id/cancel` | Cancelar preservando os dados existentes |
@@ -1320,8 +1408,9 @@ internos nem segredos. Autenticação e cadastro seguem os RF do produto.
 | `GET /api/runs/:id/report/print` | Versão de impressão do relatório publicado, final ou parcial; navegador permite salvar PDF |
 | `DELETE /api/runs/:id` | Após confirmação, excluir execução encerrada, sua credencial e mídias locais; informar tratamento separado de backups |
 
-Upload e resposta a perguntas aguardam integração. T4.1 consulta o progresso
-durante a preparação; aprovar já persiste a decisão humana sem iniciar casos;
+Upload e respostas de etapas posteriores à preparação aguardam integração. T4.1
+consulta progresso e o ajuste de 24/09 permite responder e retomar a preparação;
+aprovar já persiste a decisão humana sem iniciar casos;
 quando `/continue` existir, a interface poderá solicitar a continuidade depois.
 Se o recurso estiver ocupado, o usuário não deverá perder sua resposta ou
 aprovação. A revisão humana do plano mantém a espera após a decisão.

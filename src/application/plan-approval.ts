@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import { canResumePreparation, preparationAnswers } from './prepare-plan.js';
 import {
   applyPlanApprovalCommand, type PlanApprovalCommand, type PlanApprovalErrorCode,
   type PlanApprovalState, type PlanDecision,
 } from '../domain/plan-approval.js';
-import { RunStore, StorageError, type StorageErrorCode, type RunOutput, type WorkIntent } from '../storage/runs.js';
+import { RunStore, StorageError, type StorageErrorCode, type RunOutput, type WorkIntent, type PreparationAnswer } from '../storage/runs.js';
 
 export type PlanCommandRequest = Readonly<{
   type: 'approve_plan' | 'request_plan_changes' | 'continue';
@@ -22,7 +23,12 @@ export type PlanReview = {
   progress: { processingId: string | null; activeRole: string | null; activity: string | null;
     startedAt: string | null; finishedAt: string | null };
   stopReason: { code: string; message: string } | null;
-  questions: { id: string; description: string; requirementIds: string[]; blocking: boolean;
+  canResume: boolean;
+  answers: PreparationAnswer[];
+  curation: { id: string; revision: number; payload: ReturnType<typeof publicCuration>;
+    validations: PlanApprovalState['validations'] } | null;
+  questions: { id: string; description: string; requirementIds: string[]; ruleIds: string[]; blocking: boolean;
+    outputId: string | null; outputRevision: number | null; answerId: string | null;
     sources: { artifactId: string; locator: string; quote: string }[] }[];
   plan: {
     id: string; revision: number;
@@ -81,6 +87,33 @@ function publicTestPlan(value: unknown) {
   };
 }
 
+const publicSources = (value: unknown) => Array.isArray(value) ? value.map(item => {
+  const source = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+  return { artifactId: String(source.artifactId ?? ''), locator: String(source.locator ?? ''), quote: String(source.quote ?? '') };
+}) : [];
+const publicIds = (value: unknown): string[] => Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+function publicQuestion(question: Record<string, unknown>) {
+  return { id: String(question.id ?? ''), description: String(question.description ?? ''),
+    requirementIds: publicIds(question.requirementIds), ruleIds: publicIds(question.ruleIds), caseIds: publicIds(question.caseIds),
+    blocking: question.blocking === true, sources: publicSources(question.sources) };
+}
+function publicCuration(payload: Record<string, unknown>) {
+  return {
+    requirements: Array.isArray(payload.requirements) ? payload.requirements.map((requirement: Record<string, unknown>) => ({
+      id: String(requirement.id ?? ''), statement: String(requirement.statement ?? ''), sources: publicSources(requirement.sources),
+      rules: Array.isArray(requirement.rules) ? requirement.rules.map((rule: Record<string, unknown>) => ({
+        id: String(rule.id ?? ''), statement: String(rule.statement ?? ''), sources: publicSources(rule.sources),
+        ...(['rule', 'example'].includes(String(rule.kind)) ? { kind: rule.kind as 'rule' | 'example' } : {}),
+        ...(Array.isArray(rule.examples) ? { examples: rule.examples.map((example: Record<string, unknown>) => ({
+          id: String(example.id ?? ''), given: publicIds(example.given), when: publicIds(example.when),
+          then: publicIds(example.then), sources: publicSources(example.sources),
+        })) } : {}),
+      })) : [],
+    })) : [],
+    questions: Array.isArray(payload.questions) ? payload.questions.map(publicQuestion) : [],
+  };
+}
+
 function current(outputs: RunOutput[], phase: string): RunOutput | null {
   const versions = outputs.filter(output => output.phase === phase);
   if (new Set(versions.map(output => output.id)).size > 1 ||
@@ -104,6 +137,14 @@ export async function getPlanReview(
       return { ok: false, error: { code: 'UNAUTHORIZED', message: 'Operação não autorizada para esta execução.' } };
     }
     const plan = current(run.outputs, 'planning');
+    const curation = current(run.outputs, 'curation');
+    const answers = preparationAnswers(run).map(answer => ({ id: answer.id, revision: answer.revision,
+      outputId: answer.outputId, outputRevision: answer.outputRevision, questionId: answer.questionId,
+      text: answer.text, artifactId: answer.artifactId, actorId: answer.actorId, at: answer.at }));
+    const validations = (output: RunOutput) => run.validations.filter(validation =>
+      validation.outputId === output.id && validation.outputRevision === output.revision).map(validation => ({
+        outputId: validation.outputId, outputRevision: validation.outputRevision, validator: validation.validator, status: validation.status,
+      }));
     return { ok: true, review: {
       id: run.id, name: run.name, applicationName: run.applicationName, createdAt: run.createdAt,
       status: run.status, phase: run.phase,
@@ -113,13 +154,13 @@ export async function getPlanReview(
       stopReason: run.preparation?.stopReason ? { code: run.preparation.stopReason.code, message: run.preparation.stopReason.message }
         : run.status === 'interrupted' && run.interruptions?.length ? { code: 'SERVICE_RESTART', message: 'O serviço reiniciou. O trabalho foi interrompido.' }
         : run.status === 'cancelled' ? { code: 'CANCELLED', message: 'Execução cancelada pelo usuário.' } : null,
-      questions: run.questions.map(question => ({
-        id: String(question.id ?? ''), description: String(question.description ?? ''),
-        requirementIds: Array.isArray(question.requirementIds) ? question.requirementIds.filter((id): id is string => typeof id === 'string') : [],
-        blocking: question.blocking === true,
-        sources: Array.isArray(question.sources) ? question.sources.map((source: Record<string, unknown>) => ({
-          artifactId: String(source.artifactId ?? ''), locator: String(source.locator ?? ''), quote: String(source.quote ?? ''),
-        })) : [],
+      canResume: canResumePreparation(run), answers,
+      curation: curation ? { id: curation.id, revision: curation.revision,
+        payload: publicCuration(curation.payload), validations: validations(curation) } : null,
+      questions: run.questions.map(question => ({ ...publicQuestion(question),
+        outputId: curation?.id ?? null, outputRevision: curation?.revision ?? null,
+        answerId: answers.find(answer => answer.outputId === curation?.id && answer.outputRevision === curation?.revision &&
+          answer.questionId === question.id)?.id ?? null,
       })),
       plan: plan ? {
         id: plan.id, revision: plan.revision,

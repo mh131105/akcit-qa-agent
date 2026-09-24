@@ -1,10 +1,14 @@
 export type Artifact = { id: string; name: string; version: string; text: string };
 export type Source = { artifactId: string; locator: string; quote: string };
-export type Rule = { id: string; statement: string; sources: Source[] };
+export type ReceivedExample = { id: string; given: string[]; when: string[]; then: string[]; sources: Source[] };
+export type Rule = {
+  id: string; statement: string; sources: Source[];
+  kind?: 'rule' | 'example'; examples?: ReceivedExample[];
+};
 export type Requirement = { id: string; statement: string; rules: Rule[]; sources: Source[] };
 export type Question = {
   id: string; description: string; requirementIds: string[]; caseIds: string[];
-  blocking: boolean; sources: Source[];
+  blocking: boolean; sources: Source[]; ruleIds?: string[];
 };
 export type CurationPayload = { requirements: Requirement[]; questions: Question[] };
 export type PlanPayload = { testPlan: {
@@ -22,17 +26,18 @@ export type Verdict = {
 export class InvalidPreparationOutput extends Error {
   constructor(readonly code: 'INVALID_MODEL_OUTPUT' | 'INPUT_LIMIT' = 'INVALID_MODEL_OUTPUT') {
     super(code === 'INPUT_LIMIT'
-      ? 'O material excede o limite de dez histórias de usuário. Reduza o escopo em um novo rascunho.'
+      ? 'O material excede o limite de dez histórias ou requisitos. Reduza o escopo em um novo rascunho.'
       : 'A resposta do especialista não atende à estrutura, às referências ou às fontes exigidas.');
     this.name = 'InvalidPreparationOutput';
   }
 }
 
 function fail(): never { throw new InvalidPreparationOutput(); }
-function object(value: unknown, keys: string[]): Record<string, unknown> {
+function object(value: unknown, keys: string[], optionalKeys: string[] = []): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return fail();
   const item = value as Record<string, unknown>;
-  if (Object.keys(item).length !== keys.length || keys.some(key => !Object.hasOwn(item, key))) return fail();
+  if (keys.some(key => !Object.hasOwn(item, key)) ||
+    Object.keys(item).some(key => !keys.includes(key) && !optionalKeys.includes(key))) return fail();
   return item;
 }
 function array(value: unknown, minimum = 0): unknown[] {
@@ -94,31 +99,58 @@ export function parseCuration(value: unknown, artifacts: readonly Artifact[]): C
     return {
       id: unique(id(item.id), seen), statement: text(item.statement), sources: sources(item.sources, artifacts),
       rules: array(item.rules).map(rawRule => {
-        const rule = object(rawRule, ['id', 'statement', 'sources']);
-        return { id: unique(id(rule.id), seen), statement: text(rule.statement), sources: sources(rule.sources, artifacts) };
+        const rule = object(rawRule, ['id', 'statement', 'sources'], ['kind', 'examples']);
+        const parsed: Rule = { id: unique(id(rule.id), seen), statement: text(rule.statement), sources: sources(rule.sources, artifacts) };
+        if (Object.hasOwn(rule, 'kind')) {
+          if (rule.kind !== 'rule' && rule.kind !== 'example') return fail();
+          parsed.kind = rule.kind;
+        }
+        if (Object.hasOwn(rule, 'examples')) {
+          parsed.examples = array(rule.examples).map(rawExample => {
+            const example = object(rawExample, ['id', 'given', 'when', 'then', 'sources']);
+            return {
+              id: unique(id(example.id), seen),
+              given: array(example.given).map(item => text(item)),
+              when: array(example.when, 1).map(item => text(item)),
+              then: array(example.then, 1).map(item => text(item)),
+              sources: sources(example.sources, artifacts),
+            };
+          });
+        }
+        return parsed;
       }),
     };
   });
   const requirementIds = new Set(requirements.map(item => item.id));
   const questions = array(root.questions, requirements.length ? 0 : 1).map(raw => {
-    const item = object(raw, ['id', 'description', 'requirementIds', 'caseIds', 'blocking', 'sources']);
+    const item = object(raw, ['id', 'description', 'requirementIds', 'caseIds', 'blocking', 'sources'], ['ruleIds']);
     if (typeof item.blocking !== 'boolean') return fail();
-    return {
+    const question: Question = {
       id: unique(id(item.id), seen), description: text(item.description),
       requirementIds: ids(item.requirementIds, requirementIds, requirements.length ? 1 : 0), caseIds: ids(item.caseIds, new Set<string>()),
       blocking: item.blocking, sources: sources(item.sources, artifacts),
     };
+    if (Object.hasOwn(item, 'ruleIds')) {
+      const affectedRules = requirements.filter(requirement => question.requirementIds.includes(requirement.id))
+        .flatMap(requirement => requirement.rules.map(rule => rule.id));
+      question.ruleIds = ids(item.ruleIds, new Set(affectedRules));
+    }
+    return question;
   });
   if (!requirements.length && !questions.some(question => question.blocking)) return fail();
-  // Sem CA não há base de planejamento; a lacuna deve continuar consultável.
+  // Sem comportamento esperado não há base de planejamento, mesmo com um título de US.
   if (requirements.some(item => item.rules.length === 0 &&
     !questions.some(question => question.blocking && question.requirementIds.includes(item.id)))) return fail();
   return { requirements, questions };
 }
 
 export function eligibleRequirements(curation: CurationPayload): Requirement[] {
-  const blocked = new Set(curation.questions.filter(item => item.blocking).flatMap(item => item.requirementIds));
-  return curation.requirements.filter(item => item.rules.length > 0 && !blocked.has(item.id));
+  const questions = curation.questions.filter(item => item.blocking);
+  const blockedRequirements = new Set(questions.filter(item => !item.ruleIds?.length).flatMap(item => item.requirementIds));
+  const blockedRules = new Set(questions.flatMap(item => item.ruleIds ?? []));
+  return curation.requirements.filter(item => !blockedRequirements.has(item.id))
+    .map(item => ({ ...item, rules: item.rules.filter(rule => !blockedRules.has(rule.id)) }))
+    .filter(item => item.rules.length > 0);
 }
 
 export function parsePlan(value: unknown, artifacts: readonly Artifact[], curation: CurationPayload): PlanPayload {

@@ -265,8 +265,9 @@ O merge é a base de T4.1; os resultados acima descrevem a entrega anterior.
 Design definitivo e implementação de agentes estão fora deste card.
 
 **T2 continua aberta.** Upload, edição, exclusão, duplicação, board de US/CA,
-resposta/retomada de perguntas, casos e relatório permanecem nas tarefas
-correspondentes. T4.1 acrescenta preparação e exibição de pendências; T2.1 implementa entrada textual e
+resposta/retomada das etapas posteriores à preparação, casos e relatório permanecem
+nas tarefas correspondentes. T4.1 e o ajuste de 24/09 acrescentam preparação,
+perguntas e esclarecimentos; T2.1 implementa entrada textual e
 operações disponíveis; não conclui as sete vistas nem a aceitação completa do
 produto. Não há credenciais, sessões ou documentos privados versionados.
 
@@ -284,7 +285,8 @@ pela frente C e integração por outro desenvolvedor. Recorte de
 [T10 #14](https://github.com/mh131105/akcit-qa-agent/issues/14), sem encerrá-las.
 Branch `feat/prepare-validated-plan`, a partir de `origin/develop` contendo
 `04f8b01`. [PR #22](https://github.com/mh131105/akcit-qa-agent/pull/22) para revisão em `develop`.
-**Implementação e demonstração real prontas; decisão humana e revisão/merge pendentes.**
+**Recorte original implementado e demonstrado; decisão humana e revisão/merge pendentes.
+O ajuste de 24/09 está documentado ao final desta seção.**
 
 O site permite salvar rascunho, preparar plano, acompanhar fase/papel e cancelar.
 O coordenador persiste trabalho/orçamento antes do aceite HTTP, executa curador,
@@ -298,7 +300,7 @@ ferramentas de terminal/navegador nesses especialistas.
 Cobertura pretendida: CA-01 a CA-12 do card; RF-02, RF-08, RF-09, RF-13, RF-14
 e partes de RF-15/RF-16; RN-01, RN-02, RN-05, RN-06, RN-08, RN-12 e RN-15;
 RNF-04, RNF-06, RNF-07, RNF-08 e RNF-10. Os testes automáticos substituem a chamada
-de modelo e não comprovam CA-12. Código final `069a5e7`: check/build aprovados,
+de modelo e não comprovam CA-12. Verificação histórica no código `069a5e7`: check/build aprovados,
 **87/87 testes** (59 anteriores preservados), seis testes operacionais e ambos os
 smokes aprovados no container final; smoke web com 24 verificações. Node.js
 24.21.0 e Chromium 153.0.8010.52.
@@ -319,14 +321,42 @@ Check, 87/87 testes e build passaram novamente após a limpeza do artefato/fixtu
 
 O plano permanece em `awaiting_approval/planning`, sem decisão humana fabricada.
 Faltam avaliação da frente C, aprovação pelo site, revisão de integração por outro
-desenvolvedor e merge em `develop`. Evidências atuais e limitações:
+desenvolvedor e merge em `develop`. Evidências dessa demonstração e limitações:
 [evidencias/t4.1](evidencias/t4.1/README.md).
 
 Limite do recorte: termina na revisão humana do plano; `/continue`, criação de
-casos, mapeamento, navegação, execução, vídeos, relatório, upload e `/answer`
-permanecem nas tarefas correspondentes. A decisão humana não dispara casos.
+casos, mapeamento, navegação, execução, vídeos, relatório e upload permanecem nas
+tarefas correspondentes. O ajuste abaixo acrescenta `/answer` e `/resume` somente
+à preparação. A decisão humana não dispara casos.
 Contratos em [CONTRATOS.md](requisitos/CONTRATOS.md#preparação-do-plano-com-especialistas--t41);
 configuração e roteiro real em [OPERACAO.md](OPERACAO.md#modelos-e-preparação-do-plano--t41).
+
+### Ajuste de entradas e esclarecimentos · 24/09/2026 · mesmo PR #22
+
+O PR passa a incluir a decisão de entrada mínima por comportamento esperado
+verificável (RN-01): US/CA, requisitos funcionais, prosa e Gherkin textual opcional,
+sem exigir template formal. A curadoria distingue regras gerais e exemplos
+recebidos, preserva fontes e pode bloquear apenas regras dependentes de uma dúvida.
+Propostas de regra ficam em perguntas até uma decisão explícita do usuário.
+
+As três skills foram refinadas para fidelidade, perguntas úteis e plano conciso;
+o validador deve rejeitar defeitos materiais, sem exigir que um plano correto
+recite a sequência de agentes e aprovações. A geração de cenários quando o cliente
+não os fornece continua responsabilidade da etapa futura de casos, após plano
+aprovado; não foi implementada pela aceitação de Gherkin.
+
+A preparação recebe respostas imutáveis e retoma por ação explícita. Conserva
+originais, acrescenta fontes das respostas, invalida imediatamente o avanço pelo
+plano antigo e produz revisões crescentes dos mesmos IDs, com novas validações e
+nova revisão humana. O ciclo de produção é limitado e os 45 minutos ativos
+permanecem cumulativos. Não há retomada automática após erro ou reinício.
+
+Código, verificações e comparação das skills pertencem a esta revisão do PR;
+resultados anteriores de T4.1 acima são históricos. Consulte
+[evidências do ajuste](evidencias/ajuste-entradas/README.md) para o que efetivamente
+foi executado, modelos, limites e pendências. Esta seção não registra aprovação
+humana nem encerra T4, T5, T6 ou T10. Revisão de integração e merge em `develop`
+continuam necessários para cumprir a definição de pronto.
 
 ## Marcos propostos a partir de agora
 

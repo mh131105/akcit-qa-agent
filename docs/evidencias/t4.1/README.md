@@ -1,5 +1,8 @@
 # T4.1 — Preparação com somente US e critérios de aceite
 
+Registro histórico anterior à revisão das skills e ao fluxo de esclarecimentos.
+A alteração posterior no mesmo PR está em [ajuste de entradas](../ajuste-entradas/README.md).
+
 **Nova inferência real concluída em 24/09/2026; avaliação humana e revisão/merge pendentes.**
 Esta avaliação substitui as amostras anteriores, cujo material incluía notas sobre
 a demonstração e um percurso sugerido. Os JSON, a revisão e a captura anteriores

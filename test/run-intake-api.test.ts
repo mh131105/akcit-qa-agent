@@ -195,7 +195,7 @@ test('T3.3: entrar, criar por HTTP, abrir rascunho literal e reencontrar após r
   const raw = await h.raw(id);
   const opened = await h.request(`/api/runs/${id}`, undefined, cookie);
   assert.equal(opened.status, 200);
-  assert.deepEqual(opened.body, { ...created.body, plan: null, approvals: [], questions: [], stopReason: null,
+  assert.deepEqual(opened.body, { ...created.body, plan: null, curation: null, answers: [], canResume: false, approvals: [], questions: [], stopReason: null,
     progress: { processingId: null, activeRole: null, activity: null, startedAt: null, finishedAt: null } });
   error(await h.request(`/api/runs/${id}/approve`, { outputId: 'inexistente', outputRevision: 1 }, cookie), 409, 'INVALID_STATE');
   assert.equal(await h.raw(id), raw, 'recusa de aprovação preserva todo o rascunho');
