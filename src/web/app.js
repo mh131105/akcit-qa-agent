@@ -175,7 +175,7 @@ function access(serviceMessage = '') {
     }
     panel.append(tabs, el('h2', register ? 'Participe do piloto' : 'Bem-vindo de volta'));
     const cleanupMessage = new URLSearchParams(location.search).has('cleanup') ? 'Saída confirmada, mas não foi possível limpar a recuperação local desta aba. Feche a aba ou limpe o armazenamento do navegador.' : '';
-    const notice = message(serviceMessage || cleanupMessage || (new URLSearchParams(location.search).has('expired') ? 'Sua sessão expirou ou mudou. Entre novamente. Conteúdo pendente só será recuperado para a mesma conta.' : ''), !!serviceMessage || !!cleanupMessage); panel.append(notice);
+    const notice = message(cleanupMessage || serviceMessage || (new URLSearchParams(location.search).has('expired') ? 'Sua sessão expirou ou mudou. Entre novamente. Conteúdo pendente só será recuperado para a mesma conta.' : ''), !!serviceMessage || !!cleanupMessage); panel.append(notice);
     const form = el('form'); form.noValidate = true; const fields = {};
     if (register) fields.name = field(form, 'name', 'Nome', { autocomplete: 'name', hint: 'Até 120 caracteres.' });
     fields.email = field(form, 'email', 'E-mail', { type: 'email', autocomplete: 'username' });

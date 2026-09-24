@@ -50,7 +50,8 @@ Também verificados no mesmo smoke:
   original permite reencontrar a mesma execução.
 - Logout confirmado: limpa tentativa pendente e formulário ainda não enviado,
   sem regravação por `pagehide`. Falha de limpeza local após `204` informa o
-  problema e mantém a saída confirmada, sem tela privada.
+  problema e mantém a saída confirmada, sem tela privada, mesmo quando a
+  consulta de sessão na página de acesso também falha por rede.
 - Resposta de decisão perdida após persistir: a consulta encontra uma única
   decisão, com comentário literal, sem novo POST ou cópia pendente redundante.
 - Falha na consulta de recuperação: “Tentar novamente” conserva o comentário.

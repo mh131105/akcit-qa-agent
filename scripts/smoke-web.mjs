@@ -293,6 +293,8 @@ async function logoutRecovery(context, store, owner) {
   await login(accounts[0]);
   const retained = await pending('Logout confirmado com limpeza indisponível');
   await page.evaluate(() => { Storage.prototype.removeItem = () => { throw new DOMException('Falha sintética de limpeza', 'SecurityError'); }; });
+  // Mesmo sem conseguir reconsultar a sessão na página de acesso, o aviso local deve aparecer.
+  await page.route('**/api/auth/me', route => route.abort('connectionreset'));
   const cleanFailure = page.waitForResponse(response => response.url().endsWith('/api/auth/logout'));
   await page.getByRole('button', { name: 'Sair', exact: true }).click();
   assert.equal((await cleanFailure).status(), 204);
