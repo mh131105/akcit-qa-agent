@@ -501,6 +501,32 @@ JSON inválido, arrays, `null`, tipos incorretos e campos extras são recusados,
 inclusive `actorId`, `at`, `status`, `validations` e `resourceReserved`.
 Todas as respostas da API, inclusive erros, têm `Cache-Control: no-store`.
 
+### Precondição de conta esperada
+
+Todas as operações de `/api/runs` e `/api/runs/:id`, incluindo histórico,
+consulta e decisões, e `POST /api/auth/logout` exigem `X-Expected-User-Id`.
+Cadastro, login e `GET /api/auth/me` dispensam esse cabeçalho.
+O cliente envia o ID da conta para a qual preparou a operação: um único UUID v4,
+no formato dos IDs gerados para as contas, com hífens (`8-4-4-4-12`) e comparação
+sem distinguir maiúsculas/minúsculas. Cabeçalhos repetidos, inclusive iguais,
+são recusados usando `headersDistinct`; valores
+concatenados também são inválidos.
+
+`handleApi` confere essa precondição em um único ponto, depois de autenticar a
+requisição e antes de ler ou alterar execuções ou encerrar a sessão:
+
+| Cabeçalho | Resultado |
+| --- | --- |
+| Ausente, repetido ou fora do formato | `400 / INVALID_EXPECTED_USER_ID` |
+| UUID válido diferente do ID autenticado | `409 / ACCOUNT_CHANGED` |
+| ID igual ao autenticado | Prossegue com as verificações existentes |
+
+O cabeçalho é **uma precondição, não uma autorização**. `ownerId` e `actorId`
+continuam vindo exclusivamente da sessão. Na divergência, a API não acessa
+execuções, não encerra a sessão atual e não revela IDs de contas ou dados privados.
+Consultar `/auth/me` antes do envio não substitui a precondição: outra aba pode
+trocar o cookie entre a consulta e a operação.
+
 ### Identidade, senha e sessão
 
 `APP_ORIGIN` é a origem exata usada pelo navegador, com protocolo e porta quando
@@ -591,12 +617,12 @@ Não são expostos stack traces, caminhos, segredos ou dados de outra conta.
 
 | HTTP | Situação e códigos |
 | --- | --- |
-| `400` | Entrada/JSON inválidos (`INVALID_INPUT`, `INVALID_JSON`), comentário obrigatório (`COMMENT_REQUIRED`) ou ID de execução inválido (`INVALID_RUN_ID`) |
+| `400` | Entrada/JSON inválidos (`INVALID_INPUT`, `INVALID_JSON`), comentário obrigatório (`COMMENT_REQUIRED`), ID de execução inválido (`INVALID_RUN_ID`) ou conta esperada ausente, repetida ou inválida (`INVALID_EXPECTED_USER_ID`) |
 | `401` | Sessão ausente, inválida ou expirada (`INVALID_SESSION`); login inválido com mensagem genérica (`INVALID_CREDENTIALS`) |
 | `403` | Origem recusada (`ORIGIN_REJECTED`) ou cadastro não habilitado (`REGISTRATION_NOT_ALLOWED`) |
 | `404` | Execução inexistente ou de outro proprietário (`RUN_NOT_FOUND`); rota não oferecida (`NOT_FOUND`) |
 | `405` | Método não oferecido para a rota (`METHOD_NOT_ALLOWED`) |
-| `409` | Cadastro duplicado (`ACCOUNT_EXISTS`); revisão, estado, parecer ou decisão incompatíveis (`STALE_VERSION`, `INVALID_STATE`, `INSUFFICIENT_VALIDATION`, `DECISION_CONFLICT`, `INVALID_DECISION`); registro inválido/ambíguo (`INVALID_RECORD`, `AMBIGUOUS_RECORD`) |
+| `409` | Conta esperada diferente da sessão (`ACCOUNT_CHANGED`); cadastro duplicado (`ACCOUNT_EXISTS`); revisão, estado, parecer ou decisão incompatíveis (`STALE_VERSION`, `INVALID_STATE`, `INSUFFICIENT_VALIDATION`, `DECISION_CONFLICT`, `INVALID_DECISION`); registro inválido/ambíguo (`INVALID_RECORD`, `AMBIGUOUS_RECORD`) |
 | `413` | Corpo maior que 16 KiB (`BODY_TOO_LARGE`) |
 | `415` | Conteúdo diferente de JSON (`UNSUPPORTED_MEDIA_TYPE`) |
 | `429` | Excesso de tentativas de cadastro/login ou saturação de contadores (`TOO_MANY_ATTEMPTS`) |
@@ -610,33 +636,43 @@ um registro previamente criado pelo backend para o ID interno retornado no
 cadastro; não há endpoint de preparação ou fixture carregada pela aplicação.
 
 ```sh
-# Cadastro inicia a sessão e guarda o cookie localmente.
-curl -i -c /tmp/qa-demo.cookies http://127.0.0.1:3000/api/auth/register \
+# Cadastro inicia a sessão e guarda o cookie e a resposta localmente.
+qa_demo_dir=$(mktemp -d)
+curl -sS -c "$qa_demo_dir/cookies" -o "$qa_demo_dir/account.json" \
+  http://127.0.0.1:3000/api/auth/register \
   -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
   --data '{"name":"Ana Exemplo","email":"ana@example.invalid","password":"Senha ficticia de exemplo 123","teamName":"Equipe Demo"}'
 
-# Novo login também emite uma sessão nova.
-curl -i -c /tmp/qa-demo.cookies http://127.0.0.1:3000/api/auth/login \
+# Em acessos posteriores, o login também emite uma sessão nova.
+curl -sS -c "$qa_demo_dir/cookies" -o "$qa_demo_dir/account.json" \
+  http://127.0.0.1:3000/api/auth/login \
   -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
   --data '{"email":"ana@example.invalid","password":"Senha ficticia de exemplo 123"}'
 
-curl -b /tmp/qa-demo.cookies http://127.0.0.1:3000/api/auth/me
-curl -b /tmp/qa-demo.cookies http://127.0.0.1:3000/api/runs/run-demo-001
-curl -b /tmp/qa-demo.cookies http://127.0.0.1:3000/api/runs/run-demo-001/approve \
+# Capture a conta ao preparar a operação; uma consulta posterior não a substitui.
+qa_demo_expected=$(node --input-type=module -e 'import fs from "node:fs"; console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).user.id)' "$qa_demo_dir/account.json")
+curl -b "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/auth/me
+curl -b "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/runs/run-demo-001 \
+  -H "X-Expected-User-Id: $qa_demo_expected"
+curl -b "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/runs/run-demo-001/approve \
+  -H "X-Expected-User-Id: $qa_demo_expected" \
   -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
   --data '{"outputId":"out-planning","outputRevision":1}'
 
 # Em outra execução ainda sem decisão, solicitar alteração exige comentário.
-curl -b /tmp/qa-demo.cookies http://127.0.0.1:3000/api/runs/run-demo-002/request-changes \
+curl -b "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/runs/run-demo-002/request-changes \
+  -H "X-Expected-User-Id: $qa_demo_expected" \
   -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
   --data '{"outputId":"out-planning","outputRevision":1,"comment":"Incluir o limite superior da quantidade."}'
 
 # Reconsulta a decisão persistida antes de sair.
-curl -b /tmp/qa-demo.cookies http://127.0.0.1:3000/api/runs/run-demo-001
-curl -i -b /tmp/qa-demo.cookies -c /tmp/qa-demo.cookies \
+curl -b "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/runs/run-demo-001 \
+  -H "X-Expected-User-Id: $qa_demo_expected"
+curl -i -b "$qa_demo_dir/cookies" -c "$qa_demo_dir/cookies" \
   http://127.0.0.1:3000/api/auth/logout \
+  -H "X-Expected-User-Id: $qa_demo_expected" \
   -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' --data '{}'
-rm /tmp/qa-demo.cookies
+rm -r "$qa_demo_dir"
 ```
 
 Cadastro/login/me devolvem, por exemplo,
@@ -656,14 +692,16 @@ parâmetros de senha nem chama modelos. A verificação completa é `npm run che
 
 [`src/application/runs.ts`](../../src/application/runs.ts) recebe a configuração
 permitida, constrói o rascunho e consulta o histórico usando `RunStore`. As duas
-rotas exigem a sessão de T3.2. O proprietário é sempre o ID interno da conta na
-sessão; não se aceita `RunRecord` completo, `ownerId` ou identidade do cliente.
+rotas exigem a sessão e a precondição `X-Expected-User-Id` de T3.2. O proprietário
+é sempre o ID interno da conta na sessão; não se aceita `RunRecord` completo,
+`ownerId` ou identidade de autoria/propriedade fornecida pelo cliente.
 O recorte cobre parcialmente RF-01, RF-08 e RF-11; RNF-04 e RNF-06.
 
 ### Criar um rascunho
 
 `POST /api/runs` exige `Origin` exatamente igual a `APP_ORIGIN`,
-`Content-Type: application/json` e um único cabeçalho `Idempotency-Key` com UUID v4.
+`Content-Type: application/json`, `X-Expected-User-Id` correspondente à sessão e
+um único cabeçalho `Idempotency-Key` com UUID v4.
 A rota não aceita parâmetros de consulta na URL. O corpo aceita somente:
 
 ```json
@@ -762,19 +800,21 @@ sucesso só ocorre após concluir a persistência atômica.
 | Conta ainda não usou a chave | `201`, cria a execução |
 | Mesma conta, chave e conteúdo normalizado | `200`, devolve a execução existente, inclusive em concorrência ou após reinício |
 | Mesma conta e chave, conteúdo diferente | `409 / IDEMPOTENCY_CONFLICT`, sem alteração |
-| Outra conta usa a mesma chave | Execução independente, com outro ID e proprietário |
+| Outra conta usa a mesma chave, com sua própria identidade esperada | Execução independente, com outro ID e proprietário |
 
 A comparação usa `creation.requestHash` da criação original, nunca campos que
 etapas posteriores possam ter modificado. Repetir conserva IDs, horário, artefatos
 e trabalho posterior; não recoloca a execução em `draft` nem apaga resultados.
 A confirmação da repetição reflete o estado atual salvo. Se a resposta falhar
 depois da substituição do arquivo, o registro pode existir: o cliente repete a
-**mesma chave e o mesmo conteúdo**, obtendo a criação original sem duplicação.
+**mesma chave, o mesmo conteúdo e a identidade esperada original**, obtendo a
+criação original sem duplicação após autenticar novamente essa conta.
 
 ### Consultar o histórico
 
-`GET /api/runs` não aceita corpo e responde `200` com `{"items": []}` para histórico vazio. Cada item
-contém somente os mesmos seis campos públicos da confirmação. A ordenação é por
+`GET /api/runs` exige `X-Expected-User-Id`, não aceita corpo e responde `200` com
+`{"items": []}` para histórico vazio. Cada item contém somente os mesmos seis
+campos públicos da confirmação. A ordenação é por
 `createdAt` decrescente e, em empate, `id` decrescente. Há somente dois filtros
 opcionais, combináveis:
 
@@ -802,10 +842,10 @@ As respostas usam o envelope de erro e `Cache-Control: no-store` de T3.2.
 
 | HTTP | Código e situação |
 | --- | --- |
-| `400` | `INVALID_INPUT`: campos, tipos ou filtros inválidos; `INVALID_JSON`: JSON malformado; `INVALID_IDEMPOTENCY_KEY`: chave ausente, inválida ou duplicada |
+| `400` | `INVALID_INPUT`: campos, tipos ou filtros inválidos; `INVALID_JSON`: JSON malformado; `INVALID_IDEMPOTENCY_KEY`: chave ausente, inválida ou duplicada; `INVALID_EXPECTED_USER_ID`: conta esperada ausente, inválida ou duplicada |
 | `401` | `INVALID_SESSION`: sessão ausente, inválida ou expirada |
 | `403` | `ORIGIN_REJECTED`: origem ausente ou diferente no POST |
-| `409` | `IDEMPOTENCY_CONFLICT`: conteúdo diferente para a mesma conta e chave |
+| `409` | `IDEMPOTENCY_CONFLICT`: conteúdo diferente para a mesma conta e chave; `ACCOUNT_CHANGED`: conta esperada diferente da sessão, sem acessar execuções |
 | `413` | `BODY_TOO_LARGE`: corpo JSON excede 16 KiB |
 | `415` | `UNSUPPORTED_MEDIA_TYPE`: conteúdo diferente de JSON |
 | `503` | `STORAGE_FAILURE`: falha de leitura, gravação ou registro corrompido/inacessível; sem confirmação falsa ou dados internos |
@@ -850,6 +890,13 @@ Links e recarregamento funcionam diretamente. Após cadastro ou login, a pessoa
 retorna à página interna solicitada ou ao histórico. A conta do produto é
 identificada como distinta do acesso que os agentes usarão na aplicação testada.
 
+O helper HTTP envia `X-Expected-User-Id` nas operações de execuções e logout.
+A identidade é capturada quando a operação é preparada; uma tentativa recuperada
+usa seu `accountId` original. Consultas posteriores de sessão não substituem essa
+identidade. `ACCOUNT_CHANGED` retira os dados privados da tela e conserva a
+tentativa para a conta original, sem repetir a operação na conta recém-encontrada
+nem encerrar automaticamente a sessão dela.
+
 O servidor permite somente as páginas acima e `/web/app.js` e `/web/styles.css`,
 com tipos de conteúdo explícitos. Os arquivos são encontrados a partir do módulo
 do servidor, em desenvolvimento e após compilação, independentemente do diretório
@@ -893,19 +940,48 @@ o botão fica desabilitado. Não se armazenam senha, token ou cookie nessa área
 
 Queda de conexão ou resultado incerto preservam a tentativa, incluindo após
 recarregar a página. “Tentar confirmar salvamento” repete a mesma chave e o mesmo
-corpo original; o formulário não transforma silenciosamente essa tentativa em
-outro rascunho. Falhas conclusivas de preenchimento liberam correção. Sucesso
-confirmado remove o registro. Logout explícito também o remove.
+corpo original e `accountId`; o formulário não transforma silenciosamente essa
+tentativa em outro rascunho. Falhas conclusivas de preenchimento liberam correção. Sucesso
+confirmado remove o registro. Logout só remove a recuperação após receber `204`.
 
 A recuperação dura **na mesma aba e para a mesma conta, até confirmação ou
-logout**; não é backup permanente do formulário. Depois de expiração da sessão,
-o conteúdo pendente só reaparece após `GET /api/auth/me` confirmar o mesmo ID de
+logout confirmado**; não é backup permanente do formulário. Depois de expiração
+da sessão, o conteúdo pendente só reaparece após `GET /api/auth/me` confirmar o mesmo ID de
 conta. Outra conta não recebe o formulário da anterior. Fechar a aba ou apagar
 seus dados locais pode perder a possibilidade de recuperar a tentativa.
 O preenchimento ainda não enviado também pode ser preservado ao sair da página
 ou ao retirar a sessão, se o armazenamento local estiver disponível. Essa cópia
 não tem chave de envio e não representa uma execução criada; sua preservação
 ocorre nesses eventos, sem promessa de salvamento contínuo a cada alteração.
+
+Ao receber `204` do logout, a interface primeiro impede que `rememberForm` ou
+`pagehide` regravem o material, interrompe a verificação periódica de sessão e
+retira os dados privados; então limpa os registros de recuperação e abre a página
+de acesso. Se essa limpeza local falhar, a sessão continua tratada como encerrada
+e a interface informa o problema de limpeza, sem reabrir a tela privada ou afirmar
+que o logout falhou.
+
+Falha de rede ou `503` no logout preserva chave, corpo original, identificação da
+conta e mecanismo de recuperação. A mensagem é: “Não foi possível confirmar a
+saída. Sua tentativa de salvamento foi preservada.” Isso não afirma que a sessão
+continua ativa: o servidor pode ter encerrado a sessão e perdido apenas a
+resposta. Uma confirmação posterior de sessão inválida retira os dados da tela
+e mantém a recuperação restrita à conta original.
+
+Antes de enviar uma decisão, a página mantém em memória
+`{accountId, runId, outputId, outputRevision, comment}`, com o texto literal,
+inclusive espaços. Esse contexto acompanha as reconsultas e “Tentar novamente”:
+
+| Estado consultado | Recuperação do comentário |
+| --- | --- |
+| Mesma revisão, ainda sem decisão | Restaura o comentário e permite nova ação explícita do usuário |
+| A decisão enviada já consta no servidor | Exibe a confirmação persistida e dispensa a cópia pendente |
+| Revisão mudou ou há decisão conflitante | Mantém o comentário anterior para leitura/cópia, identificado pela revisão original; não preenche uma revisão nova |
+| Consulta falhou | Mantém o contexto para a próxima tentativa de consulta |
+
+A cópia aparece somente para a mesma conta e execução, não gera outro POST
+automaticamente e não é persistida. Sua preservação cobre erros e reconstruções
+da página atual; não há promessa de recuperação após recarregar ou fechar a aba.
 
 Credenciais inválidas, participante não habilitado, excesso de tentativas,
 configuração de origem e indisponibilidade recebem mensagens legíveis. Falhas de
@@ -1055,7 +1131,8 @@ incluindo `plan: null` para rascunhos. As demais operações, inclusive `/contin
 aguardam a integração correspondente.
 
 Cadastro e entrada permitem obter a sessão; saída a invalida. Todas as operações
-de execução abaixo exigem usuário autenticado e conferência de proprietário. Operações
+de execução abaixo exigem usuário autenticado, `X-Expected-User-Id` e conferência
+de proprietário. Operações
 com versões desatualizadas são recusadas com motivo legível; mídia não expõe caminhos
 internos nem segredos. Autenticação e cadastro seguem os RF do produto.
 

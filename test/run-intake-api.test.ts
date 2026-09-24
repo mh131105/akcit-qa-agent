@@ -40,8 +40,13 @@ async function harness(t: TestContext) {
   async function close() { app.close(); app.closeAllConnections(); await once(app, 'close'); }
   await listen();
   t.after(async () => { await close(); await fs.rm(dataDir, { recursive: true, force: true }); });
+  // Identidade capturada apenas no login/cadastro; nunca reconsultada antes de uma operação.
+  const expectedUsers = new Map<string, string>();
   async function request(path: string, body?: unknown, cookie?: string, overrides: RequestInit = {}) {
-    const headers = new Headers({ Origin: origin, 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) });
+    const expectedUserId = cookie && expectedUsers.get(cookie);
+    const headers = new Headers({ Origin: origin, 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}),
+        ...(expectedUserId && (path.startsWith('/api/runs') || path === '/api/auth/logout')
+          ? { 'X-Expected-User-Id': expectedUserId } : {}) });
     new Headers(overrides.headers).forEach((value, name) => headers.set(name, value));
     const response = await fetch(`${base}${path}`, {
       method: body === undefined ? 'GET' : 'POST',
@@ -50,7 +55,11 @@ async function harness(t: TestContext) {
     assert.equal(response.headers.get('cache-control'), 'no-store');
     const text = await response.text();
     assert.ok(!text.includes(dataDir), 'resposta não revela caminhos internos');
-    return { response, status: response.status, body: text ? JSON.parse(text) : null };
+    const result = text ? JSON.parse(text) : null;
+    if (response.ok && ['/api/auth/register', '/api/auth/login'].includes(path)) {
+      expectedUsers.set(cookieOf(response), result.user.id);
+    }
+    return { response, status: response.status, body: result };
   }
   async function register(index = 0) {
     const result = await request('/api/auth/register', accounts[index]);
@@ -93,6 +102,59 @@ async function wireRequest(url: string, method: string, cookie: string, body: un
     request.end(JSON.stringify(body));
   });
 }
+
+test('BUG-T2.1-01: criação e histórico recusam identidade ausente, inválida e duplicada', async t => {
+  const h = await harness(t);
+  const owner = await h.register();
+  for (const method of ['GET', 'POST']) {
+    for (const expected of [[], ['X-Expected-User-Id', 'not-a-uuid'],
+      ['X-Expected-User-Id', owner.user.id, 'x-expected-user-id', owner.user.id]]) {
+      const denied = await wireRequest(`${h.base}/api/runs`, method, owner.cookie, method === 'POST' ? input : undefined,
+        [...expected, 'Idempotency-Key', randomUUID()]);
+      error(denied, 400, 'INVALID_EXPECTED_USER_ID');
+    }
+  }
+  assert.deepEqual(await h.files(), []);
+});
+
+test('BUG-T2.1-01: operação de A com sessão B não cria, lê nem altera registros; A recupera a chave original', async t => {
+  const h = await harness(t);
+  const owner = await h.register();
+  const other = await h.register(1);
+  const existing = await h.create(other.cookie);
+  assert.equal(existing.status, 201);
+  const original = await h.raw(existing.body.id);
+  const files = await h.files();
+  const key = randomUUID();
+  const creates = t.mock.method(RunStore.prototype, 'createIdempotent');
+  const lists = t.mock.method(RunStore.prototype, 'listForOwner');
+  const reads = t.mock.method(RunStore.prototype, 'read');
+  const expected = { 'X-Expected-User-Id': owner.user.id, 'Idempotency-Key': key };
+  const denied = await h.request('/api/runs', input, other.cookie, { headers: expected });
+  error(denied, 409, 'ACCOUNT_CHANGED');
+  assert.equal(denied.response.headers.get('location'), null);
+  for (const path of ['/api/runs', `/api/runs/${existing.body.id}`]) {
+    const result = await h.request(path, undefined, other.cookie, { headers: expected });
+    error(result, 409, 'ACCOUNT_CHANGED');
+    assert.deepEqual(result.body, denied.body);
+  }
+  for (const privateValue of [owner.user.id, other.user.id, existing.body.id, input.text]) {
+    assert.ok(!JSON.stringify(denied.body).includes(privateValue));
+  }
+  assert.equal(creates.mock.callCount(), 0);
+  assert.equal(lists.mock.callCount(), 0);
+  assert.equal(reads.mock.callCount(), 0);
+  creates.mock.restore(); lists.mock.restore(); reads.mock.restore();
+  assert.deepEqual(await h.files(), files);
+  assert.equal(await h.raw(existing.body.id), original);
+  const recovered = await h.request('/api/runs', input, owner.cookie, { headers: expected });
+  assert.equal(recovered.status, 201);
+  assert.equal(recovered.body.id, idFor(owner.user.id, key));
+  assert.equal((await h.store.read(recovered.body.id)).run.ownerId, owner.user.id);
+  assert.equal((await h.store.read(recovered.body.id)).run.artifacts[0]!.text, input.text);
+  assert.equal((await h.request('/api/runs', input, owner.cookie, { headers: expected })).status, 200);
+  assert.deepEqual((await h.request('/api/runs', undefined, other.cookie)).body, { items: [existing.body] });
+});
 
 test('T3.3: entrar, criar por HTTP, abrir rascunho literal e reencontrar após reinício e novo login', async t => {
   const h = await harness(t);
@@ -302,21 +364,21 @@ test('T3.3: sessão, origem, JSON, campos permitidos e chave UUID v4 são obriga
   }
   // Cabeçalhos separados no fio, incluindo diferenças de caixa; fetch combina duplicados.
   const duplicated = await wireRequest(`${h.base}/api/runs`, 'POST', owner.cookie, input,
-    ['Idempotency-Key', key, 'idempotency-key', key]);
+    ['X-Expected-User-Id', owner.user.id, 'Idempotency-Key', key, 'idempotency-key', key]);
   error(duplicated, 400, 'INVALID_IDEMPOTENCY_KEY');
   error(await h.request(`/api/runs?ownerId=${owner.user.id}`, input, owner.cookie,
     { headers: { 'Idempotency-Key': key } }), 400, 'INVALID_INPUT');
   const forgedOwner = { ownerId: owner.user.id };
   for (const headers of [['Content-Length', String(Buffer.byteLength(JSON.stringify(forgedOwner)))],
     ['Transfer-Encoding', 'chunked']]) {
-    error(await wireRequest(`${h.base}/api/runs`, 'GET', owner.cookie, forgedOwner, headers), 400, 'INVALID_INPUT');
+    error(await wireRequest(`${h.base}/api/runs`, 'GET', owner.cookie, forgedOwner, ['X-Expected-User-Id', owner.user.id, ...headers]), 400, 'INVALID_INPUT');
   }
   assert.deepEqual(await h.files(), [], 'entrada recusada não deixa registros nem temporários');
   const accepted = await h.create(owner.cookie, key, { ...input, name: ` ${'😀'.repeat(120)} `,
     applicationName: ` ${'á'.repeat(120)} `, objective: ` ${'a'.repeat(2000)} ` });
   assert.equal(accepted.status, 201);
   assert.equal(accepted.body.name, '😀'.repeat(120));
-  const getWithoutOrigin = await fetch(`${h.base}/api/runs`, { headers: { Cookie: owner.cookie } });
+  const getWithoutOrigin = await fetch(`${h.base}/api/runs`, { headers: { Cookie: owner.cookie, 'X-Expected-User-Id': owner.user.id } });
   assert.equal(getWithoutOrigin.status, 200);
 });
 

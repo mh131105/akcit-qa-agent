@@ -95,6 +95,14 @@ export async function handleApi(
     }
     const session = auth.authenticate(request.headers.cookie);
     if (account === 'me') { json(response, 200, { user: session.user }); return; }
+    const expectedUsers = request.headersDistinct['x-expected-user-id'] ?? [];
+    if (expectedUsers.length !== 1 || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(expectedUsers[0]!)) {
+      throw new HttpError(400, 'INVALID_EXPECTED_USER_ID', 'Informe um único X-Expected-User-Id com UUID v4.');
+    }
+    // Precondição da interface; propriedade e autoria continuam vindo somente da sessão.
+    if (expectedUsers[0]!.toLowerCase() !== session.userId) {
+      throw new HttpError(409, 'ACCOUNT_CHANGED', 'A conta da sessão mudou. Entre novamente na conta original.');
+    }
     if (account === 'logout') {
       fields(body, []);
       auth.logout(request.headers.cookie);
