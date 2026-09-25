@@ -80,3 +80,60 @@ Confirmação de que o estado e a decisão registrada permanecem após atualiza�
 1. **Nenhum navegador ou mapeamento iniciado:** A aprovação humana dos casos é a segunda autorização exigida pelo fluxo do produto antes de qualquer ação na aplicação testada. Esta entrega não inicia navegador, não agenda tarefas de mapeamento (`mapping`) e não chama modelos de IA.
 2. **Processamento automático de alterações pendente:** O registro da solicitação de alterações e seu comentário é persistido de forma imutável. A interpretação e o reprocessamento dessa alteração (revisão de plano ou regeneração de casos) não estão incluídos neste card e exigirão entrega futura com revisão de dependências.
 3. **Escopo do `/continue`:** Permanece restrito à geração dos casos lógicos a partir do plano aprovado.
+
+## 5. BUG-T6.2-01 — Comentário preservado e casos desatualizados
+
+Verificação em **25/09/2026 (UTC)**, no próprio [PR #26](https://github.com/mh131105/akcit-qa-agent/pull/26).
+Base reproduzida: [`41d8b20`](https://github.com/mh131105/akcit-qa-agent/commit/41d8b20ae8514c6caca67323422890402566d07f).
+Correção e regressões: [`063e19a`](https://github.com/mh131105/akcit-qa-agent/commit/063e19ae34c4cdc179951457d57080191c4e7dd5).
+Os resultados e as capturas das seções anteriores correspondem à entrega original;
+esta seção registra a validação adicional do bug.
+
+### Reprodução e correção
+
+1. Após abortar uma decisão antes da gravação, o campo manteve A. Ao editar para
+   `  B: Revisar também os dados do CT-03.\n  ` e clicar em **Atualizar consulta**,
+   o smoke falhou: recebeu `Revisar o resultado esperado do caso CT-03.` (A).
+   A consulta reutilizava o comentário capturado no envio. Agora chama
+   `pendingComment(run, accountId, pending)` antes de reconstruir a página,
+   preservando os vínculos de conta, execução, saída e revisão.
+2. Com apenas a correção do comentário aplicada, aprovar os casos e acrescentar
+   uma revisão da curadoria pelo armazenamento sintético ainda deixou a tela
+   mostrando a confirmação de aprovação. O smoke falhou aguardando o aviso de
+   casos desatualizados. Agora `cases.current` é verificado antes da decisão:
+   o aviso tem precedência e a aprovação permanece no histórico com a indicação
+   **Conteúdo desatualizado**. Decisões de revisões anteriores recebem a mesma indicação.
+
+### Resultados obtidos
+
+Executado em containers locais Debian Bookworm, **Node.js 24.21.0** e dependências
+do `package-lock.json`. `check`, testes e build usaram o estágio `dependencies`
+do Dockerfile; o smoke usou `akcit-qa:t62` com os arquivos corrigidos de interface
+e smoke montados, em **Chromium 153.0.8010.52**.
+
+| Comando | Resultado |
+| --- | --- |
+| `npm run check` | Aprovado, sem erros de TypeScript. |
+| `npm test` | **144/144 aprovados**, 0 falhas, 0 ignorados; 7.684,701 ms. |
+| `npm run build` | Aprovado, compilação concluída. |
+| `npm run smoke:web` | **33 verificações aprovadas**, incluindo os cinco CA abaixo; 24.991 ms. |
+
+| Critério deste bug | Evidência automatizada em `scripts/smoke-web.mjs` |
+| --- | --- |
+| CA-01 | POST de alteração com A abortado antes da gravação; editar para B e atualizar conserva B literalmente. Continua apenas um POST e nenhuma decisão de casos gravada. |
+| CA-02 | Após a falha e edição para B, criar a revisão 2 sintética e consultar deixa B em campo somente leitura da revisão 1; o comentário da revisão 2 fica vazio. Outra execução também começa vazia. Cabeçalho de conta e referência da saída são conferidos nos envios. |
+| CA-03 | Aprovar casos, alterar a dependência de curadoria no armazenamento e consultar mostra **Casos desatualizados**, identifica a aprovação histórica como desatualizada e remove os dois botões de decisão. `cases.current` e `canDecideCases` são falsos; a coleção de aprovações permanece intacta. |
+| CA-04 | Antes de alterar a dependência, recarregar conserva a confirmação de aprovação e `cases.current: true`, com uma única aprovação de casos. |
+| CA-05 | Gravar o pedido de alteração da revisão 2 com resposta 200 e abortar sua entrega ao navegador. A consulta recupera uma única decisão com o comentário correto; recuperação e reload não acrescentam POST. |
+
+O smoke gera `web-result.json`, `web-cases-stale.png`,
+`web-cases-stale-mobile.png` e `web-cases-comment-recovery.png` quando
+`SMOKE_ARTIFACT_DIR` está definido. As capturas adicionais foram inspecionadas:
+aviso e histórico legíveis em 390 px, sem transbordamento; comentário antigo
+somente para cópia e campo da revisão nova vazio. Na CI, ficam no artefato `web-smoke`.
+
+Dados, contas e armazenamento temporário exclusivamente sintéticos; chamadas de
+modelo substituídas no teste, **nenhuma inferência paga**. As consultas e decisões
+mantiveram a contagem de chamadas simuladas, sem iniciar mapeamento. Revisão técnica
+do ajuste realizada pelo Codex, conforme solicitado pelo responsável, sem achados
+bloqueantes nos cinco critérios.
