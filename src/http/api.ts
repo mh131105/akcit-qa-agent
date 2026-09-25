@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { AuthError, AuthService } from '../auth.js';
 import { executeApprovalCommand, executePlanCommand, getPlanReview, publicPlanDecisions } from '../application/plan-approval.js';
+import { configureTargetAccess } from '../application/target-access.js';
 import { createRun, listRuns, RunInputError } from '../application/runs.js';
 import { PreparationError, type PreparationCoordinator } from '../application/prepare-plan.js';
 import type { readConfig } from '../config.js';
@@ -51,7 +52,7 @@ function serviceError(error: { code: string; message: string }): never {
     throw new HttpError(404, 'RUN_NOT_FOUND', 'Execução não encontrada.');
   }
   const status = ['STORAGE_FAILURE', 'RUN_INACCESSIBLE'].includes(error.code) ? 503
-    : ['INVALID_RUN_ID', 'COMMENT_REQUIRED'].includes(error.code) ? 400 : 409;
+    : ['INVALID_RUN_ID', 'COMMENT_REQUIRED', 'INVALID_INPUT', 'AUTHORIZED_TARGET_REQUIRED', 'INVALID_URL', 'TARGET_NOT_ALLOWED'].includes(error.code) ? 400 : 409;
   throw new HttpError(status, error.code, error.message);
 }
 
@@ -68,7 +69,7 @@ export async function handleApi(
     const account = /^\/api\/auth\/(register|login|logout|me)$/.exec(path)?.[1];
     const run = /^\/api\/runs\/([^/]+)(?:\/(approve|request-changes|start|cancel|answer|resume|continue))?$/.exec(path);
     if (!account && !run && !collection) throw new HttpError(404, 'NOT_FOUND', 'Rota não encontrada.');
-    const methods = collection ? ['GET', 'POST'] : [account === 'me' || (run && !run[2]) ? 'GET' : 'POST'];
+    const methods = collection ? ['GET', 'POST'] : run && !run[2] ? ['GET', 'PATCH'] : account === 'me' ? ['GET'] : ['POST'];
     if (!methods.includes(request.method!)) {
       response.setHeader('Allow', methods.join(', '));
       throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Método não permitido.');
@@ -76,7 +77,7 @@ export async function handleApi(
     const method = request.method;
     auth.ensureConfigured();
     let body: Record<string, unknown> = {};
-    if (method === 'POST') {
+    if (method === 'POST' || method === 'PATCH') {
       if (request.headers.origin !== config.appOrigin) {
         throw new HttpError(403, 'ORIGIN_REJECTED', 'Origem não permitida.');
       }
@@ -129,6 +130,13 @@ export async function handleApi(
       const result = await getPlanReview(runs, runId, { userId: session.userId });
       if (!result.ok) serviceError(result.error);
       json(response, 200, result.review);
+      return;
+    }
+    if (method === 'PATCH') {
+      if (url.search) throw invalid();
+      const result = await configureTargetAccess(runs, runId, body, { userId: session.userId }, config.targetAllowedOrigins);
+      if (!result.ok) serviceError(result.error);
+      json(response, 200, { targetAccess: result.targetAccess });
       return;
     }
     if (run![2] === 'start' || run![2] === 'cancel' || run![2] === 'resume') {

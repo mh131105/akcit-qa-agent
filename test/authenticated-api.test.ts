@@ -23,7 +23,7 @@ function waiting(id: string, ownerId: string): RunRecord {
   return {
     id, ownerId, name: 'Revisão sintética', applicationName: 'Alvo controlado',
     createdAt: '2026-09-23T12:00:00.000Z', status: 'awaiting_approval', phase: 'planning',
-    input: { credentialRef: secret, startUrl: secret, accessProfile: secret },
+    input: { credentialRef: secret, startUrl: null, accessProfile: null },
     artifacts: [{ path: secret }], questions: [], answers: [], validationPolicy: {}, budgetCycles: [],
     privateField: secret,
     outputs: [
@@ -187,7 +187,7 @@ test('T3.2: cadastro, consulta própria, aprovação idempotente, logout e retor
   assert.deepEqual((await h.request('/api/auth/me', undefined, owner.cookie)).body, { user: owner.user });
   await h.store.create(waiting('run-own', owner.user.id));
   const review = await h.request('/api/runs/run-own', undefined, owner.cookie);
-  assert.deepEqual(Object.keys(review.body).sort(), ['id', 'name', 'applicationName', 'createdAt', 'status', 'phase', 'plan', 'curation', 'cases', 'canCreateCases', 'canDecideCases', 'answers', 'canResume', 'approvals', 'progress', 'stopReason', 'questions'].sort());
+  assert.deepEqual(Object.keys(review.body).sort(), ['id', 'name', 'applicationName', 'createdAt', 'status', 'phase', 'plan', 'curation', 'cases', 'canCreateCases', 'canDecideCases', 'answers', 'canResume', 'approvals', 'progress', 'stopReason', 'questions', 'targetAccess'].sort());
   assert.equal(review.body.plan.revision, 1);
   assert.equal(review.body.plan.payload.testPlan.objective, 'Verificar o exemplo.');
   assert.equal(review.body.plan.validations[0].status, 'approved');
@@ -490,7 +490,7 @@ function waitingCases(id: string, ownerId: string): RunRecord {
   return {
     id, ownerId, name: 'Revisão sintética de casos', applicationName: 'Alvo controlado',
     createdAt: '2026-09-23T12:00:00.000Z', status: 'awaiting_approval', phase: 'case_design',
-    input: { credentialRef: secret, startUrl: secret, accessProfile: secret, objective: 'Testar', artifactIds: ['artifact-1'] },
+    input: { credentialRef: secret, startUrl: null, accessProfile: null, objective: 'Testar', artifactIds: ['artifact-1'] },
     artifacts: [artifact], questions: [], answers: [], validationPolicy: {}, budgetCycles: [],
     outputs: [
       {

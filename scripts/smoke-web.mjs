@@ -795,7 +795,7 @@ async function preparationJourney(context, store, owner) {
 try {
   if (artifactDir) await mkdir(artifactDir, { recursive: true });
   const config = readConfig({ DATA_DIR: root, PILOT_ALLOWED_EMAILS: accounts.map(account => account.email).join(','),
-    PI_PROVIDER: 'test-only', PI_MODEL: 'scripted' });
+    PI_PROVIDER: 'test-only', PI_MODEL: 'scripted', TARGET_ALLOWED_ORIGINS: 'https://alvo.exemplo.test' });
   server = await createApp(config, { now: () => clock, modelCall, modelPreflight: async () => {} });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
@@ -852,6 +852,100 @@ try {
   await page.getByRole('link', { name, exact: true }).click();
   await bodyIncludes('Material recebido. O processamento ainda não foi iniciado.');
   checked.push('recarregamento, logout/login e reencontro da execução persistida');
+
+  // T8.1: Configurar acesso privado ao alvo
+  await bodyIncludes('Acesso pendente. Configure o endereço e a conta de teste antes do mapeamento.');
+
+  // Erro de envio: destino não autorizado
+  await page.getByLabel('URL inicial', { exact: true }).fill('https://nao-autorizado.exemplo.test');
+  await page.getByLabel('Perfil de acesso', { exact: true }).fill('Operador de reservas');
+  await page.getByLabel('Preparação necessária', { exact: true }).fill('Iniciar com a lista de reservas vazia.');
+  await page.getByLabel('Usuário da conta de teste', { exact: true }).fill('operador-reserva');
+  await page.getByLabel('Senha da conta de teste', { exact: true }).fill('senha-secreta-alvo-123!');
+  await page.getByLabel('Confirmo que tenho autorização para testar esta aplicação', { exact: true }).check();
+  await page.getByRole('button', { name: 'Salvar acesso', exact: true }).click();
+  await bodyIncludes('O endereço informado não pertence às origens autorizadas pela equipe do piloto.');
+  assert.equal(await page.getByLabel('Senha da conta de teste', { exact: true }).inputValue(), '', 'Senha limpa após erro de validação.');
+
+  // Erro de envio: resposta perdida / falha de rede
+  await page.getByLabel('URL inicial', { exact: true }).fill('https://alvo.exemplo.test');
+  await page.getByLabel('Senha da conta de teste', { exact: true }).fill('senha-secreta-alvo-123!');
+  await page.route(`**/api/runs/${draftId}`, async route => {
+    if (route.request().method() === 'PATCH') await route.abort('connectionreset');
+    else await route.continue();
+  });
+  await page.getByRole('button', { name: 'Salvar acesso', exact: true }).click();
+  await bodyIncludes(/não foi possível concluir a solicitação|verifique a conexão/i);
+  assert.equal(await page.getByLabel('Senha da conta de teste', { exact: true }).inputValue(), '', 'Senha limpa após erro de rede, sem reenvio automático.');
+  await page.unroute(`**/api/runs/${draftId}`);
+
+  // Conflito de revisão: STALE_VERSION
+  await store.update(draftId, record => {
+    record.run.input.accessRevision = 1;
+    return { save: true, value: null };
+  });
+  await page.getByLabel('Senha da conta de teste', { exact: true }).fill('senha-secreta-alvo-123!');
+  await page.getByRole('button', { name: 'Salvar acesso', exact: true }).click();
+  await bodyIncludes(/consulte a configuração salva antes de tentar novamente/i);
+  await visible(page.getByRole('button', { name: 'Consultar registro atualizado', exact: true }));
+  assert.equal(await page.getByLabel('Senha da conta de teste', { exact: true }).inputValue(), '', 'Senha limpa após conflito de versão.');
+  await store.update(draftId, record => {
+    record.run.input.accessRevision = 0;
+    return { save: true, value: null };
+  });
+  await page.getByRole('button', { name: 'Consultar registro atualizado', exact: true }).click();
+  await bodyIncludes('Acesso pendente. Configure o endereço e a conta de teste antes do mapeamento.');
+
+  // Salvamento com sucesso da configuração inicial completa
+  await page.getByLabel('URL inicial', { exact: true }).fill('https://alvo.exemplo.test');
+  await page.getByLabel('Perfil de acesso', { exact: true }).fill('Operador de reservas');
+  await page.getByLabel('Preparação necessária', { exact: true }).fill('Iniciar com a lista de reservas vazia.');
+  await page.getByLabel('Usuário da conta de teste', { exact: true }).fill('operador-reserva');
+  await page.getByLabel('Senha da conta de teste', { exact: true }).fill('senha-secreta-alvo-123!');
+  await page.getByLabel('Confirmo que tenho autorização para testar esta aplicação', { exact: true }).check();
+  await page.getByRole('button', { name: 'Salvar acesso', exact: true }).click();
+
+  await bodyIncludes('Acesso configurado. O login ainda não foi verificado pelo navegador.');
+  await bodyIncludes('https://alvo.exemplo.test');
+  await bodyIncludes('Operador de reservas');
+  await bodyIncludes('Iniciar com a lista de reservas vazia.');
+  await bodyIncludes('Credencial cadastrada');
+  await bodyIncludes('Confirmada pelo usuário');
+
+  // Segredo e usuário não permanecem no storage do navegador
+  const targetStorage = await page.evaluate(() => JSON.stringify({ session: { ...sessionStorage }, local: { ...localStorage } }));
+  assert.ok(!targetStorage.includes('senha-secreta-alvo-123!'), 'Senha não pode ser persistida no storage.');
+  assert.ok(!targetStorage.includes('operador-reserva'), 'Usuário não pode ser persistido no storage.');
+
+  // Captura do resumo salvo
+  await screenshot('acesso-configurado.png', 1366);
+
+  // Recarregar e conferir resumo persistido
+  await page.reload();
+  await bodyIncludes('Acesso configurado. O login ainda não foi verificado pelo navegador.');
+  await bodyIncludes('https://alvo.exemplo.test');
+  await bodyIncludes('Operador de reservas');
+  await bodyIncludes('Credencial cadastrada');
+
+  // Atualização sem reenviar senha
+  await page.locator('summary', { hasText: 'Alterar configuração de acesso' }).click();
+  await page.getByLabel('Perfil de acesso', { exact: true }).fill('Operador sênior de reservas');
+  await page.getByLabel('Preparação necessária', { exact: true }).fill('Carregar 5 reservas prévias.');
+  assert.equal(await page.getByLabel('Substituir usuário e senha da conta de teste', { exact: true }).isChecked(), false);
+  await page.getByRole('button', { name: 'Salvar acesso', exact: true }).click();
+
+  await bodyIncludes('Acesso à aplicação testada · Revisão 2');
+  await bodyIncludes('Operador sênior de reservas');
+  await bodyIncludes('Carregar 5 reservas prévias.');
+  await bodyIncludes('Credencial cadastrada');
+
+  const storedAfterUpdate = await store.read(draftId);
+  assert.equal(storedAfterUpdate.run.input.accessRevision, 2);
+  assert.equal(storedAfterUpdate.run.input.accessProfile, 'Operador sênior de reservas');
+  assert.equal(storedAfterUpdate.run.input.dataPreparation, 'Carregar 5 reservas prévias.');
+  assert.equal(storedAfterUpdate.targetCredential?.username, 'operador-reserva');
+  assert.equal(storedAfterUpdate.targetCredential?.password, 'senha-secreta-alvo-123!');
+  checked.push('T8.1: configurar acesso → validação/origem não autorizada → resposta perdida sem reenvio automático → conflito de revisão → salvamento 200 → recarregamento com resumo sem senha → atualização sem reenviar senha incrementa revisão');
 
   await page.goto('/execucoes/nova');
   await fillRun(pendingName, pendingText);
@@ -1096,7 +1190,7 @@ try {
   assert.deepEqual(pageErrors, [], 'Nenhum erro JavaScript na preparação e aprovação do plano.');
   }
   await regressions(origin, store, owner, other);
-  result = { status: 'passed', scope: 'T2.1/T4.1/T6.1/T6.2 — navegador, API, coordenador e persistência reais; chamada de modelo substituída, sem inferência paga', checked,
+  result = { status: 'passed', scope: 'T2.1/T4.1/T6.1/T6.2/T8.1 — navegador, API, coordenador e persistência reais; chamada de modelo substituída, sem inferência paga', checked,
     node: process.versions.node, chromium: browser.version(), durationMs: Date.now() - started };
 } catch (error) {
   result = { status: 'failed', checked, error: error.message, pageUrl: page?.url(), durationMs: Date.now() - started };

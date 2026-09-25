@@ -233,6 +233,18 @@ input,textarea,select {
   border-radius:6px;
   min-height:46px;
 }
+input[type="checkbox"] {
+  width:auto;
+  min-height:auto;
+  margin-right:8px;
+  accent-color:var(--dark);
+}
+.checkbox-field label {
+  display:flex;
+  align-items:center;
+  cursor:pointer;
+  font-weight:500;
+}
 textarea {
   resize:vertical;
   line-height:1.65;

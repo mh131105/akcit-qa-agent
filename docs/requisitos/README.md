@@ -29,11 +29,20 @@ casos, aprovações humanas, mapa, detalhamento e uma correção antes do relat�
 
 ## Estado conferido da base
 
-Há servidor inicial, fábrica de sessões do Pi, cadastro dos seis papéis, diretórios
-de tools/skills, ambiente de navegador/cursor/vídeo e publicação em dev/prod.
-**Os requisitos deste documento ainda precisam ser implementados e aceitos.** A
-fábrica atual não habilita rede do modelo, skills ou tools. O smoke de infraestrutura
-não comprova a qualidade nem o funcionamento do fluxo de testes do produto.
+Estão implementadas e integradas na base as etapas fundamentais de preparação textual e acesso:
+- **Autenticação e sessão:** cadastro, login, logout, expiração e isolamento de contas (T3.2, T3.3, BUG-T2.1-01).
+- **Entrada e histórico:** criação de rascunhos com requisitos em texto, preservação literal dos artefatos e busca/filtros no histórico (T3.3).
+- **Curadoria, plano e esclarecimentos:** coordenação em pipeline com Pi, curador de artefatos, designer de testes e validador independente; ciclo de perguntas/respostas de esclarecimento com retomada sem reprocessamento redundante (T4.1, ajuste 24/09).
+- **Aprovação do plano:** revisão humana obrigatória, separação entre aprovação e continuidade (`applyPlanApprovalCommand`, T1.1, T3.1, T4.1).
+- **Casos de teste lógicos:** geração dos casos a partir do plano aprovado com validação independente por `output-validator` (T6.1) e aprovação humana ou solicitação de alterações nos casos pelo site (T6.2).
+- **Aplicação controlada de reservas:** alvo sintético de demonstração com login, reservas, regras de limite, defeito conhecido e reset (T7).
+- **Configuração de acesso ao alvo:** configuração da URL inicial autorizada (`TARGET_ALLOWED_ORIGINS`), credencial privada em envelope seguro e controle de revisão (T8.1).
+
+As etapas seguintes continuam pendentes de implementação:
+- Mapeamento autônomo da aplicação pelo executor no navegador (T8).
+- Detalhamento de percursos a partir dos casos aprovados e do mapa validado (T6).
+- Execução autônoma dos casos no navegador real com captura de tela e gravação de vídeo (T8).
+- Redação e validação independente do relatório final (T6, T10).
 
 Documentos de clientes, credenciais, sessões e vídeos ficam no armazenamento da
 aplicação, fora do Git. No repositório, manter apenas exemplos sintéticos e metodologia.
