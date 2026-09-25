@@ -311,6 +311,7 @@ async function main() {
         const context = await browser.newContext({ baseURL: origin, viewport: { width: 1366, height: 900 } });
         const page = await context.newPage();
         page.setDefaultTimeout(20000);
+
 console.error('[eval-A] ' + 'A1 goto');
         await page.goto('/');
 console.error('[eval-A] ' + 'A2 acesso');
@@ -323,6 +324,7 @@ console.error('[eval-A] ' + 'A3 criar-conta-form');
 console.error('[eval-A] ' + 'A4 cadastrar');
         await page.getByRole('button', { name: 'Cadastrar e entrar', exact: true }).click();
 console.error('[eval-A] ' + 'A5 execucoes');
+        await page.getByRole('button', { name: 'Sair', exact: true }).waitFor({ timeout: 60_000 });
         await page.waitForURL(url => url.pathname.startsWith('/execucoes'), { timeout: 60_000 });
 console.error('[eval-A] ' + 'A6 cookies');
         const sessionCookie = 'akcit_session=' + (await context.cookies()).find(cookie => cookie.name === 'akcit_session')?.value;
@@ -332,22 +334,39 @@ console.error('[eval-A] ' + 'A7 me');
         // Criação pela interface.
 console.error('[eval-A] ' + 'A8 nova-execucao');
         await page.getByRole('link', { name: 'Nova execução', exact: true }).first().click();
-        await page.getByLabel('Nome da execução', { exact: true }).fill('Ensaio real — interface e revisão humana');
+        await page.locator('#text').waitFor({ timeout: 60_000 });
+        // Preenchimento com verificacao: uma nova renderizacao da interface nao
+        // pode deixar o formulario pela metade.
+        for (let attempt = 0; attempt < 3; attempt++) {
+          await page.locator('#name').fill('Ensaio real — interface e revisão humana');
+          await page.locator('#applicationName').fill('Reservas (T7)');
+          await page.locator('#text').fill(MATERIAL);
+          const state = await page.evaluate(() => ({
+            name: document.querySelector('#name')?.value,
+            applicationName: document.querySelector('#applicationName')?.value,
+            text: document.querySelector('#text')?.value,
+          }));
+          if (state.name && state.applicationName && state.text) break;
+          await page.waitForTimeout(300);
+        }
+        assert.equal(await page.locator('#applicationName').inputValue(), 'Reservas (T7)', 'campo Aplicação preenchido');
 console.error('[eval-A] ' + 'A9 preenchido');
-        await page.getByLabel('Material de requisitos', { exact: true }).fill(MATERIAL);
 console.error('[eval-A] ' + 'A10 salvar');
+        const createdResponse = page.waitForResponse(response => response.url().endsWith('/api/runs') && response.request().method() === 'POST', { timeout: 60_000 });
         await page.getByRole('button', { name: 'Salvar rascunho', exact: true }).click();
-console.error('[eval-A] ' + 'A11 run-criada');
+        assert.equal((await createdResponse).status(), 201, 'rascunho criado pela interface');
         await page.waitForURL(url => /^\/execucoes\/run-/.test(url.pathname), { timeout: 60_000 });
         const runId = new URL(page.url()).pathname.split('/').at(-1);
         scenario.runId = runId;
+        console.error('[eval-A] runId:', runId);
         // Preparação pela interface.
         const startResponse = page.waitForResponse(response => response.url().endsWith(`/api/runs/${runId}/start`));
         await page.getByRole('button', { name: 'Preparar plano', exact: true }).click();
         assert.equal((await startResponse).status(), 202);
         await page.getByRole('button', { name: 'Aprovar plano', exact: true }).waitFor({ timeout: 40 * 60_000 });
         // Revisão humana efetiva do plano (conteúdo real impresso e decidido pelo operador).
-        const planReview = (await context.request.get(origin + `/api/runs/${runId}`)).then(r => r.json());
+        let planReview = (await api('/api/runs/' + runId, undefined, sessionCookie, userId)).body;
+        for (let attempt = 0; attempt < 10 && !planReview?.plan; attempt++) { await page.waitForTimeout(1000); planReview = (await api('/api/runs/' + runId, undefined, sessionCookie, userId)).body; }
         if (humanDir) {
           await json(join(humanDir, 'awaiting-plan-' + runId + '.json'), { runId, input: MATERIAL, curation: planReview.curation, plan: planReview.plan });
           const decisionFile = join(humanDir, 'decision-plan-' + runId + '.json');
@@ -364,7 +383,8 @@ console.error('[eval-A] ' + 'A11 run-criada');
         assert.equal((await generateCases).status(), 202);
         await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true }).waitFor({ timeout: 40 * 60_000 });
         // Revisão humana efetiva dos casos.
-        const caseReview = await (await context.request.get(origin + `/api/runs/${runId}`)).json();
+        let caseReview = (await api('/api/runs/' + runId, undefined, sessionCookie, userId)).body;
+        for (let attempt = 0; attempt < 10 && !caseReview?.cases; attempt++) { await page.waitForTimeout(1000); caseReview = (await api('/api/runs/' + runId, undefined, sessionCookie, userId)).body; }
         if (humanDir) {
           await json(join(humanDir, 'awaiting-cases-' + runId + '.json'), { runId, curation: caseReview.curation, plan: caseReview.plan, cases: caseReview.cases });
           const decisionFile = join(humanDir, 'decision-cases-' + runId + '.json');
@@ -373,15 +393,29 @@ console.error('[eval-A] ' + 'A11 run-criada');
           scenario.humanCases = decision;
         }
         await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true }).click();
-        // Acesso pela interface.
-        await page.getByLabel('URL inicial', { exact: true }).fill(targetOrigin + '/');
-        await page.getByLabel('Perfil de acesso', { exact: true }).fill('Operador de reservas');
-        await page.getByLabel('Preparação necessária', { exact: true }).fill('Iniciar com a lista de reservas vazia.');
-        await page.getByLabel('Usuário da conta de teste', { exact: true }).fill(TARGET_USER);
-        await page.getByLabel('Senha da conta de teste', { exact: true }).fill(TARGET_PASSWORD);
-        await page.getByLabel('Confirmo que tenho autorização para testar esta aplicação', { exact: true }).check();
+        // Acesso: aguardar a tela assentar e preencher por ID com verificação.
+        await page.getByRole('button', { name: 'Salvar acesso', exact: true }).waitFor({ timeout: 60_000 });
+        for (let attempt = 0; attempt < 3; attempt++) {
+          await page.locator('#target-start-url').fill(targetOrigin + '/');
+          await page.locator('#target-access-profile').fill('Operador de reservas');
+          await page.locator('#target-data-preparation').fill('Iniciar com a lista de reservas vazia.');
+          await page.locator('#target-username').fill(TARGET_USER);
+          await page.locator('#target-password').fill(TARGET_PASSWORD);
+          await page.locator('#target-authorized').check();
+          const state = await page.evaluate(() => ({
+            url: document.querySelector('#target-start-url')?.value,
+            profile: document.querySelector('#target-access-profile')?.value,
+            username: document.querySelector('#target-username')?.value,
+            password: document.querySelector('#target-password')?.value,
+            authorized: document.querySelector('#target-authorized')?.checked,
+          }));
+          if (state.url && state.profile && state.username && state.password && state.authorized) break;
+          await page.waitForTimeout(300);
+        }
+        assert.equal(await page.locator('#target-start-url').inputValue(), targetOrigin + '/', 'campo URL inicial preenchido');
+        const accessPatch = page.waitForResponse(response => response.url().endsWith(`/api/runs/${runId}`) && response.request().method() === 'PATCH', { timeout: 60_000 });
         await page.getByRole('button', { name: 'Salvar acesso', exact: true }).click();
-        await page.getByRole('button', { name: 'Mapear aplicação', exact: true }).waitFor({ timeout: 60_000 });
+        assert.equal((await accessPatch).status(), 200, 'acesso configurado pela interface');
         // Mapeamento pela interface com navegador e pareceres reais.
         const mappingPost = page.waitForResponse(response => response.url().endsWith(`/api/runs/${runId}/continue`));
         await page.getByRole('button', { name: 'Mapear aplicação', exact: true }).click();
@@ -396,7 +430,7 @@ console.error('[eval-A] ' + 'A11 run-criada');
           return image && image.complete && image.naturalWidth > 0 && image.src.startsWith('blob:');
         }, null, { timeout: 30_000 });
         await page.screenshot({ path: join(evidenceDir, 'ui-mapa-' + runId + '.png'), fullPage: true });
-        const finalReview = await (await context.request.get(origin + `/api/runs/${runId}`)).json();
+        const finalReview = (await api('/api/runs/' + runId, undefined, sessionCookie, userId)).body;
         assert.equal(finalReview.status, 'ready');
         assert.equal(finalReview.phase, 'mapping');
         assert.ok(!JSON.stringify(finalReview.mapping?.payload).includes('caseId'));
@@ -410,14 +444,25 @@ console.error('[eval-A] ' + 'A11 run-criada');
       } catch (error) {
         scenario.error = error?.stack ?? String(error);
         report.failures.push({ scenario: scenario.name, error: scenario.error });
+        console.error('[eval] falha na jornada A:', scenario.error);
+        try { await page.screenshot({ path: join(evidenceDir, 'falha-jornada-a.png') }).catch(() => {}); } catch {}
       } finally {
         report.scenarios.push(scenario);
+        console.error('[eval] fim jornada A. Erros acumulados:', report.failures.length);
+        if (scenario.error) {
+          console.error('[eval] Jornada A falhou: sem a jornada pela interface o ensaio está incompleto. Encerrando.');
+          await json(join(evidenceDir, 'report.json'), report);
+          process.exitCode = 1;
+          return;
+        }
       }
     }
     // Jornada B: aprovações automatizadas, registradas como tal.
+    console.error('[eval] inicio jornada B (automatizada)');
     await fullJourney('jornada-completa-aprovacoes-automatizadas', 'automatizada (roteiro)');
-    // Cenário 2: credencial inválida e correção.
+    console.error('[eval] inicio cenário 2 (credencial inválida)');
     await invalidCredentialJourney();
+    console.error('[eval] inicio cenário 3 (controles do validador)');
     // Cenário 3: controles do validador a partir do mapa real da jornada A.
     if (approvedRunId) await validatorControls(approvedRunId);
   } finally {
