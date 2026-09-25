@@ -695,14 +695,20 @@ Correções (defeito → reprodução → correção → teste de regressão em
   de credencial recusada (`blocked`/`AUTHENTICATION_MISSING` → `awaiting_input` →
   correção → nova tentativa) permanece.
 
-Verificações: `npm run check` limpo; `npm test` **195/195** (regressões de
-orçamento, cancelamento, falha de inferência, validação, recarga, reinício e
-isolamento; novo `test/pi-visual.test.ts`); imagem final construída do código
-versionado com os quatro smokes `passed` na imagem (`smoke-mapping` com 18
-verificações de integração real). Ensaio com LLM real (duas jornadas completas,
-credencial inválida com correção e controles positivo/negativo do validador) em
-[ensaio-real.md](evidencias/t8.2/ensaio-real.md), executado com
-`npm run eval:mapping:real`.
+Verificações: `npm run check` limpo; `npm test` **196/196** (regressões de
+orçamento, cancelamento, falha de inferência, validação, recarga, reinício,
+isolamento e tolerância de formato do modelo; novo `test/pi-visual.test.ts`);
+imagem final construída do código versionado com os quatro smokes `passed` na
+imagem (`smoke-mapping` com 18 verificações de integração real). Ensaio com LLM
+real concluído em [ensaio-real.md](evidencias/t8.2/ensaio-real.md): duas
+jornadas completas em `ready / mapping` (uma pela interface, com o plano e os
+casos revisados por um avaliador independente via arquivos de decisão; outra
+com aprovações automatizadas, registradas como tal), credencial inválida
+bloqueada por `AUTHENTICATION_MISSING` e corrigida pelo fluxo suportado
+(histórico e tempo acumulado preservados) e controles positivo/negativo do
+validador com a inconsistência localizada. O ensaio encontrou e motivou uma
+correção real (JSON do executor em cercas de código); o cenário afetado e uma
+execução completa foram repetidos no candidato corrigido.
 
 **Pendências verdadeiras:** detalhamento dos percursos (`route_detail`), execução
 dos testes com entradas válidas/inválidas, vídeos por tentativa, retomada

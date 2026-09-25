@@ -16,9 +16,11 @@ Ensaio com inferência real: [ensaio-real.md](ensaio-real.md).
 | **Smoke** | imagem final (CI, container com Xvfb/Chromium/xdotool) | substituído por roteiro, identificado como simulação | provar integração de navegador, cursor, capturas, destinos e interface reais |
 | **Ensaio real** | ambiente operado (container da imagem final com Pi autenticado) | DeepSeek Flash/Pro conforme perfis documentados | avaliar a qualidade da navegação escolhida pelo modelo |
 
-Nada nesta pasta, exceto [ensaio-real.md](ensaio-real.md), comprova inferência
-real; os arquivos sintéticos são sanitizados (sem credenciais, sem conteúdo de
-usuários) e identificados como exemplos.
+O ensaio com inferência real está registrado em [ensaio-real.md](ensaio-real.md):
+duas jornadas completas em `ready / mapping`, credencial inválida bloqueada e
+corrigida, e controles positivo/negativo do validador. Os demais arquivos
+sintéticos são sanitizados (sem credenciais, sem conteúdo de usuários) e
+identificados como exemplos.
 
 ## Configuração
 
@@ -31,7 +33,7 @@ usuários) e identificados como exemplos.
 
 ```bash
 npm run check
-npm test            # 195/195
+npm test            # 196/196
 npm run build
 # na imagem final (construída do SHA registrado em ensaio-real.md), como o CI:
 docker build --target runtime -t akcit-qa:ci .
@@ -81,7 +83,7 @@ imagem (ver [revisao-pr29.md](revisao-pr29.md), itens 2 e 3).
 | Verificação | Resultado |
 | --- | --- |
 | `npm run check` | limpo |
-| `npm test` | 195/195 aprovados |
+| `npm test` | 196/196 aprovados |
 | `npm run build` | completa (com `agents/` no contexto) |
 | `smoke-mapping.mjs` (imagem final) | `passed` com 18 verificações: conta pela API, recusas sem sessão, 202/repetição 200, foco errado recusado, preenchimento privado, captura insegura bloqueada, percurso login → início → reservas → nova reserva sem criar reserva, destino bloqueado, `ready/mapping`, chamadas persistidas, evidência real servida, segredo fora da projeção, aba única com popup bloqueado, cliques em alvos pequenos, capturas sem consumo de ação e privacidade indisponível bloqueando captura |
 | `smoke-web.mjs` | jornada completa: botão **Mapear aplicação**, painel do mapa, capturas por `blob:`, isolamento entre contas (404 com sessão própria), persistência após recarregar, filtro `ready` |

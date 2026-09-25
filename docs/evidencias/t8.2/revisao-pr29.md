@@ -2,8 +2,9 @@
 
 - **Branch revisada:** `feat/validated-navigation-map`.
 - **SHA inicial revisado:** `14ca870` (não havia commits posteriores em `origin`).
-- **SHA do candidato corrigido:** ver [ensaio-real.md](ensaio-real.md) (o candidato final é o
-  mesmo commit registrado lá; esta revisão evoluiu em commits na própria branch).
+- **SHA do candidato corrigido:** `58daf904b610d37c5153f60e42bd59634ba142a5`
+  (imagem `47bd28ecd54b`), conforme [ensaio-real.md](ensaio-real.md); a revisão
+  evoluiu em commits na própria branch.
 - **Imagem final validada:** construída do código versionado (`docker build --target runtime`),
   executada com o usuário `node` e as restrições do CI (`--cap-drop=ALL --read-only`, tmpfs).
 
@@ -174,8 +175,8 @@ substituições explícitas sem tocar o componente sob verificação.
 
 ## Resultado
 
-- `npm run check` limpo; `npm test` **195/195** (11 novos em `test/navigation.test.ts`,
-  7 em `test/pi-visual.test.ts`).
+- `npm run check` limpo; `npm test` **196/196** (11 novos em `test/navigation.test.ts`,
+  8 em `test/pi-visual.test.ts`).
 - Imagem final construída do código versionado; `smoke-runtime`, `smoke-target`,
   `smoke-web` e `smoke-mapping` executados na imagem com o usuário e as restrições
   do CI, todos `passed` (o smoke de mapeamento com 18 verificações de integração
