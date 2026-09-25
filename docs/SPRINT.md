@@ -418,7 +418,42 @@ Entrega técnica de padronização da distribuição de modelos e configuração
 
 > **Ressalva factual:** A execução existente comprova a integração técnica da preparação textual; ainda não comprova a qualidade do navegador, do relatório ou da validação visual, nem superioridade entre modelos.
 
-## Marcos propostos a partir de agora
+### T6.2 · Aprovar ou solicitar alterações nos casos de teste
+
+História de usuário, prioridade alta, **avanço de [T6 · #9](https://github.com/mh131105/akcit-qa-agent/issues/9)**.
+Responsável: um desenvolvedor com atuação em backend e frontend.
+Revisão: outro integrante, conferindo integração e regras de aprovação.
+Requisitos: RF-14, RN-04, RN-05, RN-06 e RNF-04/RNF-06.
+Base verificada: `develop`, merge `8b46434` do PR #25. Branch: `feat/case-approval`.
+Estado: **Implementação concluída**; revisão por outro integrante e merge para `develop` pendentes (T6 #9 permanece aberta).
+
+Como responsável pelos testes, quero revisar o conjunto de casos validado e aprová-lo ou solicitar alterações com um comentário, para registrar exatamente quais situações, dados e resultados esperados autorizei antes do mapeamento da aplicação.
+
+T6.2 implementa a segunda aprovação humana exigida pelo fluxo:
+- **Domínio puro e idempotência:** extrai a lógica compartilhada de registro e conflito de decisões em `src/domain/plan-approval.ts` e implementa `src/domain/case-approval.ts` com validação de fase (`case_design`), situação (`awaiting_approval`), dependências atômicas (`caseDependencies`) e parecer aprovado emitido por `output-validator`. Decisão idêntica é idempotente; decisões divergentes geram conflito (`409`).
+- **Aplicação e armazenamento:** atualiza atômica via `RunStore.update`, com `canDecideCases` calculado no DTO `PlanReview`. Reutiliza a coleção existente `run.approvals`, preservando histórico sem necessidade de migração ou nova coleção.
+- **Endpoints unificados:** `POST /api/runs/:id/approve` e `POST /api/runs/:id/request-changes` despacham para plano ou casos identificando o `outputId` no registro persistido, sem campos extras de fase enviados pelo cliente. Comentário não vazio é obrigatório para pedidos de alteração e preservado na íntegra.
+- **Interface web:** exibe revisão, parecer e botões de aprovação e solicitação de alterações no painel de casos em `/execucoes/:id`; separa os históricos de decisões por `outputId` (evitando misturar decisões de plano e casos); preserva comentários digitados em rascunho (`pendingComment`) contra falhas de rede e transições de tela.
+- **Limites da entrega:** decidir não inicia o navegador, não agenda tarefas de mapeamento, não reserva recursos e não chama modelos de IA. A interface informa a espera real. Processamento automático de pedidos de alteração de casos requer card e entrega futuros.
+
+Critérios atendidos:
+- **CA-01 (Aprovação válida):** casos vigentes e validados permitem registrar decisão da revisão exata.
+- **CA-02 (Pedido de alteração):** comentário não vazio obrigatório, gravado com autor, data e revisão.
+- **CA-03 (Consistência):** casos antigos, dependências alteradas ou sem parecer aprovado impedem a decisão.
+- **CA-04 (Repetição e concorrência):** envios iguais não duplicam; decisões diferentes geram conflito.
+- **CA-05 (Persistência):** recarregar, deslogar e reiniciar o servidor conservam a decisão.
+- **CA-06 (Isolamento):** outra conta não consulta nem decide sobre a execução.
+- **CA-07 (Interface correta):** decisões de plano e casos aparecem estritamente nos respectivos painéis.
+- **CA-08 (Recuperação):** perda de resposta e falha de rede preservam comentário para consulta e reenvio manual.
+- **CA-09 (Limite da entrega):** nenhum mapeamento, navegador ou intenção de trabalho é iniciado.
+- **CA-10 (Regressão):** aprovação do plano e geração de casos continuam funcionando plenamente.
+
+Verificações realizadas:
+- `npm run check`: typecheck TypeScript limpo.
+- `npm test`: **144/144 testes** aprovados, cobrindo regras de domínio, persistência, concorrência e API autenticada com isolamento entre contas.
+- `npm run build`: compilação completa para `dist/`.
+- `npm run smoke:web`: **28 verificações**, 22.611 ms, executadas no container com Node 24.21.0 e Chromium 153.0.8010.52, cobrindo a jornada do site desde a validação até a aprovação, solicitação de alterações, recuperação de falha e persistência.
+- Evidências em [docs/evidencias/t6.2/](evidencias/t6.2/README.md) com capturas em 1366 px e 390 px.
 
 | Quando | Verificação |
 | --- | --- |

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test, { type TestContext } from 'node:test';
 import { createApp } from '../src/app.js';
-import { executePlanCommand, getPlanReview } from '../src/application/plan-approval.js';
+import { executeCaseCommand, executePlanCommand, getPlanReview } from '../src/application/plan-approval.js';
 import { readConfig } from '../src/config.js';
 import { RunStore, type RunRecord, type StoredRun } from '../src/storage/runs.js';
 
@@ -23,6 +23,11 @@ const reference = { outputId: plan.id, outputRevision: plan.revision };
 const approve = { type: 'approve_plan', ...reference } as const;
 const changes = { type: 'request_plan_changes', ...reference, comment: 'Rever os limites da quantidade.' } as const;
 const proceed = { type: 'continue', ...reference } as const;
+const cases = fixture.run.outputs.find(output => output.phase === 'case_design')!;
+assert.ok(cases);
+const caseReference = { outputId: cases.id, outputRevision: cases.revision };
+const approveCases = { type: 'approve_cases', ...caseReference } as const;
+const changesCases = { type: 'request_case_changes', ...caseReference, comment: 'Revisar resultado do caso CT-01.' } as const;
 const owner = { userId: 'storage-test-owner' };
 type Request = Parameters<typeof executePlanCommand>[2];
 type Context = Parameters<typeof executePlanCommand>[3];
@@ -35,6 +40,38 @@ function waiting(id = 'run-test'): RunRecord {
     approvals: run.approvals.filter(decision => decision.outputId !== plan.id),
     questions: [{ id: 'question-test', description: 'Qual o limite?', requirementIds: ['US-01'], caseIds: [], blocking: false, sources: [] }],
     answers: [{ questionId: 'question-test', revision: 1, actorId: owner.userId, at: '2026-09-23T12:00:00Z', text: 'Até dez.', affectedCaseIds: [] }],
+    extraHistory: [{ event: 'synthetic-note', content: { preserved: true } }],
+  };
+}
+
+function waitingCases(id = 'run-cases-test'): RunRecord {
+  const run = structuredClone(fixture.run);
+  const curation = run.outputs.find(o => o.phase === 'curation');
+  const plan = run.outputs.find(o => o.phase === 'planning');
+  const fixLocators = (sources: any[]) => {
+    for (const s of sources) {
+      if (typeof s?.quote === 'string') {
+        if (s.quote.startsWith('A quantidade')) s.locator = 'L7-L10';
+        else if (s.quote.startsWith('O comentário')) s.locator = 'L14';
+      }
+    }
+  };
+  if (curation?.payload && typeof curation.payload === 'object') {
+    const p = curation.payload as any;
+    for (const req of p.requirements ?? []) {
+      fixLocators(req.sources ?? []);
+      for (const rule of req.rules ?? []) fixLocators(rule.sources ?? []);
+    }
+  }
+  if (plan?.payload && typeof plan.payload === 'object') {
+    const p = plan.payload as any;
+    fixLocators(p.testPlan?.sources ?? []);
+  }
+  return {
+    ...run, id, ownerId: owner.userId, status: 'awaiting_approval', phase: 'case_design',
+    approvals: run.approvals.filter(decision => decision.outputId !== cases.id),
+    questions: [],
+    answers: [],
     extraHistory: [{ event: 'synthetic-note', content: { preserved: true } }],
   };
 }
@@ -613,3 +650,71 @@ test('T3.1 CA-09/10: createApp recupera antes de servir, entrega site/health e n
   await createApp(readConfig({ DATA_DIR: empty.dataDir, PORT: '0' }));
   assert.deepEqual(await fs.readdir(join(empty.dataDir, 'runs')), []);
 });
+
+test('T6.2 CA-01/02: decisões dos casos sobrevivem à reabertura e preservam o registro completo', async t => {
+  const { store, reopen } = await temporaryStore(t);
+  for (const request of [approveCases, changesCases]) {
+    const run = waitingCases(request.type);
+    await store.create(run);
+    const started = Date.now();
+    const result = success(await executeCaseCommand(store, run.id, request, owner));
+    const stored = await reopen(run.id);
+    const decision = stored.run.approvals.at(-1)!;
+    assert.match(decision.id, /^[0-9a-f-]{36}$/i);
+    utc(decision.at);
+    assert.ok(Date.parse(decision.at) >= started && Date.parse(decision.at) <= Date.now());
+    assert.deepEqual(decision, {
+      id: decision.id, at: decision.at, actorId: owner.userId, ...caseReference,
+      decision: request.type === 'approve_cases' ? 'approved' : 'changes_requested',
+      comment: request.type === 'request_case_changes' ? request.comment : '',
+    });
+    assert.deepEqual(stored, {
+      schemaVersion: 1, run: { ...run, approvals: [...run.approvals, decision] }, workIntents: [],
+    });
+    assert.equal(result.work, null);
+    assert.deepEqual(result.approvals, stored.run.approvals);
+    success(await executeCaseCommand(store, run.id, request, owner));
+    assert.deepEqual(await reopen(run.id), stored, 'repetição preserva decisão e horário originais');
+  }
+});
+
+test('T6.2 CA-04: decisões concorrentes para casos preservam ID/horário na repetição e conflitam se diferentes', async t => {
+  const { store, reopen, raw } = await temporaryStore(t);
+  const run = waitingCases('concurrent-cases');
+  await store.create(run);
+
+  // Duas decisões concorrentes idênticas
+  const [first, second] = await Promise.all([
+    executeCaseCommand(store, run.id, approveCases, owner),
+    executeCaseCommand(store, run.id, approveCases, owner),
+  ]);
+  success(first);
+  success(second);
+  const stored = await reopen(run.id);
+  assert.equal(stored.run.approvals.filter(a => a.outputId === cases.id).length, 1, 'apenas uma decisão é persistida');
+
+  // Decisão conflitante diferente
+  const conflict = await executeCaseCommand(store, run.id, changesCases, owner);
+  refusal(conflict as Result, 'DECISION_CONFLICT');
+  assert.deepEqual(await reopen(run.id), stored, 'conflito não altera o registro salvo');
+});
+
+test('T6.2 CA-05: reinício do servidor preserva decisão confirmada dos casos sem iniciar novos trabalhos', async t => {
+  const { store, reopen } = await temporaryStore(t);
+  const run = waitingCases('restart-cases');
+  await store.create(run);
+  success(await executeCaseCommand(store, run.id, approveCases, owner));
+  const before = await reopen(run.id);
+
+  // Releitura com nova instância de RunStore
+  const review = await getPlanReview(store, run.id, owner);
+  assert.equal(review.ok, true);
+  if (review.ok) {
+    assert.equal(review.review.canDecideCases, false, 'decisão já registrada impede nova decisão');
+    assert.equal(review.review.approvals.some(a => a.outputId === cases.id && a.decision === 'approved'), true);
+  }
+  const after = await reopen(run.id);
+  assert.deepEqual(after, before);
+  assert.deepEqual(after.workIntents, []);
+});
+

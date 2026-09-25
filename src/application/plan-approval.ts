@@ -1,14 +1,21 @@
 import { randomUUID } from 'node:crypto';
-import { canCreateCases, canResumePreparation, caseDependencies, preparationAnswers } from './prepare-plan.js';
+import {
+  canCreateCases, canResumePreparation, caseDependencies, preparationAnswers,
+  PreparationError,
+} from './prepare-plan.js';
 import type { TestCase } from '../domain/preparation.js';
 import {
   applyPlanApprovalCommand, type PlanApprovalCommand, type PlanApprovalErrorCode,
   type PlanApprovalState, type PlanDecision,
 } from '../domain/plan-approval.js';
-import { RunStore, StorageError, type StorageErrorCode, type RunOutput, type WorkIntent, type PreparationAnswer } from '../storage/runs.js';
+import {
+  applyCaseApprovalCommand, type CaseApprovalCommand, type CaseApprovalErrorCode,
+  type CaseApprovalState,
+} from '../domain/case-approval.js';
+import { RunStore, StorageError, type StorageErrorCode, type RunOutput, type WorkIntent, type PreparationAnswer, type RunRecord } from '../storage/runs.js';
 
 export type PlanCommandRequest = Readonly<{
-  type: 'approve_plan' | 'request_plan_changes' | 'continue';
+  type: 'approve_plan' | 'request_plan_changes' | 'continue' | 'approve_cases' | 'request_case_changes';
   outputId: string; outputRevision: number; comment?: string;
 }>;
 export type PlanCommandContext = Readonly<{ userId: string; resourceReserved?: boolean }>;
@@ -16,6 +23,16 @@ export type PlanCommandResult =
   | { ok: true; status: string; phase: string; approvals: readonly PlanDecision[]; work: WorkIntent | null }
   | { ok: false; work: null; error: {
     code: PlanApprovalErrorCode | StorageErrorCode | 'UNAUTHORIZED'; message: string;
+  } };
+
+export type CaseCommandRequest = Readonly<{
+  type: 'approve_cases' | 'request_case_changes';
+  outputId: string; outputRevision: number; comment?: string;
+}>;
+export type CaseCommandResult =
+  | { ok: true; status: string; phase: string; approvals: readonly PlanDecision[]; work: null }
+  | { ok: false; work: null; error: {
+    code: CaseApprovalErrorCode | StorageErrorCode | 'UNAUTHORIZED'; message: string;
   } };
 
 export type PlanReview = {
@@ -26,6 +43,7 @@ export type PlanReview = {
   stopReason: { code: string; message: string } | null;
   canResume: boolean;
   canCreateCases: boolean;
+  canDecideCases: boolean;
   cases: { id: string; revision: number; current: boolean;
     dependsOn: RunOutput['dependsOn']; answerRefs: NonNullable<RunOutput['answerRefs']>;
     payload: { testCases: TestCase[] };
@@ -192,7 +210,7 @@ export async function getPlanReview(
       stopReason: run.preparation?.stopReason ? { code: run.preparation.stopReason.code, message: run.preparation.stopReason.message }
         : run.status === 'interrupted' && run.interruptions?.length ? { code: 'SERVICE_RESTART', message: 'O serviço reiniciou. O trabalho foi interrompido.' }
         : run.status === 'cancelled' ? { code: 'CANCELLED', message: 'Execução cancelada pelo usuário.' } : null,
-      canResume: canResumePreparation(run), canCreateCases: canCreateCases(run), answers,
+      canResume: canResumePreparation(run), canCreateCases: canCreateCases(run), canDecideCases: canDecideCases(run), answers,
       cases: cases ? { id: cases.id, revision: cases.revision, current: currentCases,
         dependsOn: cases.dependsOn.map(ref => ({ outputId: ref.outputId, revision: ref.revision })),
         answerRefs: (cases.answerRefs ?? []).map(ref => ({ questionId: ref.questionId, revision: ref.revision,
@@ -227,6 +245,30 @@ export async function getPlanReview(
   }
 }
 
+export function canDecideCases(run: RunRecord): boolean {
+  if (run.status !== 'awaiting_approval' || run.phase !== 'case_design') return false;
+  const cases = current(run.outputs, 'case_design');
+  const plan = current(run.outputs, 'planning');
+  const curation = current(run.outputs, 'curation');
+  if (!cases || !plan || !curation || !Number.isSafeInteger(cases.revision) || cases.revision < 1) return false;
+  const existingDecisions = run.approvals.filter(a => a.outputId === cases.id && a.outputRevision === cases.revision);
+  if (existingDecisions.length > 0) return false;
+  try {
+    const dependencies = caseDependencies(run, { outputId: plan.id, outputRevision: plan.revision }, false);
+    const validDeps = cases.dependsOn.length === 2 &&
+      [dependencies.curation, dependencies.plan].every(output =>
+        cases.dependsOn.some(ref => ref.outputId === output.id && ref.revision === output.revision)) &&
+      JSON.stringify(cases.answerRefs ?? []) === JSON.stringify(plan.answerRefs ?? []);
+    if (!validDeps) return false;
+  } catch {
+    return false;
+  }
+  const verdicts = run.validations.filter(v =>
+    v.outputId === cases.id && v.outputRevision === cases.revision &&
+    v.validator === 'output-validator' && v.status !== 'error');
+  return verdicts.length === 1 && verdicts[0]?.status === 'approved';
+}
+
 /** Serviço interno; store já inicializado em config.dataDir.
  * request é intenção do solicitante. context.userId vem da identidade conferida
  * pelo backend; context.resourceReserved só confirma reserva REAL do chamador.
@@ -239,6 +281,15 @@ export async function executePlanCommand(
   request: PlanCommandRequest,
   context: PlanCommandContext,
 ): Promise<PlanCommandResult> {
+  if (request.type === 'approve_cases' || request.type === 'request_case_changes') {
+    return executeCaseCommand(store, runId, {
+      type: request.type,
+      outputId: request.outputId,
+      outputRevision: request.outputRevision,
+      ...(request.comment !== undefined ? { comment: request.comment } : {}),
+    }, context);
+  }
+  const planRequest = request;
   try {
     return await store.update<PlanCommandResult>(runId, record => {
       const run = record.run;
@@ -252,11 +303,11 @@ export async function executePlanCommand(
         plan: current(run.outputs, 'planning'), curation: current(run.outputs, 'curation'),
         validations: run.validations, approvals: run.approvals,
       };
-      const reference = { outputId: request.outputId, outputRevision: request.outputRevision };
-      const command: PlanApprovalCommand = request.type === 'continue'
+      const reference = { outputId: planRequest.outputId, outputRevision: planRequest.outputRevision };
+      const command: PlanApprovalCommand = planRequest.type === 'continue'
         ? { type: 'continue', ...reference, resourceReserved: context.resourceReserved === true }
-        : { type: request.type, ...reference, id: randomUUID(), actorId: context.userId,
-          at: new Date().toISOString(), ...(request.comment === undefined ? {} : { comment: request.comment }) };
+        : { type: planRequest.type as 'approve_plan' | 'request_plan_changes', ...reference, id: randomUUID(), actorId: context.userId,
+          at: new Date().toISOString(), ...(planRequest.comment === undefined ? {} : { comment: planRequest.comment }) };
       const result = applyPlanApprovalCommand(state, command);
       if (!result.ok) return { save: false, value: { ok: false, work: null, error: result.error } };
 
@@ -275,4 +326,83 @@ export async function executePlanCommand(
     const failure = error instanceof StorageError ? error : new StorageError('STORAGE_FAILURE');
     return { ok: false, work: null, error: { code: failure.code, message: failure.message } };
   }
+}
+
+export async function executeCaseCommand(
+  store: RunStore,
+  runId: string,
+  request: CaseCommandRequest,
+  context: PlanCommandContext,
+): Promise<CaseCommandResult> {
+  try {
+    return await store.update<CaseCommandResult>(runId, record => {
+      const run = record.run;
+      if (!authorized(run.ownerId, context)) {
+        return { save: false, value: {
+          ok: false, work: null, error: { code: 'UNAUTHORIZED', message: 'Operação não autorizada para esta execução.' },
+        } };
+      }
+      const plan = current(run.outputs, 'planning');
+      const curation = current(run.outputs, 'curation');
+      const cases = current(run.outputs, 'case_design');
+
+      if (plan) {
+        try {
+          caseDependencies(run, { outputId: plan.id, outputRevision: plan.revision }, false);
+        } catch (error) {
+          const failure = error instanceof PreparationError ? error : new PreparationError('STALE_VERSION', 'Dependências desatualizadas.');
+          return { save: false, value: { ok: false, work: null, error: { code: failure.code as CaseApprovalErrorCode, message: failure.message } } };
+        }
+      }
+
+      const state: CaseApprovalState = {
+        status: run.status, phase: run.phase,
+        cases, plan, curation,
+        validations: run.validations, approvals: run.approvals,
+      };
+      const command: CaseApprovalCommand = {
+        type: request.type, outputId: request.outputId, outputRevision: request.outputRevision,
+        id: randomUUID(), actorId: context.userId, at: new Date().toISOString(),
+        ...(request.comment === undefined ? {} : { comment: request.comment }),
+      };
+      const result = applyCaseApprovalCommand(state, command);
+      if (!result.ok) return { save: false, value: { ok: false, work: null, error: result.error } };
+
+      const hasNew = result.state.approvals.length > state.approvals.length;
+      if (hasNew) {
+        run.approvals.push(...result.state.approvals.slice(state.approvals.length));
+      }
+      return { save: hasNew, value: {
+        ok: true, status: run.status, phase: run.phase, approvals: run.approvals, work: null,
+      } };
+    });
+  } catch (error) {
+    const failure = error instanceof StorageError ? error : new StorageError('STORAGE_FAILURE');
+    return { ok: false, work: null, error: { code: failure.code, message: failure.message } };
+  }
+}
+
+export async function executeApprovalCommand(
+  store: RunStore,
+  runId: string,
+  request: Readonly<{ type: 'approve' | 'request_changes'; outputId: string; outputRevision: number; comment?: string }>,
+  context: PlanCommandContext,
+): Promise<PlanCommandResult> {
+  const record = await store.read(runId);
+  const matching = record.run.outputs.find(output => output.id === request.outputId);
+  const isCases = matching?.phase === 'case_design' || (record.run.phase === 'case_design' && matching?.phase !== 'planning');
+  if (isCases) {
+    return executeCaseCommand(store, runId, {
+      type: request.type === 'approve' ? 'approve_cases' : 'request_case_changes',
+      outputId: request.outputId,
+      outputRevision: request.outputRevision,
+      ...(request.comment !== undefined ? { comment: request.comment } : {}),
+    }, context);
+  }
+  return executePlanCommand(store, runId, {
+    type: request.type === 'approve' ? 'approve_plan' : 'request_plan_changes',
+    outputId: request.outputId,
+    outputRevision: request.outputRevision,
+    ...(request.comment !== undefined ? { comment: request.comment } : {}),
+  }, context);
 }

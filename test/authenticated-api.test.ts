@@ -187,7 +187,7 @@ test('T3.2: cadastro, consulta própria, aprovação idempotente, logout e retor
   assert.deepEqual((await h.request('/api/auth/me', undefined, owner.cookie)).body, { user: owner.user });
   await h.store.create(waiting('run-own', owner.user.id));
   const review = await h.request('/api/runs/run-own', undefined, owner.cookie);
-  assert.deepEqual(Object.keys(review.body).sort(), ['id', 'name', 'applicationName', 'createdAt', 'status', 'phase', 'plan', 'curation', 'cases', 'canCreateCases', 'answers', 'canResume', 'approvals', 'progress', 'stopReason', 'questions'].sort());
+  assert.deepEqual(Object.keys(review.body).sort(), ['id', 'name', 'applicationName', 'createdAt', 'status', 'phase', 'plan', 'curation', 'cases', 'canCreateCases', 'canDecideCases', 'answers', 'canResume', 'approvals', 'progress', 'stopReason', 'questions'].sort());
   assert.equal(review.body.plan.revision, 1);
   assert.equal(review.body.plan.payload.testPlan.objective, 'Verificar o exemplo.');
   assert.equal(review.body.plan.validations[0].status, 'approved');
@@ -482,3 +482,118 @@ test('T3.2: armazenamento indisponível ou corrompido gera erro sem derrubar ser
   assert.equal(await fs.readFile(usersFile, 'utf8'), '{');
   assert.equal((await fetch(`${h.base}/healthz`)).status, 200);
 });
+
+function waitingCases(id: string, ownerId: string): RunRecord {
+  const text = 'Texto sintético para validação de fontes dos casos.';
+  const artifact = { id: 'artifact-1', name: 'art.md', version: 'v1', text };
+  const source = { artifactId: 'artifact-1', locator: 'L1', quote: text };
+  return {
+    id, ownerId, name: 'Revisão sintética de casos', applicationName: 'Alvo controlado',
+    createdAt: '2026-09-23T12:00:00.000Z', status: 'awaiting_approval', phase: 'case_design',
+    input: { credentialRef: secret, startUrl: secret, accessProfile: secret, objective: 'Testar', artifactIds: ['artifact-1'] },
+    artifacts: [artifact], questions: [], answers: [], validationPolicy: {}, budgetCycles: [],
+    outputs: [
+      {
+        id: 'out-curation', phase: 'curation', revision: 1, dependsOn: [], answerRefs: [],
+        payload: {
+          requirements: [{ id: 'REQ-1', statement: text, sources: [source],
+            rules: [{ id: 'RULE-1', statement: text, sources: [source] }] }],
+          questions: [],
+        },
+      },
+      {
+        id: 'out-plan', phase: 'planning', revision: 1, dependsOn: [{ outputId: 'out-curation', revision: 1 }], answerRefs: [],
+        payload: {
+          testPlan: {
+            objective: 'Testar', requirementIds: ['REQ-1'], ruleIds: ['RULE-1'],
+            priorities: [{ ruleId: 'RULE-1', reason: 'Foco' }], exclusions: [],
+            approach: ['AVL'], preconditions: [], sources: [source],
+          },
+        },
+      },
+      {
+        id: 'out-cases', phase: 'case_design', revision: 1,
+        dependsOn: [{ outputId: 'out-curation', revision: 1 }, { outputId: 'out-plan', revision: 1 }], answerRefs: [],
+        payload: {
+          testCases: [{
+            id: 'CT-01', requirementIds: ['REQ-1'], ruleIds: ['RULE-1'], preconditions: [], setup: '', pathId: null,
+            data: {}, techniques: [{ name: 'PCE', description: 'Teste', values: [] }], expected: 'OK', sources: [source],
+          }],
+        },
+      },
+    ],
+    validations: [
+      { outputId: 'out-curation', outputRevision: 1, validator: 'output-validator', status: 'approved' },
+      { outputId: 'out-plan', outputRevision: 1, validator: 'output-validator', status: 'approved' },
+      { outputId: 'out-cases', outputRevision: 1, validator: 'output-validator', status: 'approved' },
+    ],
+    approvals: [
+      { id: 'app-plan', outputId: 'out-plan', outputRevision: 1, actorId: ownerId, at: '2026-09-23T12:00:00.000Z', decision: 'approved', comment: '' },
+    ],
+  };
+}
+
+test('T6.2: endpoints de aprovação e solicitação de alterações nos casos de teste', async t => {
+  const h = await harness(t);
+  const owner = await h.register();
+  const outsider = await h.register(second);
+  const casesRef = { outputId: 'out-cases', outputRevision: 1 };
+
+  // CA-01/CA-02: consulta antes de decidir
+  await h.store.create(waitingCases('run-cases-1', owner.user.id));
+  const reviewBefore = await h.request('/api/runs/run-cases-1', undefined, owner.cookie);
+  assert.equal(reviewBefore.status, 200);
+  assert.equal(reviewBefore.body.canDecideCases, true);
+  assert.equal(reviewBefore.body.cases.id, 'out-cases');
+  assert.equal(reviewBefore.body.cases.revision, 1);
+
+  // CA-02: pedido de alteração sem comentário é recusado
+  error(await h.request('/api/runs/run-cases-1/request-changes', casesRef, owner.cookie), 400, 'COMMENT_REQUIRED');
+  error(await h.request('/api/runs/run-cases-1/request-changes', { ...casesRef, comment: '   ' }, owner.cookie), 400, 'COMMENT_REQUIRED');
+
+  // CA-01: aprovação dos casos registra decisão com autor, horário e revisão vigentes
+  const approved = await h.request('/api/runs/run-cases-1/approve', casesRef, owner.cookie);
+  assert.equal(approved.status, 200);
+  assert.equal(approved.body.status, 'awaiting_approval');
+  assert.equal(approved.body.phase, 'case_design');
+  const caseDecision = approved.body.approvals.find((a: any) => a.outputId === 'out-cases');
+  assert.ok(caseDecision);
+  assert.equal(caseDecision.actorId, owner.user.id);
+  assert.equal(caseDecision.decision, 'approved');
+
+  // Consulta atualizada reflete canDecideCases false
+  const reviewAfter = await h.request('/api/runs/run-cases-1', undefined, owner.cookie);
+  assert.equal(reviewAfter.body.canDecideCases, false);
+
+  // CA-04: repetição idêntica é idempotente e preserva decisão
+  const repeat = await h.request('/api/runs/run-cases-1/approve', casesRef, owner.cookie);
+  assert.equal(repeat.status, 200);
+  assert.deepEqual(repeat.body, approved.body);
+
+  // CA-04: decisão divergente para mesma revisão gera conflito 409
+  error(await h.request('/api/runs/run-cases-1/request-changes', { ...casesRef, comment: 'Mudar CT-01' }, owner.cookie), 409, 'DECISION_CONFLICT');
+
+  // CA-02: pedido de alterações com comentário válido
+  await h.store.create(waitingCases('run-cases-2', owner.user.id));
+  const changed = await h.request('/api/runs/run-cases-2/request-changes', { ...casesRef, comment: 'Ajustar expectativa.' }, owner.cookie);
+  assert.equal(changed.status, 200);
+  const changeDecision = changed.body.approvals.find((a: any) => a.outputId === 'out-cases');
+  assert.ok(changeDecision);
+  assert.equal(changeDecision.decision, 'changes_requested');
+  assert.equal(changeDecision.comment, 'Ajustar expectativa.');
+
+  // CA-06: isolamento de contas
+  error(await h.request('/api/runs/run-cases-1', undefined, outsider.cookie), 404, 'RUN_NOT_FOUND');
+  error(await h.request('/api/runs/run-cases-1/approve', casesRef, outsider.cookie), 404, 'RUN_NOT_FOUND');
+  error(await h.request('/api/runs/run-cases-1/request-changes', { ...casesRef, comment: 'Tentativa externa.' }, outsider.cookie), 404, 'RUN_NOT_FOUND');
+
+  // CA-03: dependência desatualizada ou sem validação
+  await h.store.create(waitingCases('run-cases-stale', owner.user.id));
+  error(await h.request('/api/runs/run-cases-stale/approve', { outputId: 'out-cases', outputRevision: 99 }, owner.cookie), 409, 'STALE_VERSION');
+
+  const unvalidated = waitingCases('run-cases-unvalidated', owner.user.id);
+  unvalidated.validations = unvalidated.validations.filter(v => v.outputId !== 'out-cases');
+  await h.store.create(unvalidated);
+  error(await h.request('/api/runs/run-cases-unvalidated/approve', casesRef, owner.cookie), 409, 'INSUFFICIENT_VALIDATION');
+});
+

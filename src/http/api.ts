@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { AuthError, AuthService } from '../auth.js';
-import { executePlanCommand, getPlanReview, publicPlanDecisions } from '../application/plan-approval.js';
+import { executeApprovalCommand, executePlanCommand, getPlanReview, publicPlanDecisions } from '../application/plan-approval.js';
 import { createRun, listRuns, RunInputError } from '../application/runs.js';
 import { PreparationError, type PreparationCoordinator } from '../application/prepare-plan.js';
 import type { readConfig } from '../config.js';
@@ -173,8 +173,8 @@ export async function handleApi(
     if (changes && (typeof body.comment !== 'string' || !body.comment.trim())) {
       throw new HttpError(400, 'COMMENT_REQUIRED', 'Informe um comentário para solicitar alterações.');
     }
-    const result = await executePlanCommand(runs, runId, {
-      type: changes ? 'request_plan_changes' : 'approve_plan', outputId,
+    const result = await executeApprovalCommand(runs, runId, {
+      type: changes ? 'request_changes' : 'approve', outputId,
       outputRevision: body.outputRevision as number,
       ...(changes ? { comment: string(body, 'comment', 1, 4000, false) } : {}),
     }, { userId: session.userId });

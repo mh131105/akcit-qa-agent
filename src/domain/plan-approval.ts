@@ -53,18 +53,64 @@ export type PlanApprovalResult =
     code: PlanApprovalErrorCode; message: string;
   } };
 
-const validRevision = (revision: number) => Number.isSafeInteger(revision) && revision > 0;
-const nonEmpty = (value: string) => typeof value === 'string' && value.trim().length > 0;
-const validTime = (at: string) => {
+export const validRevision = (revision: number) => Number.isSafeInteger(revision) && revision > 0;
+export const nonEmpty = (value: string) => typeof value === 'string' && value.trim().length > 0;
+export const validTime = (at: string) => {
   if (typeof at !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(at) ||
     !Number.isFinite(Date.parse(at))) return false;
   return new Date(at).toISOString() === (at.includes('.') ? at : at.replace('Z', '.000Z'));
 };
-const validDecision = (decision: PlanDecision) =>
+export const validDecision = (decision: PlanDecision) =>
   nonEmpty(decision.id) && nonEmpty(decision.actorId) && validTime(decision.at) &&
   typeof decision.comment === 'string' &&
   (decision.decision === 'approved' ||
     (decision.decision === 'changes_requested' && nonEmpty(decision.comment)));
+
+// ponytail: função pura compartilhada entre plano e casos para registro, repetição e conflito de decisões humanas.
+export function recordApprovalDecision(
+  approvals: readonly PlanDecision[],
+  target: OutputReference,
+  command: Readonly<{
+    id: string;
+    actorId: string;
+    at: string;
+    decision: 'approved' | 'changes_requested';
+    comment?: string | undefined;
+  }>,
+): { ok: true; approvals: readonly PlanDecision[] } | { ok: false; error: { code: PlanApprovalErrorCode; message: string } } {
+  const comment = command.comment ?? '';
+  if (command.decision === 'changes_requested' && !nonEmpty(comment)) {
+    return { ok: false, error: { code: 'COMMENT_REQUIRED', message: 'Informe um comentário para solicitar alterações.' } };
+  }
+  const decision: PlanDecision = {
+    id: command.id, outputId: target.outputId, outputRevision: target.outputRevision,
+    actorId: command.actorId, at: command.at, comment,
+    decision: command.decision,
+  };
+  if (!validDecision(decision)) {
+    return { ok: false, error: { code: 'INVALID_DECISION', message: 'Informe identificador, autor e horário UTC válidos para a decisão.' } };
+  }
+  const decisions = approvals.filter(approval =>
+    approval.outputId === target.outputId && approval.outputRevision === target.outputRevision);
+  if (decisions.length > 1) {
+    return { ok: false, error: { code: 'DECISION_CONFLICT', message: 'A revisão possui mais de uma decisão registrada.' } };
+  }
+  const previous = decisions[0];
+  if (previous) {
+    if (!validDecision(previous)) {
+      return { ok: false, error: { code: 'INVALID_DECISION', message: 'A decisão anterior é inválida; o registro foi preservado.' } };
+    }
+    if (previous.actorId !== decision.actorId || previous.decision !== decision.decision ||
+      previous.comment !== decision.comment) {
+      return { ok: false, error: { code: 'DECISION_CONFLICT', message: 'Esta revisão já possui uma decisão diferente; decisões não são editadas.' } };
+    }
+    return { ok: true, approvals };
+  }
+  if (approvals.some(approval => approval.id === decision.id)) {
+    return { ok: false, error: { code: 'DECISION_CONFLICT', message: 'O identificador da decisão já está em uso.' } };
+  }
+  return { ok: true, approvals: [...approvals, decision] };
+}
 
 export function applyPlanApprovalCommand(
   state: PlanApprovalState,
@@ -105,32 +151,14 @@ export function applyPlanApprovalCommand(
   const previous = decisions[0];
 
   if (command.type === 'approve_plan' || command.type === 'request_plan_changes') {
-    const comment = command.comment ?? '';
-    if (command.type === 'request_plan_changes' && !nonEmpty(comment)) {
-      return refuse('COMMENT_REQUIRED', 'Informe um comentário para solicitar alterações.');
-    }
-    const decision: PlanDecision = {
-      id: command.id, outputId: plan.id, outputRevision: plan.revision,
-      actorId: command.actorId, at: command.at, comment,
+    const recorded = recordApprovalDecision(state.approvals, { outputId: plan.id, outputRevision: plan.revision }, {
+      id: command.id, actorId: command.actorId, at: command.at,
       decision: command.type === 'approve_plan' ? 'approved' : 'changes_requested',
-    };
-    if (!validDecision(decision)) {
-      return refuse('INVALID_DECISION', 'Informe identificador, autor e horário UTC válidos para a decisão.');
-    }
-    if (previous) {
-      if (!validDecision(previous)) {
-        return refuse('INVALID_DECISION', 'A decisão anterior é inválida; o registro foi preservado.');
-      }
-      if (previous.actorId !== decision.actorId || previous.decision !== decision.decision ||
-        previous.comment !== decision.comment) {
-        return refuse('DECISION_CONFLICT', 'Esta revisão já possui uma decisão diferente; decisões não são editadas.');
-      }
-      return { ok: true, state, work: null };
-    }
-    if (state.approvals.some(approval => approval.id === decision.id)) {
-      return refuse('DECISION_CONFLICT', 'O identificador da decisão já está em uso.');
-    }
-    return { ok: true, state: { ...state, approvals: [...state.approvals, decision] }, work: null };
+      comment: command.comment,
+    });
+    if (!recorded.ok) return { ok: false, state, work: null, error: recorded.error };
+    if (recorded.approvals === state.approvals) return { ok: true, state, work: null };
+    return { ok: true, state: { ...state, approvals: recorded.approvals }, work: null };
   }
 
   if (command.type !== 'continue') {

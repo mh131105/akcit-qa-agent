@@ -358,15 +358,24 @@ function curationPanel(curation) {
   }
   return panel;
 }
-function casesPanel(cases) {
+function casesPanel(run, accountId, pending) {
+  const cases = run.cases;
   const panel = el('section', null, 'panel');
   const verdicts = cases.validations.filter(value => value.validator === 'output-validator' && value.status !== 'error');
-  const approved = cases.current && verdicts.length === 1 && verdicts[0].status === 'approved';
+  const caseDecisions = run.approvals.filter(d => d.outputId === cases.id);
+  const currentDecision = caseDecisions.find(d => d.outputRevision === cases.revision);
+
+  const statusText = !cases.current
+    ? 'Casos desatualizados — as dependências desta revisão foram alteradas.'
+    : currentDecision
+    ? (currentDecision.decision === 'approved' ? 'Casos aprovados. O mapeamento ainda não foi iniciado.' : 'Alterações solicitadas. Os casos aguardam revisão.')
+    : (verdicts.length === 1 && verdicts[0].status === 'approved'
+      ? 'Conjunto validado. Disponível para revisão humana.'
+      : 'Conteúdo provisório — a validação desta revisão ainda não foi aprovada.');
+
   panel.append(el('p', `Casos de teste / Revisão ${cases.revision}`, 'eyebrow'), el('h2', 'Casos de teste'),
     el('p', 'Casos lógicos — percurso ainda não mapeado.', 'lead'),
-    message(approved ? 'Conjunto validado. Disponível para revisão humana; a aprovação dos casos será integrada na próxima etapa.'
-      : cases.current ? 'Conteúdo provisório — a validação desta revisão ainda não foi aprovada.'
-      : 'Conteúdo provisório — as dependências desta revisão foram alteradas.'));
+    message(statusText));
   for (const item of cases.payload.testCases) {
     const detail = el('details', null, 'plan-section'); detail.append(el('summary', `${item.id} · ${item.ruleIds.join(', ')}`));
     detail.append(planSection('Requisitos referenciados', item.requirementIds), planSection('Regras referenciadas', item.ruleIds),
@@ -382,11 +391,86 @@ function casesPanel(cases) {
   for (const verdict of cases.validations) {
     if (verdict.findings?.length) panel.append(planSection('Achados da validação', verdict.findings, value => `${value.location} — ${value.message}`));
   }
+
+  const decisions = el('section', null, 'plan-section');
+  decisions.append(el('h3', 'Decisões registradas'));
+  if (!caseDecisions.length) decisions.append(el('p', 'Nenhuma decisão registrada.', 'hint'));
+  for (const decision of caseDecisions) {
+    const item = el('div', null, 'decision');
+    item.append(el('p', `${decision.decision === 'approved' ? 'Casos aprovados' : 'Alterações solicitadas'} · Revisão ${decision.outputRevision}${!cases.current || decision.outputRevision !== cases.revision ? ' · Conteúdo desatualizado' : ''}`), el('p', date(decision.at), 'hint'));
+    if (decision.comment) item.append(el('p', decision.comment, 'text-content'));
+    decisions.append(item);
+  }
+  panel.append(decisions);
+
+  const restoreCaseComment = pending && run.cases?.id === pending.outputId && run.cases.revision === pending.outputRevision &&
+    !run.approvals.some(decision => decision.outputId === pending.outputId && decision.outputRevision === pending.outputRevision);
+
+  if (run.canDecideCases && !currentDecision) {
+    const review = el('section', null, 'plan-section');
+    review.append(el('h3', 'Decidir sobre os casos de teste'), el('p', 'Aprovar registra sua decisão e mantém a execução em espera. O servidor confere a revisão e suas dependências antes de aceitar.'));
+    const notice = message(); review.append(notice);
+    const form = el('form'); form.noValidate = true;
+    const comment = field(form, 'case-comment', 'Comentário sobre os casos', { optional: true, textarea: true, hint: 'Obrigatório ao solicitar alterações. Até 4.000 caracteres.' });
+    if (restoreCaseComment) comment.input.value = pending.comment;
+    const actions = el('div', null, 'actions');
+    const approve = button('Aprovar casos de teste');
+    const change = button('Solicitar alterações nos casos', null, 'secondary');
+    actions.append(approve, change); form.append(actions); review.append(form); panel.append(review);
+    form.addEventListener('submit', event => event.preventDefault());
+    let submitting = false;
+    const decide = async changes => {
+      if (submitting) return;
+      if (changes && invalid(comment, !comment.input.value.trim() ? 'Informe um comentário para solicitar alterações.' : count(comment.input.value) > 4000 ? 'Use até 4.000 caracteres.' : '')) {
+        comment.input.focus(); return;
+      }
+      const payload = { outputId: cases.id, outputRevision: cases.revision, ...(changes ? { comment: comment.input.value } : {}) };
+      if (bytes(JSON.stringify(payload)) > limit) {
+        invalid(comment, 'O comentário torna o envio maior que 16 KiB. Reduza seu tamanho.'); comment.input.focus(); return;
+      }
+      pending = { accountId, runId: run.id, outputId: cases.id, outputRevision: cases.revision, comment: comment.input.value,
+        decision: changes ? 'changes_requested' : 'approved' };
+      submitting = true; approve.disabled = change.disabled = comment.input.readOnly = true; tell(notice, 'Registrando decisão…');
+      try {
+        await sameAccount(accountId);
+        if (user?.id !== accountId) return;
+        await api(`/runs/${encodeURIComponent(run.id)}/${changes ? 'request-changes' : 'approve'}`, {
+          accountId, method: 'POST', body: JSON.stringify(payload),
+        });
+        await detailPage('A solicitação foi aceita. Confira abaixo a decisão consultada no registro salvo.', false, pending);
+        main.focus();
+      } catch (error) {
+        if (!user) return;
+        if (error.status === 409) {
+          await detailPage(`Decisão recusada. ${errorText(error)} Nenhuma decisão foi reaplicada.`, true, pending);
+          main.focus();
+        } else if (!error.status || error.status >= 500) {
+          await detailPage('Não foi possível confirmar a decisão pela resposta. Consulte o registro salvo antes de decidir novamente; nenhuma decisão será reaplicada automaticamente.', true, pending);
+          main.focus();
+        } else {
+          tell(notice, errorText(error), true);
+          submitting = false; approve.disabled = change.disabled = comment.input.readOnly = false;
+        }
+      }
+    };
+    approve.addEventListener('click', () => decide(false));
+    change.addEventListener('click', () => decide(true));
+  } else if (restoreCaseComment) {
+    panel.append(preservedComment(pending));
+  }
+
   return panel;
 }
-function pendingPlanComment(run, accountId, pending) {
-  const comment = document.getElementById('comment')?.value;
-  return comment && run.plan ? { accountId, runId: run.id, outputId: run.plan.id, outputRevision: run.plan.revision, comment, decision: 'changes_requested' } : pending;
+function pendingComment(run, accountId, pending) {
+  const planComment = document.getElementById('comment')?.value;
+  if (planComment && run.plan) {
+    return { accountId, runId: run.id, outputId: run.plan.id, outputRevision: run.plan.revision, comment: planComment, decision: 'changes_requested' };
+  }
+  const caseComment = document.getElementById('case-comment')?.value;
+  if (caseComment && run.cases) {
+    return { accountId, runId: run.id, outputId: run.cases.id, outputRevision: run.cases.revision, comment: caseComment, decision: 'changes_requested' };
+  }
+  return pending;
 }
 const canAnswer = run => ['curation', 'planning'].includes(run.phase) && ['awaiting_input', 'awaiting_approval'].includes(run.status);
 function questionPanel(run, accountId, pending) {
@@ -417,17 +501,17 @@ function questionPanel(run, accountId, pending) {
         const payload = { outputId: question.outputId, outputRevision: question.outputRevision, questionId: question.id, text: response.input.value };
         const problem = !payload.text.trim() ? 'Informe a resposta.' : count(payload.text) > 4000 ? 'Use até 4.000 caracteres.' : bytes(JSON.stringify(payload)) > limit ? 'O envio excede 16 KiB. Reduza a resposta.' : '';
         if (invalid(response, problem)) { response.input.focus(); return; }
-        remember(); const planComment = pendingPlanComment(run, accountId, pending);
+        remember(); const activeComment = pendingComment(run, accountId, pending);
         sending = true; save.disabled = response.input.readOnly = true; tell(notice, 'Registrando resposta…');
         try {
           await sameAccount(accountId); if (user?.id !== accountId) return;
           await api(`/runs/${encodeURIComponent(run.id)}/answer`, { accountId, method: 'POST', body: JSON.stringify(payload) });
-          answerDrafts.delete(key); await detailPage('Resposta registrada. Confira as demais dúvidas antes de retomar.', false, planComment);
+          answerDrafts.delete(key); await detailPage('Resposta registrada. Confira as demais dúvidas antes de retomar.', false, activeComment);
         } catch (error) {
           if (user?.id !== accountId) return;
           if (error.status === 409 || !error.status || error.status >= 500) {
             tell(notice, `${errorText(error)} Consulte o registro antes de tentar novamente. A resposta digitada está preservada nesta aba; não será reenviada automaticamente.`, true);
-            item.append(button('Consultar registro atualizado', () => detailPage('', false, planComment), 'secondary'));
+            item.append(button('Consultar registro atualizado', () => detailPage('', false, activeComment), 'secondary'));
           } else { tell(notice, errorText(error), true); sending = false; save.disabled = response.input.readOnly = false; }
         }
       });
@@ -459,7 +543,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
     summary.append(message([roles[run.progress.activeRole] || run.progress.activeRole, activities[run.progress.activity] || run.progress.activity].filter(Boolean).join(' · ')));
   }
   if (run.stopReason) main.append(message(run.stopReason.message, ['error', 'interrupted'].includes(run.status)));
-  if (run.cases) main.append(casesPanel(run.cases));
+  if (run.cases) main.append(casesPanel(run, accountId, pending));
   if (run.curation) main.append(curationPanel(run.curation));
   if (run.questions?.length) main.append(questionPanel(run, accountId, pending));
   for (const [key, draft] of answerDrafts) {
@@ -477,13 +561,13 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
       if ([...answerDrafts].some(([key, draft]) => key.startsWith(`${accountId}:${id}:`) && draft.text.trim())) {
         tell(notice, 'Há uma resposta digitada que ainda não foi registrada. Registre-a ou apague o texto antes de retomar.', true); return;
       }
-      const planComment = pendingPlanComment(run, accountId, pending);
+      const activeComment = pendingComment(run, accountId, pending);
       resume.disabled = true; tell(notice, 'Solicitando nova curadoria e planejamento…');
       try {
         await sameAccount(accountId); if (user?.id !== accountId) return;
         await api(`/runs/${encodeURIComponent(id)}/resume`, { accountId, method: 'POST', body: '{}' });
-        await detailPage('Retomada aceita. As novas revisões aparecerão abaixo.', false, planComment);
-      } catch (error) { if (user?.id === accountId) await detailPage(errorText(error), true, planComment); }
+        await detailPage('Retomada aceita. As novas revisões aparecerão abaixo.', false, activeComment);
+      } catch (error) { if (user?.id === accountId) await detailPage(errorText(error), true, activeComment); }
     });
     summary.append(resume, notice);
   }
@@ -526,9 +610,11 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   if (pending && run.approvals.some(decision => decision.outputId === pending.outputId &&
       decision.outputRevision === pending.outputRevision && decision.decision === pending.decision &&
       (pending.decision === 'approved' || decision.comment === pending.comment))) pending = null;
-  const restoreComment = pending && run.plan?.id === pending.outputId && run.plan.revision === pending.outputRevision &&
+  const restorePlanComment = pending && run.plan?.id === pending.outputId && run.plan.revision === pending.outputRevision &&
     !run.approvals.some(decision => decision.outputId === pending.outputId && decision.outputRevision === pending.outputRevision);
-  if (pending && !restoreComment) main.append(preservedComment(pending));
+  const restoreCaseComment = pending && run.cases?.id === pending.outputId && run.cases.revision === pending.outputRevision &&
+    !run.approvals.some(decision => decision.outputId === pending.outputId && decision.outputRevision === pending.outputRevision);
+  if (pending && !restorePlanComment && !restoreCaseComment) main.append(preservedComment(pending));
   if (!run.plan) { main.append(message(run.status === 'draft' ? 'Material recebido. O processamento ainda não foi iniciado.' : 'Ainda não há plano disponível para consulta.')); return; }
   const plan = run.plan; const content = plan.payload.testPlan; const panel = el('section', null, 'panel');
   panel.append(el('p', `Plano de testes / Revisão ${plan.revision}`, 'eyebrow'), el('h2', 'Revisão do plano'), el('h3', 'Objetivo'), el('p', content.objective, 'text-content'));
@@ -537,26 +623,27 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   if (!content.sources.length) sources.append(el('p', 'Nenhuma fonte informada.', 'hint'));
   for (const source of content.sources) { sources.append(el('p', `${source.artifactId} · ${source.locator}`, 'text-content'), el('blockquote', source.quote, 'text-content')); }
   panel.append(sources, planSection('Situação da validação', plan.validations, value => `${validations[value.status] || value.status} · Revisão ${value.outputRevision} · ${value.validator}`));
+  const planDecisions = run.approvals.filter(value => value.outputId === plan.id);
   const decisions = el('section', null, 'plan-section'); decisions.append(el('h3', 'Decisões registradas'));
-  if (!run.approvals.length) decisions.append(el('p', 'Nenhuma decisão registrada.', 'hint'));
-  for (const decision of run.approvals) {
+  if (!planDecisions.length) decisions.append(el('p', 'Nenhuma decisão registrada.', 'hint'));
+  for (const decision of planDecisions) {
     const item = el('div', null, 'decision'); item.append(el('p', `${decision.decision === 'approved' ? 'Plano aprovado' : 'Alterações solicitadas'} · Revisão ${decision.outputRevision}`), el('p', date(decision.at), 'hint'));
     if (decision.comment) item.append(el('p', decision.comment, 'text-content')); decisions.append(item);
   }
   panel.append(decisions); main.append(panel);
-  const currentDecisions = run.approvals.filter(value => value.outputId === plan.id && value.outputRevision === plan.revision);
+  const currentDecisions = planDecisions.filter(value => value.outputRevision === plan.revision);
   const verdicts = plan.validations.filter(value => value.validator === 'output-validator' && value.status !== 'error');
   const eligible = run.status === 'awaiting_approval' && run.phase === 'planning' && verdicts.length === 1 && verdicts[0].status === 'approved' && currentDecisions.length === 0;
   if (!eligible) {
     const waiting = run.status === 'awaiting_approval' && run.phase === 'planning';
     main.append(message(currentDecisions.length ? `A decisão desta revisão está registrada.${waiting ? ' A execução permanece em espera; a continuidade ainda não foi iniciada.' : ''}` : 'A revisão está disponível para consulta. Uma decisão exige a etapa de aprovação e um parecer aprovado do validador.'));
-    if (restoreComment) main.append(preservedComment(pending));
-    main.append(button('Atualizar consulta', () => detailPage('', false, pending), 'secondary')); return;
+    if (restorePlanComment) main.append(preservedComment(pending));
+    main.append(button('Atualizar consulta', () => detailPage('', false, pendingComment(run, accountId, pending)), 'secondary')); return;
   }
   const review = el('section', null, 'panel'); review.append(el('h2', `Decidir sobre a revisão ${plan.revision}`), el('p', 'Aprovar registra sua decisão e mantém a execução em espera. O servidor confere a revisão e suas dependências antes de aceitar.'));
   const notice = message(); review.append(notice); const form = el('form'); form.noValidate = true;
   const comment = field(form, 'comment', 'Comentário', { optional: true, textarea: true, hint: 'Obrigatório ao solicitar alterações. Até 4.000 caracteres.' });
-  if (restoreComment) comment.input.value = pending.comment;
+  if (restorePlanComment) comment.input.value = pending.comment;
   const actions = el('div', null, 'actions'); const approve = button('Aprovar plano'); const change = button('Solicitar alterações', null, 'secondary'); actions.append(approve, change); form.append(actions); review.append(form); main.append(review);
   form.addEventListener('submit', event => event.preventDefault()); let submitting = false;
   const decide = async changes => {
