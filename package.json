@@ -14,6 +14,8 @@
     "test": "node --import tsx --test test/*.test.ts",
     "smoke:runtime": "node scripts/smoke-runtime.mjs",
     "smoke:web": "node scripts/smoke-web.mjs",
+    "demo:target": "node scripts/demo-target.mjs",
+    "smoke:target": "node scripts/smoke-target.mjs",
     "pi": "pi"
   },
   "dependencies": {

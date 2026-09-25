@@ -469,6 +469,63 @@ número de fluxos, casos e formatos da demonstração, mantendo todas as etapas 
 requisitos de segurança, integridade e acessibilidade. Registrar qualquer mudança
 de escopo de forma explícita; não encerrar tarefas com base apenas em mocks.
 
+### T7 · Disponibilizar aplicação controlada de reservas para demonstração
+
+História de usuário, prioridade alta,
+**[T7 · #10](https://github.com/mh131105/akcit-qa-agent/issues/10)**.
+Responsável: um desenvolvedor com atuação backend/interface.
+Revisão: outro integrante, preferencialmente da frente de navegador.
+Base: `develop`, merge `13e39c4`. Branch: `feat/controlled-reservations-target`.
+Estado: **Implementação concluída**; [PR #27](https://github.com/mh131105/akcit-qa-agent/pull/27)
+aberto, com revisão e merge pendentes.
+
+Como responsável pela demonstração, quero uma aplicação controlada com login,
+navegação, comportamento correto e um defeito conhecido, para verificar se o
+agente consegue percorrer a aplicação e identificar problemas com evidências
+reproduzíveis.
+
+Implementação:
+- **`scripts/demo-target.mjs`:** servidor `node:http` com login (credencial
+  sintética), sessão em memória, navegação, reservas com validação server-side.
+  Modos `reference` e `known-defect` (rejeita qty 10). Sem dependências além do
+  stdlib. Exporta `createDemoTarget()` para testes.
+- **`test/demo-target.test.ts`:** 14 testes cobrindo a matriz completa (1, 2,
+  9, 10, 0, 11, 1.5, vazio), comentários, XSS, reset, ambos os modos e
+  redirecionamento após POST sem duplicação ao recarregar.
+- **`scripts/smoke-target.mjs`:** jornada no Chromium com `playwright-core`,
+  cobrindo login incorreto, acesso protegido, percurso completo, defeito
+  conhecido, reset com sessão inválida e lista vazia.
+
+Verificações:
+- `npm run check`: limpo.
+- `npm test`: **158/158 testes** (144 anteriores preservados).
+- `npm run build`: compilação completa.
+- `npm run smoke:target`: jornada pelo navegador com 15 verificações.
+- Validação local na imagem runtime com as restrições do CI: os três smokes
+  (runtime, web e alvo) passaram após corrigir o reenvio do POST ao recarregar.
+  Reprodução e resultados registrados em [evidencias/t7](evidencias/t7/README.md).
+  O resultado remoto vigente fica nos checks do PR.
+
+Critérios:
+- **CA-01:** aplicação inicia por `npm run demo:target` e o Chromium do container
+  acessa via loopback.
+- **CA-02:** login funciona e páginas internas exigem sessão.
+- **CA-03:** percurso completo por links, botões e formulários visíveis.
+- **CA-04:** modo `reference` cumpre os requisitos e a matriz de testes.
+- **CA-05:** modo `known-defect` reproduz somente o defeito da quantidade 10.
+- **CA-06:** reiniciar restaura o estado inicial de forma reproduzível.
+- **CA-07:** requisitos, gabarito e configuração permanecem separados; o alvo não
+  fornece dicas sobre o defeito.
+- **CA-08:** testes, smoke e documentação permitem repetição sem orientação verbal.
+
+Evidências em [evidencias/t7](evidencias/t7/README.md). Gabarito humano em
+[evidencias/t7/gabarito.md](evidencias/t7/gabarito.md) — arquivo fora do
+contexto dos agentes. Operação em
+[OPERACAO.md](OPERACAO.md#aplicação-controlada-de-reservas--t7).
+
+**T7 fornece o alvo real e reproduzível para T8 (mapeamento).** Não declara
+navegação autônoma nem eficácia do agente.
+
 ## Como encerrar uma tarefa
 
 O PR referencia requisitos e mostra o critério funcionando na integração. Anexar

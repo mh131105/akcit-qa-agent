@@ -1,0 +1,21 @@
+{
+  "status": "passed",
+  "checked": [
+    "login-incorreto",
+    "acesso-direto-protegido",
+    "login-correto",
+    "navegacao-reservas",
+    "nova-reserva-valida",
+    "reserva-na-lista",
+    "comentario-preservado-reload",
+    "reload-sem-duplicacao",
+    "quantidade-invalida",
+    "sem-reserva-apos-rejeicao",
+    "percurso-completo-reference",
+    "defeito-conhecido-qty10",
+    "known-defect-qty9-aceita",
+    "reset-sessao-invalida",
+    "reset-lista-vazia"
+  ],
+  "durationMs": 4315
+}

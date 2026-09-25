@@ -802,6 +802,84 @@ o ensaio não modifica o conjunto persistido da execução. Sanitização exclui
 credenciais, cookies, contas, caminhos privados e sessões. Avaliação por agente e
 inferência real devem ser distinguidas de revisão humana e testes simulados.
 
+## Aplicação controlada de reservas — T7
+
+### Configuração
+
+O alvo é configurado por variáveis de ambiente:
+
+```dotenv
+DEMO_TARGET_PORT=4000        # Porta (padrão: 4000)
+DEMO_TARGET_USER=demo        # Usuário (padrão: demo)
+DEMO_TARGET_PASSWORD=demo1234 # Senha (padrão: demo1234)
+DEMO_TARGET_MODE=reference   # reference | known-defect
+```
+
+Use somente conta descartável de demonstração. Um modo inválido impede a
+inicialização com mensagem clara.
+
+### Inicialização local
+
+```sh
+npm run demo:target
+# ou com modo específico:
+DEMO_TARGET_MODE=known-defect npm run demo:target
+```
+
+O servidor escuta em `http://127.0.0.1:4000` (loopback, porta configurável).
+Abra essa URL no navegador.
+
+### Inicialização no container
+
+A pasta `scripts/` já é copiada pelo Dockerfile. Execute o alvo sem acrescentar
+outro serviço permanente à VPS:
+
+```sh
+docker build --target runtime -t akcit-qa:ci .
+docker run --rm --cpus=1 --memory=2g --shm-size=512m \
+  --cap-drop=ALL --security-opt=no-new-privileges --read-only \
+  --tmpfs /tmp:rw,size=512m,mode=1777 \
+  --tmpfs /home/node:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+  --tmpfs /data:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+  -e DEMO_TARGET_MODE=reference \
+  akcit-qa:ci node scripts/demo-target.mjs
+```
+
+No container, alvo e navegador compartilham `127.0.0.1`. Não presuma que
+`localhost` do computador e `localhost` do container sejam o mesmo endereço.
+
+### Troca de modo
+
+Pare o processo e reinicie com `DEMO_TARGET_MODE=known-defect` ou
+`DEMO_TARGET_MODE=reference`.
+
+### Reset
+
+Reiniciar o processo limpa sessões e reservas em memória. Este é o procedimento
+de reset: não há banco ou persistência em disco.
+
+### Encerramento
+
+`Ctrl+C` ou `SIGTERM` encerra o servidor. No container, o Tini repassa o sinal.
+
+### Smoke no navegador
+
+```sh
+CHROMIUM_PATH=/usr/bin/chromium SMOKE_ARTIFACT_DIR=artifacts/target npm run smoke:target
+```
+
+O smoke percorre login, navegação, formulários, ambos os modos, defeito
+conhecido e reset. Verificações:
+
+- Login incorreto e acesso direto a página protegida.
+- Percurso completo: Login → Início → Reservas → Nova reserva → Confirmar → Lista.
+- Ausência de reserva após rejeição.
+- Preservação do comentário após recarregar a página, sem duplicar a reserva
+  (POST redireciona com 303 para GET da lista).
+- Defeito conhecido (qty=10) no modo `known-defect`.
+- Reset com lista vazia e sessão anterior inválida.
+- Acesso pelo Chromium da imagem do projeto.
+
 ## Referências
 
 - [SDK do Pi](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md)

@@ -45,11 +45,30 @@ jobs:
             --tmpfs /data:rw,size=128m,uid=1000,gid=1000,mode=0700 \
             -e SMOKE_ARTIFACT_DIR=/evidence -v "$PWD/artifacts/web:/evidence" \
             akcit-qa:ci node scripts/smoke-web.mjs
+      - name: Jornada do alvo controlado de reservas na imagem final
+        run: |
+          mkdir -p artifacts/target
+          chmod 777 artifacts/target
+          docker run --rm --cpus=1 --memory=2g --shm-size=512m \
+            --cap-drop=ALL --security-opt=no-new-privileges --read-only \
+            --tmpfs /tmp:rw,size=512m,mode=1777 \
+            --tmpfs /home/node:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+            --tmpfs /data:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+            -e SMOKE_ARTIFACT_DIR=/evidence -v "$PWD/artifacts/target:/evidence" \
+            akcit-qa:ci node scripts/smoke-target.mjs
       - name: Evidências sintéticas da interface
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: web-smoke
           path: artifacts/web/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Evidências do alvo controlado
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: target-smoke
+          path: artifacts/target/
           if-no-files-found: ignore
           retention-days: 14
