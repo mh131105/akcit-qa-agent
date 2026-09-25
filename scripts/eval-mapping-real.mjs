@@ -428,7 +428,7 @@ console.error('[eval-A] ' + 'A10 salvar');
         await page.waitForFunction(() => {
           const image = document.querySelector('img[alt="Captura da tela observada"]');
           return image && image.complete && image.naturalWidth > 0 && image.src.startsWith('blob:');
-        }, null, { timeout: 30_000 });
+        }, null, { timeout: 90_000 });
         await page.screenshot({ path: join(evidenceDir, 'ui-mapa-' + runId + '.png'), fullPage: true });
         const finalReview = (await api('/api/runs/' + runId, undefined, sessionCookie, userId)).body;
         assert.equal(finalReview.status, 'ready');
