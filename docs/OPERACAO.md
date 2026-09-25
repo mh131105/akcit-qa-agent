@@ -704,15 +704,52 @@ e validação abre sessão própria, sem ferramentas de navegador.
    técnicas, expectativa e fontes. Confira o aviso **Casos lógicos — percurso ainda
    não mapeado.** Não houve acesso à aplicação nem execução dos casos.
 5. Após parecer `approved`, o estado é `awaiting_approval/case_design`. Recarregue
-   para conferir persistência, revisão e parecer. Nesta entrega, os casos ficam
-   disponíveis para revisão: **aprovação dos casos e navegação serão implementadas
-   depois**. Não há botão que prometa essa operação.
+   para conferir persistência, revisão e parecer. A decisão humana sobre o conjunto
+   validado é realizada pelo roteiro T6.2 abaixo.
 
-O plano e sua curadoria precisam continuar vigentes, validados e com os originais
-preservados. Respostas novas invalidam as revisões anteriores; refaça a preparação
-e a aprovação antes de solicitar casos. Pedido de alteração no plano não inicia
-casos; `analyze_feedback` permanece fora do recorte. Falta de URL/credenciais do
-alvo não impede elaborar comportamentos lógicos claros.
+## Aprovar ou solicitar alterações nos casos de teste — T6.2
+
+Implementa a segunda aprovação humana exigida pelo fluxo do produto sobre o conjunto
+de casos validado (`awaiting_approval/case_design`), antes de qualquer ação no navegador.
+
+### Roteiro de operação pelo site
+
+1. **Localizar e abrir a execução:** Entre na conta proprietária e acesse `/execucoes/:id`.
+   Confira que a execução está em `Aguardando aprovação` na fase `Casos de teste`.
+2. **Revisar o parecer independente:** No painel de casos de teste, confirme a revisão
+   vigente e o parecer emitido por `output-validator` com `status: approved`. Os casos
+   estão listados com dados, pré-condições, preparação, técnicas, expectativas e fontes.
+3. **Aprovar os casos:**
+   - Clique no botão **Aprovar casos de teste**.
+   - A interface envia `{ outputId, outputRevision }` para `POST /api/runs/:id/approve`.
+   - A confirmação é exibida imediatamente: *“Casos aprovados. O mapeamento ainda não foi iniciado.”*
+   - O botão é removido da tela e a decisão permanece salva após recarregar a página, sair da conta e reiniciar o servidor.
+4. **Solicitar alterações nos casos:**
+   - Preencha o campo **Comentário sobre os casos** explicando o que precisa ser ajustado (por exemplo: `Revisar resultado esperado do caso CT-03.`). O comentário é obrigatório; o envio sem texto é bloqueado na interface e recusado pelo servidor com `400 / COMMENT_REQUIRED`.
+   - Clique em **Solicitar alterações nos casos**.
+   - A interface envia `{ outputId, outputRevision, comment }` para `POST /api/runs/:id/request-changes`.
+   - A confirmação exibe: *“Alterações solicitadas. Os casos aguardam revisão.”*, junto do comentário, autor e data.
+
+### Reencontrar a decisão
+
+Ao reabrir a execução a qualquer momento, o histórico de aprovações da saída correspondente
+é exibido no painel de casos. As decisões de plano e de casos são filtradas pelo seu
+respectivo `outputId`, garantindo que decisões de casos não apareçam como aprovações do plano
+e vice-versa.
+
+### Recuperação de resposta incerta (falhas de conexão ou servidor)
+
+Se houver queda de rede, resposta HTTP perdida ou erro transitório (500/503) durante o envio:
+1. O texto do comentário digitado é **preservado intacto** no formulário da aba.
+2. A interface informa: *“Não foi possível confirmar a decisão pela resposta. Consulte o registro salvo antes de decidir novamente; nenhuma decisão será reaplicada automaticamente.”*
+3. O cliente **não reenvia automaticamente**: consulte a execução ou recarregue a página para verificar se a gravação atômica foi concluída no disco antes da falha de rede.
+4. Se a decisão já tiver sido gravada, ela será carregada do servidor. Se não foi gravada, o usuário pode clicar novamente no botão sem perder o texto que havia digitado.
+
+### Limites operacionais desta entrega
+
+- **Sem início de navegador ou mapeamento:** Aprovar os casos de teste registra formalmente a autorização humana exigida pelo fluxo, mas **não inicia o navegador, não agenda tarefas de mapeamento (`mapping`) e não chama especialistas**. A interface informa a espera real.
+- **Processamento automático de alterações fora do escopo:** Solicitar alterações grava o comentário de forma auditável e persistente. O processamento automático dessa alteração (como reavaliação de dependências pelo orquestrador ou refazer casos) fica expressamente fora deste card. O sistema não classifica o comentário por palavras-chave nem presume ações do orquestrador sem especificação e entrega próprias.
+- **`/continue` exclusivo do plano:** O endpoint `/continue` permanece restrito à geração inicial de casos a partir do plano aprovado.
 
 ### Interrupções e limites dos casos
 

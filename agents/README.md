@@ -47,8 +47,9 @@ Cada produção/validação usa uma sessão Pi nova por
 tentativa, modelo configurado sem fallback e nenhuma tool de terminal, escrita ou
 navegador. A saída JSON é conferida estruturalmente pelo backend e semanticamente
 pelo validador. O plano validado exige aprovação humana antes de **Gerar casos de
-teste**; aprovar não chama os modelos. T6.1 termina em `awaiting_approval/case_design`,
-com casos consultáveis. A aprovação humana dos casos ainda será integrada. O ajuste de 24/09
+teste**; aprovar não chama os modelos. T6.1 entrega os casos em `awaiting_approval/case_design`
+e T6.2 implementa a aprovação humana e a solicitação de alterações sobre o conjunto validado,
+mantendo a espera; mapeamento, execução e relatório continuam pendentes. O ajuste de 24/09
 acrescenta respostas rastreáveis e retomada explícita da preparação: originais
 permanecem intactos, respostas viram fontes, revisões e aprovações antigas ficam
 históricas. Pergunta pode bloquear uma regra sem bloquear toda a história; novas

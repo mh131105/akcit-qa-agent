@@ -615,9 +615,79 @@ async function preparationJourney(context, store, owner) {
   await screenshot('web-cases.png', 1366); await screenshot('web-cases-mobile.png', 390);
   await page.reload(); await bodyIncludes('Conjunto validado. Disponível para revisão humana');
   assert.equal(await page.getByRole('button', { name: 'Gerar casos de teste', exact: true }).count(), 0);
-  assert.equal(await page.getByRole('button', { name: /Aprovar casos/ }).count(), 0);
+
+  // T6.2: Verificações de decisão humana sobre os casos de teste
+  await visible(page.getByRole('button', { name: 'Aprovar casos de teste', exact: true }));
+  await visible(page.getByRole('button', { name: 'Solicitar alterações nos casos', exact: true }));
+  await visible(page.getByLabel('Comentário sobre os casos', { exact: true }));
+  await screenshot('web-cases-review.png', 1366); await screenshot('web-cases-review-mobile.png', 390);
+
+  // CA-02: validação de comentário obrigatório ao solicitar alterações
+  await page.getByRole('button', { name: 'Solicitar alterações nos casos', exact: true }).click();
+  await bodyIncludes('Informe um comentário para solicitar alterações.');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'case-comment');
+
+  // CA-08: recuperação de falha de rede/resposta incerta preserva comentário
+  const caseCommentText = 'Revisar o resultado esperado do caso CT-03.';
+  await page.getByLabel('Comentário sobre os casos', { exact: true }).fill(caseCommentText);
+  let approveFails = true;
+  await page.route(`**/api/runs/${id}/approve`, async route => {
+    if (approveFails) { approveFails = false; return route.abort('connectionreset'); }
+    return route.continue();
+  });
+  await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true }).click();
+  await bodyIncludes('Não foi possível confirmar a decisão pela resposta.');
+  assert.equal(await page.getByLabel('Comentário sobre os casos', { exact: true }).inputValue(), caseCommentText);
+  await page.unroute(`**/api/runs/${id}/approve`);
+
+  // CA-01: Aprovação dos casos de teste pelo site
+  await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true }).click();
+  await bodyIncludes('Casos aprovados. O mapeamento ainda não foi iniciado.');
+  await screenshot('web-cases-approved.png', 1366); await screenshot('web-cases-approved-mobile.png', 390);
+
+  // CA-05: persistência após recarregar página
+  await page.reload();
+  await bodyIncludes('Casos aprovados. O mapeamento ainda não foi iniciado.');
+  assert.equal(await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Solicitar alterações nos casos', exact: true }).count(), 0);
   await screenshot('web-cases-persisted.png', 1366);
-  checked.push('T6.1: aprovação separada → gerar casos 202 → repetição 200 sem duplicação → geração → casos provisórios em validação → conjunto persistido para revisão humana; sem aprovação de casos ou navegação');
+
+  // CA-09: conferência de que nenhum mapeamento ou navegação foi iniciado
+  const runAfterApproval = await api(context, `/api/runs/${id}`, owner.id);
+  assert.equal(runAfterApproval.status, 'awaiting_approval');
+  assert.equal(runAfterApproval.phase, 'case_design');
+  assert.equal(runAfterApproval.canDecideCases, false);
+  const storedRecordAfter = await store.read(id);
+  assert.equal(storedRecordAfter.run.outputs.some(o => o.phase === 'mapping'), false);
+  assert.deepEqual(storedRecordAfter.workIntents.filter(w => w.status === 'pending'), []);
+
+  // CA-02 e CA-07: jornada de solicitação de alterações e separação dos históricos
+  const changesRun = structuredClone((await store.read(id)).run);
+  changesRun.id = 'run-cases-changes';
+  changesRun.name = 'Execução com alterações nos casos';
+  changesRun.approvals = changesRun.approvals.filter(a => a.outputId !== savedCases.id);
+  await store.create(changesRun);
+
+  await page.goto('/execucoes/run-cases-changes');
+  await bodyIncludes('Conjunto validado. Disponível para revisão humana');
+  await page.getByLabel('Comentário sobre os casos', { exact: true }).fill('Revisar o resultado esperado do caso CT-01.');
+  await page.getByRole('button', { name: 'Solicitar alterações nos casos', exact: true }).click();
+  await bodyIncludes('Alterações solicitadas. Os casos aguardam revisão.');
+  await bodyIncludes('Revisar o resultado esperado do caso CT-01.');
+  await screenshot('web-cases-changes.png', 1366); await screenshot('web-cases-changes-mobile.png', 390);
+
+  // CA-07: verificar que as decisões não se misturam nos painéis
+  await page.reload();
+  await bodyIncludes('Alterações solicitadas. Os casos aguardam revisão.');
+  await bodyIncludes('Revisar o resultado esperado do caso CT-01.');
+  const changesRunPersisted = await api(context, '/api/runs/run-cases-changes', owner.id);
+  assert.equal(changesRunPersisted.canDecideCases, false);
+  const caseDecisionEntry = changesRunPersisted.approvals.find(a => a.outputId === savedCases.id);
+  assert.equal(caseDecisionEntry.decision, 'changes_requested');
+  assert.equal(caseDecisionEntry.comment, 'Revisar o resultado esperado do caso CT-01.');
+
+  checked.push('T6.2: aprovação e solicitação de alterações de casos pelo site → comentário obrigatório → persistência após recarregar → nenhum mapeamento iniciado → históricos de plano e casos separados');
+  checked.push('T6.1: aprovação separada → gerar casos 202 → repetição 200 sem duplicação → geração → casos provisórios em validação → conjunto persistido para revisão humana');
   checked.push('T4.1: rascunho → iniciar 202 → curador → validador → planejador → validador → aprovação pelo site; chamada de modelo substituída explicitamente no teste');
   checked.push('T4.1: repetição não duplica chamada; pendência localizada permite plano independente; consulta periódica para na revisão e conserva comentário em edição');
   checked.push('Esclarecimentos: resposta literal preserva originais, comentário e outra resposta digitada; plano antigo não aceita aprovação e texto pendente impede retomada');

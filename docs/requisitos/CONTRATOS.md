@@ -1394,10 +1394,108 @@ reconferida no POST. Progresso informa geração/validação dos casos.
 O site oferece **Gerar casos de teste**, polling existente durante `running`,
 lista expansível com dados, pré-condições, preparação, técnicas, expectativa,
 fontes, revisão e validação. Exibe **Casos lógicos — percurso ainda não mapeado.**
-Conteúdo aguardando parecer é provisório; interrupções mostram o motivo. Não há
-botão de aprovação dos casos neste recorte. Conta, origem e renderização como texto
+Conteúdo aguardando parecer é provisório; interrupções mostram o motivo. A aprovação
+humana e a solicitação de alterações foram entregues em T6.2. Conta, origem e renderização como texto
 mantêm os controles existentes. Testes simulados e demonstração real estão
 separados em [evidencias/t6.1](../evidencias/t6.1/README.md).
+
+## Aprovação humana dos casos — T6.2
+
+Avanço de [T6 #9](https://github.com/mh131105/akcit-qa-agent/issues/9), atendendo a RF-14, RN-04, RN-05, RN-06 e RNF-04/RNF-06.
+Implementa a segunda aprovação humana exigida pelo fluxo do produto sobre o conjunto
+de casos validado (`awaiting_approval/case_design`), antes de qualquer ação no navegador.
+
+### Pré-condições da decisão
+
+A decisão opera sobre o conjunto de casos como um todo, identificado por seu `outputId`
+e `outputRevision` (não caso a caso individualmente). Dentro da transação atômica
+de atualização da execução, o backend confere rigorosamente:
+1. **Identidade e propriedade:** A execução pertence ao usuário autenticado (sessão ativa, `Origin` exata e `X-Expected-User-Id`).
+2. **Estado e fase:** Execução está em `status: 'awaiting_approval'` e `phase: 'case_design'`.
+3. **Versão vigente:** O par `outputId` e `outputRevision` indicado corresponde à revisão vigente da saída `case_design`.
+4. **Dependências preservadas:** Curadoria, plano de testes aprovado e eventuais esclarecimentos continuam vigentes e suas fontes originais literais continuam íntegras (reconferidas via `caseDependencies`).
+5. **Validação independente:** A revisão dos casos possui exatamente um parecer com `status: 'approved'` emitido por `output-validator`. Tentativas com `error` técnico não configuram aprovação.
+
+### Endpoints estendidos
+
+Reaproveita os endpoints existentes de decisão humana, sem acrescentar parâmetro de fase controlado pelo cliente:
+- `POST /api/runs/:id/approve`
+- `POST /api/runs/:id/request-changes`
+
+O backend identifica automaticamente se a saída indicada pertence ao plano (`planning`)
+ou aos casos (`case_design`) a partir dos registros persistidos.
+
+#### Corpo da requisição
+
+Aprovação:
+```json
+{
+  "outputId": "identificador-da-saida-de-casos",
+  "outputRevision": 1
+}
+```
+
+Solicitação de alterações:
+```json
+{
+  "outputId": "identificador-da-saida-de-casos",
+  "outputRevision": 1,
+  "comment": "Revisar o resultado esperado do caso CT-03."
+}
+```
+
+Para `request-changes`, o campo `comment` é **obrigatório** e deve conter texto não vazio (espaços em branco isolados são rejeitados). O texto do comentário é preservado na íntegra.
+
+#### Resposta de sucesso (`200 OK`)
+
+Retorna a situação atualizada da execução e a coleção de aprovações:
+```json
+{
+  "ok": true,
+  "status": "awaiting_approval",
+  "phase": "case_design",
+  "approvals": [
+    {
+      "id": "c5f8b9e2-1234-4567-89ab-cdef01234567",
+      "outputId": "identificador-da-saida-de-casos",
+      "outputRevision": 1,
+      "actorId": "usuario-autenticado",
+      "at": "2026-09-24T22:30:00.000Z",
+      "decision": "approved",
+      "comment": ""
+    }
+  ]
+}
+```
+
+### Projeção pública e `canDecideCases`
+
+A consulta individual `GET /api/runs/:id` inclui o campo booleano `canDecideCases`.
+Ele é calculado pelo servidor com as mesmas condições necessárias para aceitar a decisão,
+orientando a renderização dos controles na interface:
+- `true`: Casos vigentes, validados por `output-validator`, dependências vigentes íntegras e sem decisão humana ainda registrada para a revisão atual.
+- `false`: Execução em outra fase/status, validação pendente ou decisão já registrada para a revisão vigente.
+
+O envio de `POST` reconfere todas as regras independentemente de `canDecideCases`.
+
+### Tabela de comportamento após decisão
+
+| Situação | Comportamento do sistema |
+| --- | --- |
+| Casos vigentes e validados, sem decisão | Permite aprovação ou pedido de alteração. `canDecideCases: true`. |
+| Aprovação registrada | Mantém `awaiting_approval/case_design`, registra decisão em `run.approvals` e exibe: *“Casos aprovados. O mapeamento ainda não foi iniciado.”* |
+| Alteração solicitada | Mantém `awaiting_approval/case_design`, registra decisão com comentário e exibe: *“Alterações solicitadas. Os casos aguardam revisão.”* |
+| Repetição de decisão idêntica | Retorna `200 OK` idempotente, preservando o ID, autor, data e comentário originais, sem duplicar o registro. |
+| Decisão conflitante para a mesma revisão | Recusa com `409 / DECISION_CONFLICT`, preservando o registro salvo inalterado. |
+| Revisão ou dependência desatualizada | Recusa com `409 / STALE_VERSION`, preserva registros e atualiza a consulta. |
+| Parecer ausente ou reprovado | Recusa com `409 / INSUFFICIENT_VALIDATION`. |
+| Resposta HTTP perdida ou falha de rede | Interface mantém o comentário digitado e orienta a consulta do registro antes de nova tentativa; sem reenvio automático. |
+
+### Limites desta entrega
+
+1. **Sem disparo de ferramentas ou navegação:** A aprovação humana dos casos não inicia o navegador, não agenda trabalho de mapeamento (`mapping`), não reserva recursos e não chama modelos de IA. A interface informa claramente a espera.
+2. **Processamento automático de alterações fora de escopo:** O card T6.2 registra o pedido e o comentário do usuário de forma persistente e auditável. O processamento automático dessa alteração (revisão de plano ou casos) necessita de entrega e contratos próprios para análise de dependências e orçamento.
+3. **Escopo de `/continue`:** Permanece restrito à geração dos casos a partir do plano aprovado.
 
 ### Contratos de etapas futuras e validação visual
 
@@ -1542,8 +1640,8 @@ internos nem segredos. Autenticação e cadastro seguem os RF do produto.
 | `GET /api/runs` | Histórico do proprietário, com estado e data |
 | `GET /api/runs/:id` | Estado, fase, versões, questões, aprovações, pareceres e resultados; distinguir provisório, validado e desatualizado |
 | `POST /api/runs/:id/start` | Conferir entrada textual e iniciar curadoria/plano, se recurso disponível; acesso pode estar pendente |
-| `POST /api/runs/:id/approve` | Registrar aprovação para `outputId` e `outputRevision`; autor vem da sessão |
-| `POST /api/runs/:id/request-changes` | Registrar decisão sobre revisão exata e comentário; análise do pedido aguarda continuidade com recurso reservado |
+| `POST /api/runs/:id/approve` | Registrar aprovação para `outputId` e `outputRevision` do plano ou casos; autor vem da sessão |
+| `POST /api/runs/:id/request-changes` | Registrar decisão sobre revisão exata e comentário para plano ou casos; análise do pedido de plano aguarda continuidade |
 | `POST /api/runs/:id/answer` | Implementado para questão da revisão atual da curadoria; demais etapas aguardam integração |
 | `POST /api/runs/:id/resume` | Implementado para reprocessar preparação com respostas novas, reserva e orçamento acumulado |
 | `POST /api/runs/:id/continue` | Implementado somente para gerar casos do plano validado e aprovado; recebe `{outputId, outputRevision}`, reserva e preserva orçamento |
@@ -1557,9 +1655,10 @@ internos nem segredos. Autenticação e cadastro seguem os RF do produto.
 Upload e respostas de etapas posteriores à preparação aguardam integração. T4.1
 consulta progresso e o ajuste de 24/09 permite responder e retomar a preparação;
 aprovar persiste a decisão humana sem iniciar casos; T6.1 permite solicitar
-a continuidade depois, pelo botão **Gerar casos de teste**.
+a continuidade depois, pelo botão **Gerar casos de teste**; T6.2 permite aprovar
+ou solicitar alterações sobre o conjunto de casos validado, mantendo a espera e sem iniciar mapeamento.
 Se o recurso estiver ocupado, o usuário não deverá perder sua resposta ou
-aprovação. A revisão humana do plano mantém a espera após a decisão.
+aprovação. As revisões humanas de plano e casos mantêm a espera após a decisão.
 
 ## Exemplo e verificação
 
