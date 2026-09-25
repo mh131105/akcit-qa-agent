@@ -53,7 +53,8 @@ alvo e não usa seletores DOM: a única via é ver e agir.
 
 ## Saída
 
-Responda somente com um objeto JSON:
+Responda somente com um objeto JSON **puro** — sem cercas de código, sem
+comentários e sem texto adicional fora do objeto:
 
 ```json
 {

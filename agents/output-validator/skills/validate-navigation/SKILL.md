@@ -45,7 +45,8 @@ referências, validade das ações e estados contraditórios.
 
 ## Parecer
 
-Responda somente com JSON:
+Responda somente com JSON **puro** — sem cercas de código, sem comentários
+e sem texto adicional fora do objeto:
 
 ```json
 {

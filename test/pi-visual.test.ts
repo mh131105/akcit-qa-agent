@@ -192,3 +192,17 @@ test('visualSettings aplica o teto por chamada informado', () => {
   const settings = visualSettings(120000);
   assert.ok(settings, 'configuração da sessão criada sem retry automático');
 });
+
+test('JSON embrulhado em cercas de código ou com texto adicional é tolerado', async () => {
+  resetSpies();
+  const fenced = await executeVisualTask(baseTask({}), {
+    createSession: async () => ({ session: makeFakeSession('```json\n{"status":"approved"}\n```') }),
+    prepareModel: async () => fakeModel(),
+  });
+  assert.equal(fenced.payload.status, 'approved', 'cercas de código removidas antes do parse');
+  const surrounded = await executeVisualTask(baseTask({}), {
+    createSession: async () => ({ session: makeFakeSession('Mapa concluído:\n{"status":"approved"}') }),
+    prepareModel: async () => fakeModel(),
+  });
+  assert.equal(surrounded.payload.status, 'approved', 'texto ao redor do objeto tolerado');
+});
