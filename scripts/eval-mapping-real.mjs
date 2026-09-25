@@ -311,23 +311,34 @@ async function main() {
         const context = await browser.newContext({ baseURL: origin, viewport: { width: 1366, height: 900 } });
         const page = await context.newPage();
         page.setDefaultTimeout(20000);
+console.error('[eval-A] ' + 'A1 goto');
         await page.goto('/');
-        await page.waitForURL('**/acesso*');
+console.error('[eval-A] ' + 'A2 acesso');
+        await page.waitForURL('**/acesso*', { timeout: 60_000 });
+console.error('[eval-A] ' + 'A3 criar-conta-form');
         await page.getByRole('button', { name: 'Criar conta', exact: true }).click();
         await page.getByLabel('Nome', { exact: true }).fill(ACCOUNT.name);
         await page.getByLabel('E-mail', { exact: true }).fill(ACCOUNT.email);
         await page.getByLabel('Senha', { exact: true }).fill(ACCOUNT.password);
+console.error('[eval-A] ' + 'A4 cadastrar');
         await page.getByRole('button', { name: 'Cadastrar e entrar', exact: true }).click();
-        await page.waitForURL(url => url.pathname.startsWith('/execucoes'));
+console.error('[eval-A] ' + 'A5 execucoes');
+        await page.waitForURL(url => url.pathname.startsWith('/execucoes'), { timeout: 60_000 });
+console.error('[eval-A] ' + 'A6 cookies');
         const sessionCookie = 'akcit_session=' + (await context.cookies()).find(cookie => cookie.name === 'akcit_session')?.value;
+console.error('[eval-A] ' + 'A7 me');
         const me = await (await context.request.get(origin + '/api/auth/me')).json();
         const userId = me.user.id;
         // Criação pela interface.
+console.error('[eval-A] ' + 'A8 nova-execucao');
         await page.getByRole('link', { name: 'Nova execução', exact: true }).first().click();
         await page.getByLabel('Nome da execução', { exact: true }).fill('Ensaio real — interface e revisão humana');
+console.error('[eval-A] ' + 'A9 preenchido');
         await page.getByLabel('Material de requisitos', { exact: true }).fill(MATERIAL);
+console.error('[eval-A] ' + 'A10 salvar');
         await page.getByRole('button', { name: 'Salvar rascunho', exact: true }).click();
-        await page.waitForURL(url => /^\/execucoes\/run-/.test(url.pathname));
+console.error('[eval-A] ' + 'A11 run-criada');
+        await page.waitForURL(url => /^\/execucoes\/run-/.test(url.pathname), { timeout: 60_000 });
         const runId = new URL(page.url()).pathname.split('/').at(-1);
         scenario.runId = runId;
         // Preparação pela interface.
