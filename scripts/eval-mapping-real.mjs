@@ -77,7 +77,10 @@ const headers = (cookie, userId) => ({ Origin: origin, 'Content-Type': 'applicat
   ...(cookie ? { Cookie: cookie } : {}), 'X-Expected-User-Id': userId });
 const json = async (path, value) => { await mkdir(join(path, '..'), { recursive: true }); await writeFile(path, JSON.stringify(value, null, 2) + '\n', { mode: 0o600 }); };
 async function api(path, body, cookie, userId, method = body === undefined ? 'GET' : 'POST') {
-  const response = await fetch(origin + path, { method, headers: headers(cookie, userId),
+  const response = await fetch(origin + path, {
+    method,
+    headers: { ...headers(cookie, userId),
+      ...(path === '/api/runs' && method === 'POST' ? { 'Idempotency-Key': randomUUID() } : {}) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const text = await response.text();
   return { status: response.status, body: text ? JSON.parse(text) : null, cookie: response.headers.get('set-cookie')?.split(';')[0] };
@@ -294,18 +297,21 @@ async function validatorControls(approvedRunId) {
   }
 }
 
-/** Jornada A acompanhada pela interface, com revisão humana efetiva (arquivo de
- * decisão em EVAL_HUMAN_DIR). Aprovações da jornada B são automatizadas e
- * registradas como tal. */
+let approvedRunId = null;
+
+/** Jornada A acompanhada pela interface, com revisão independente por decisão
+ * registrada em arquivo (EVAL_HUMAN_DIR). Aprovações da jornada B são
+ * automatizadas e registradas como tal. `--skip-journey-a` repete apenas os
+ * demais cenários (para re-execução sem refazer a jornada da interface). */
 async function main() {
+  const skipJourneyA = process.argv.includes('--skip-journey-a');
   const browser = await chromium.launch({
     executablePath: process.env.CHROMIUM_PATH ?? '/usr/bin/chromium', headless: true,
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   });
   try {
-    let approvedRunId = null;
-    // Jornada A: interface real + revisão humana do plano e dos casos.
-    {
+    // Jornada A: interface real + revisão independente do plano e dos casos.
+    if (!skipJourneyA) {
       const scenario = { name: 'jornada-completa-interface-revisao-humana', approvalMode: 'humana (arquivo de decisão em EVAL_HUMAN_DIR)', runId: null, steps: [], error: null };
       try {
         const context = await browser.newContext({ baseURL: origin, viewport: { width: 1366, height: 900 } });
@@ -459,7 +465,8 @@ console.error('[eval-A] ' + 'A10 salvar');
     }
     // Jornada B: aprovações automatizadas, registradas como tal.
     console.error('[eval] inicio jornada B (automatizada)');
-    await fullJourney('jornada-completa-aprovacoes-automatizadas', 'automatizada (roteiro)');
+    const jornadaB = await fullJourney('jornada-completa-aprovacoes-automatizadas', 'automatizada (roteiro)');
+    if (!jornadaB.error && jornadaB.runId) approvedRunId = jornadaB.runId;
     console.error('[eval] inicio cenário 2 (credencial inválida)');
     await invalidCredentialJourney();
     console.error('[eval] inicio cenário 3 (controles do validador)');
