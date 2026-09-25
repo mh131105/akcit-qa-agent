@@ -109,7 +109,9 @@ export async function executeSpecialistTask(task: SpecialistTask): Promise<Speci
     signal.throwIfAborted();
     ({ session } = await createAgentSession({
       cwd: directory, agentDir: directory, modelRuntime, model, resourceLoader, settingsManager,
-      sessionManager: SessionManager.inMemory(directory), noTools: 'all', tools: [], thinkingLevel: 'off',
+      sessionManager: SessionManager.inMemory(directory), noTools: 'all', tools: [],
+      thinkingLevel: task.model.provider === 'deepseek' && task.model.model === 'deepseek-v4-pro' ? 'high'
+        : task.model.provider === 'deepseek' && task.model.model === 'deepseek-flash' ? 'low' : 'off',
     }));
     session.setAutoCompactionEnabled(false);
     session.setAutoRetryEnabled(false);
