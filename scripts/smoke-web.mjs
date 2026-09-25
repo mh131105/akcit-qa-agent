@@ -710,12 +710,12 @@ async function preparationJourney(context, store, owner) {
 
   // CA-01: Aprovação dos casos de teste pelo site
   await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true }).click();
-  await bodyIncludes('Casos aprovados. O mapeamento ainda não foi iniciado.');
+  await bodyIncludes('Casos aprovados. Configure o acesso à aplicação antes do mapeamento.');
   await screenshot('web-cases-approved.png', 1366); await screenshot('web-cases-approved-mobile.png', 390);
 
   // CA-05: persistência após recarregar página
   await page.reload();
-  await bodyIncludes('Casos aprovados. O mapeamento ainda não foi iniciado.');
+  await bodyIncludes('Casos aprovados. Configure o acesso à aplicação antes do mapeamento.');
   assert.equal(await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true }).count(), 0);
   assert.equal(await page.getByRole('button', { name: 'Solicitar alterações nos casos', exact: true }).count(), 0);
   await screenshot('web-cases-persisted.png', 1366);
