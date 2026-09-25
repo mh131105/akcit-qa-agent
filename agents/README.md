@@ -5,23 +5,24 @@ T6.1 acrescenta casos lógicos, com validações independentes. A sequência é 
 chamada adicional para escolher a próxima etapa. A implementação segue
 [PROTOTIPO.md](../docs/requisitos/PROTOTIPO.md) e os contratos na mesma pasta.
 
-- `orchestrator/`: delegação, estado da sessão e encaminhamento conforme o parecer
-  do validador; não avalia a qualidade das saídas nem substitui uma decisão dele.
-- `artifact-curator/`: [curadoria textual](artifact-curator/skills/curate-artifacts/SKILL.md)
-  com requisitos, regras, exemplos recebidos, fontes e perguntas localizadas;
-  aceita prosa, US/CA, requisitos funcionais e Gherkin textual sem formato obrigatório.
-- `test-designer/`: [plano de testes](test-designer/skills/create-test-plan/SKILL.md)
-  com originais, respostas e curadoria aprovada; produz cobertura concisa, sem
-  recitar as etapas internas; [casos lógicos](test-designer/skills/create-test-cases/SKILL.md)
-  com plano aprovado, dados concretos, expectativas, fontes e técnicas justificadas,
-  mesmo sem Gherkin. `pathId` permanece `null`; detalhamento após mapa é futuro.
-- `test-executor/`: reconhecimento de navegação, mouse, teclado e evidências.
-- `report-writer/`: consolidação de resultados e referências às evidências.
-- `output-validator/`: [validação independente](output-validator/skills/validate-output/SKILL.md)
-  da curadoria, do plano e dos casos, distinguindo erros materiais de paráfrases e
-  escolhas de redação. Nos casos, confere dados, técnicas, cobertura real, condições,
-  expectativas e alcance de exemplos pontuais. Demais fases permanecem pendentes. Aprova, pede correção
-  ou bloqueia com justificativa; falhas técnicas são registradas pelo backend.
+## Distribuição de papéis e etapas
+
+A política de modelos adota a API oficial DeepSeek com níveis de raciocínio explícitos (`thinkingLevel`).
+Consulte a matriz completa em [OPERACAO.md](../docs/OPERACAO.md#matriz-de-distribuição-de-modelos).
+
+### Agentes e tarefas operacionais (implementados)
+- `orchestrator/`: delegação, controle de estado e avanço conforme parecer do validador. É lógica determinística do backend, sem modelo de linguagem associado. Não julga qualidade de saídas nem substitui decisão humana.
+- `artifact-curator/`: [curadoria textual](artifact-curator/skills/curate-artifacts/SKILL.md) com requisitos, regras, exemplos recebidos, fontes e perguntas localizadas; aceita prosa, US/CA, requisitos funcionais e Gherkin textual sem formato obrigatório. Opera com `deepseek-flash` e raciocínio `low`.
+- `test-designer/`: [plano de testes](test-designer/skills/create-test-plan/SKILL.md) com originais, respostas e curadoria aprovada; e [casos lógicos](test-designer/skills/create-test-cases/SKILL.md) com dados concretos, expectativas, fontes e técnicas (PCE/AVL). Ambas as tarefas operam com `deepseek-v4-pro` e raciocínio `high`.
+- `output-validator/`: [validação independente](output-validator/skills/validate-output/SKILL.md) da curadoria, do plano e dos casos lógicos. Opera em perfil textual com `deepseek-v4-pro` e raciocínio `high`, em sessão isolada, conferindo rigor metodológico, fontes, critérios e regras.
+
+### Agentes e etapas planejadas (futuras)
+- `test-designer/` (em `route_detail`): associará percursos observados no mapa aos casos aprovados, operando com `deepseek-v4-pro` / `high`, preservando integralmente os campos já validados e aprovados.
+- `test-executor/`: reconhecimento de telas, navegação, mouse, teclado e registro de evidências. Planejado para operar com `deepseek-flash` / `high` tanto no mapeamento quanto na execução, utilizando capacidade multimodal de imagens.
+- `report-writer/`: consolidação de resultados validados e referências a evidências em relatório textual, operando com `deepseek-flash` / `low`. Novas interpretações de comportamento não pertencem ao redator e devem retornar às etapas técnicas correspondentes.
+- `output-validator/` (perfil visual): revisão independente do mapa e dos resultados apoiados em capturas visuais, operando com `deepseek-flash` / `high`.
+
+> **Ressalva factual:** A execução existente comprova a integração técnica da preparação textual; ainda não comprova a qualidade do navegador, do relatório ou da validação visual, nem superioridade entre modelos.
 
 Cada saída passa pelas verificações estruturais do backend e pela revisão do
 validador antes de alimentar uma etapa dependente. O validador usa contexto próprio,

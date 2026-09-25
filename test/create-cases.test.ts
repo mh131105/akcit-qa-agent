@@ -36,13 +36,13 @@ function deferred<T>() {
   const promise = new Promise<T>(done => { resolve = done; });
   return { promise, resolve };
 }
-async function setup(t: TestContext, options: PreparationOptions = {}) {
+async function setup(t: TestContext, options: PreparationOptions = {}, env: NodeJS.ProcessEnv = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'akcit-cases-'));
   t.after(() => rm(dir, { force: true, recursive: true }));
   const store = new RunStore(dir); await store.initialize();
   const calls: SpecialistTask[] = [];
   const coordinator = new PreparationCoordinator(store, readConfig({ DATA_DIR: dir,
-    PI_PROVIDER: model.provider, PI_MODEL: model.model }), { ...options, modelPreflight: options.modelPreflight ?? (async () => {}),
+    PI_PROVIDER: model.provider, PI_MODEL: model.model, ...env }), { ...options, modelPreflight: options.modelPreflight ?? (async () => {}),
     modelCall: async task => { calls.push(task); return options.modelCall ? options.modelCall(task) : normal(task); } });
   const create = async () => (await createRun(store, { name: 'Casos controlados', applicationName: 'Reservas', text },
     [randomUUID()], { userId: 'owner' })).run.id;
@@ -272,4 +272,40 @@ test('T6.1: falha após gravação do aceite interrompe intenção sem deixar ru
   const record = await h.store.read(h.id);
   assert.equal(record.run.status, 'interrupted'); assert.equal(record.workIntents[0]!.status, 'interrupted');
   assert.equal(h.calls.length, 4);
+});
+
+test('T6.1: projetista e validador recebem Pro/high na geração de casos sob a distribuição padrão', async t => {
+  const env = {
+    PI_CURATOR_PROVIDER: 'deepseek', PI_CURATOR_MODEL: 'deepseek-flash', PI_CURATOR_THINKING_LEVEL: 'low',
+    PI_PLANNER_PROVIDER: 'deepseek', PI_PLANNER_MODEL: 'deepseek-v4-pro', PI_PLANNER_THINKING_LEVEL: 'high',
+    PI_VALIDATOR_PROVIDER: 'deepseek', PI_VALIDATOR_MODEL: 'deepseek-v4-pro', PI_VALIDATOR_THINKING_LEVEL: 'high',
+  };
+  const h = await setup(t, {}, env);
+  assert.deepEqual(await h.coordinator.continue(h.id, 'owner', h.reference), { accepted: true });
+  await h.coordinator.settled();
+
+  const caseTasks = h.calls.slice(4);
+  assert.equal(caseTasks.length, 2);
+  const designerTask = caseTasks.find(c => c.role === 'test-designer');
+  const validatorTask = caseTasks.find(c => c.role === 'output-validator');
+
+  assert.ok(designerTask);
+  assert.equal(designerTask.task, 'create-test-cases');
+  assert.equal(designerTask.model.provider, 'deepseek');
+  assert.equal(designerTask.model.model, 'deepseek-v4-pro');
+  assert.equal(designerTask.model.thinkingLevel, 'high');
+
+  assert.ok(validatorTask);
+  assert.equal(validatorTask.task, 'validate-output');
+  assert.equal(validatorTask.model.provider, 'deepseek');
+  assert.equal(validatorTask.model.model, 'deepseek-v4-pro');
+  assert.equal(validatorTask.model.thinkingLevel, 'high');
+
+  const run = await h.read();
+  const caseCalls = run.preparation!.calls.filter(c => c.phase === 'case_design');
+  assert.equal(caseCalls.length, 2);
+  assert.equal(caseCalls[0]!.model, 'deepseek-v4-pro');
+  assert.equal(caseCalls[0]!.thinkingLevel, 'high');
+  assert.equal(caseCalls[1]!.model, 'deepseek-v4-pro');
+  assert.equal(caseCalls[1]!.thinkingLevel, 'high');
 });

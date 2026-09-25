@@ -482,51 +482,66 @@ interna; não existe opção de simulação na API, no site ou no ambiente de pr
 O smoke de runtime continua criando sessão sem inferência. Os testes de runtime
 substituem execução/autenticação deliberadamente para não chamar provedores.
 
-### API oficial DeepSeek
+### Política de distribuição de modelos e API DeepSeek
 
-O catálogo do Pi 0.87.0 reconhece `deepseek/deepseek-flash` (V4.1 Flash,
-texto e imagem) e `deepseek/deepseek-v4-pro` (texto). O identificador antigo
-`deepseek-v4-flash` não consta no catálogo instalado. A API oficial está em
-`https://api.deepseek.com`; não é necessário instalar outro SDK ou configurar
-um provedor personalizado.
+A política de modelos define o provedor oficial `deepseek` (API oficial em `https://api.deepseek.com`) como a configuração padrão do protótipo. O catálogo do Pi 0.87.0 reconhece `deepseek/deepseek-flash` (V4.1 Flash, aceita texto e imagem) e `deepseek/deepseek-v4-pro` (aceita somente texto). Essa restrição técnica determina o uso obrigatório de `deepseek-flash` em tarefas que envolvam evidências visuais (mapeamento, execução e validação visual).
 
-Configuração privada de local e desenvolvimento:
+Substituindo a regra anterior simplificada de "Flash sempre low; Pro sempre high", o runtime agora opera com **nível de raciocínio (`thinkingLevel`) explicitamente configurado** (`off`, `low` ou `high`), permitindo que o mesmo modelo Flash trabalhe com `low` ou `high` conforme a sensibilidade da tarefa.
+
+#### Matriz de distribuição de modelos
+
+| Agente | Tarefa | Modelo | Reasoning | Situação no protótipo |
+|---|---|---|---|---|
+| Orquestrador | Controlar etapas, delegar e aplicar transições | Sem modelo: lógica do backend | Não se aplica | Integrado (determinístico) |
+| Curador | Normalizar artefatos, preservar significado e apontar dúvidas | `deepseek-flash` | `low` | Integrado (T4.1) |
+| Projetista de testes | Elaborar plano e casos, aplicando PCE e AVL | `deepseek-v4-pro` | `high` | Integrado (T4.1 / T6.1) |
+| Projetista de testes | Associar percursos observados aos casos aprovados (`route_detail`) | `deepseek-v4-pro` | `high` | Etapa futura (planejada) |
+| Executor | Explorar a aplicação e mapear a navegação | `deepseek-flash` | `high` | Etapa futura (planejada) |
+| Executor | Executar casos, observar resultados e reproduzir problemas | `deepseek-flash` | `high` | Etapa futura (planejada) |
+| Redator | Consolidar resultados validados no relatório | `deepseek-flash` | `low` | Etapa futura (planejada) |
+| Validador | Revisar curadoria, plano, casos, detalhamento dos percursos e relatório textual | `deepseek-v4-pro` | `high` | Curadoria/plano/casos integrados; demais etapas futuras |
+| Validador | Revisar mapa e resultados que dependam de evidência visual | `deepseek-flash` | `high` | Etapa futura (planejada) |
+
+**Justificativas técnicas e de processo:**
+- A preparação textual mantém a configuração testada e exercitada em execução real (Curador em Flash/low, Projetista e Validador em Pro/high).
+- Mapeamento, execução e validação visual começam com `high`, priorizando a profundidade de análise enquanto ainda não dispomos de medições empíricas dessas tarefas.
+- O redator consolida conclusões já previamente validadas; novas interpretações de comportamento devem ser devolvidas à etapa técnica responsável, justificando raciocínio `low`.
+- O orquestrador é determinístico no backend. O julgamento semântico e de qualidade pertence exclusivamente ao validador independente.
+- Tarefas visuais utilizam obrigatoriamente `deepseek-flash`, único modelo do catálogo com suporte a imagens. Conclusões ou validações que dependam de imagem não podem ser delegadas ao perfil Pro.
+
+#### Configuração privada (Local e VPS)
+
+Configuração explícita para ambientes local e de desenvolvimento:
 
 ```dotenv
 DEEPSEEK_API_KEY=<chave privada do projeto>
 PI_PROVIDER=deepseek
 PI_MODEL=deepseek-v4-pro
+PI_THINKING_LEVEL=high
 PI_AUTH_PATH=
+
 PI_CURATOR_PROVIDER=deepseek
 PI_CURATOR_MODEL=deepseek-flash
+PI_CURATOR_THINKING_LEVEL=low
+
 PI_PLANNER_PROVIDER=deepseek
 PI_PLANNER_MODEL=deepseek-v4-pro
+PI_PLANNER_THINKING_LEVEL=high
+
 PI_VALIDATOR_PROVIDER=deepseek
 PI_VALIDATOR_MODEL=deepseek-v4-pro
+PI_VALIDATOR_THINKING_LEVEL=high
 ```
 
-O runtime usa esforço `low` para `deepseek-flash` e `high` para
-`deepseek-v4-pro`. Os demais modelos mantêm o comportamento anterior (`off`).
-A seleção de modelo continua explícita por papel, sem fallback automático.
-Plano e casos usam a configuração do planejador; o validador mantém sessão
-independente. O raciocínio interno não é publicado nem persistido nos resultados.
+O runtime recebe `thinkingLevel` explicitamente resolvido e o repassa à sessão Pi. Valores inválidos geram erro imediato na inicialização. Para garantir compatibilidade retroativa, a ausência da variável de raciocínio aplica o padrão inferido do modelo (`deepseek-v4-pro` → `high`; `deepseek-flash` → `low`; demais modelos/provedores → `off`).
 
-Localmente, incorpore esses valores no `.env` privado antes de reiniciar o
-processo, preservando porta, origem, participantes e diretório de dados. Na VPS,
-incorpore-os somente em `development/runtime.env` (modo `0600`) e recrie o
-container `akcit-qa-dev`, após conferir que não há execução ativa. Configurações
-pendentes não são carregadas automaticamente. A mudança não configura produção.
-Uma eventual reversão exige restaurar a configuração anterior e reiniciar o
-serviço; nunca exponha a chave em comandos, logs ou arquivos versionados.
+Localmente, configure esses valores no `.env` privado antes de iniciar o processo. Na VPS, configure-os exclusivamente em `development/runtime.env` (modo `0600`) e recrie o container `akcit-qa-dev`. A mudança não configura produção e credenciais nunca devem ser expostas em logs, repositório ou commits.
 
-A escolha Flash/Pro é inicial e precisa de avaliação em mais entradas; uma
-execução bem-sucedida comprova integração, não qualidade geral. A verificação
-real com seis casos está em [evidências DeepSeek](evidencias/deepseek/README.md).
-O custo registrado pelo Pi é estimativa do catálogo, não conciliação da cobrança
-da DeepSeek, que pode depender de cache e horário.
+> **Ressalva factual:** A execução existente comprova a integração técnica da preparação textual; ainda não comprova a qualidade do navegador, do relatório ou da validação visual, nem superioridade entre modelos.
 
-Referências: [modelos e preços](https://api-docs.deepseek.com/quick_start/pricing/)
-e [controle de raciocínio](https://api-docs.deepseek.com/guides/thinking_mode/).
+A verificação real com seis casos está registrada em [evidências DeepSeek](evidencias/deepseek/README.md). O custo registrado pelo Pi é estimativa do catálogo, não conciliação da cobrança da DeepSeek, que pode depender de cache e horário.
+
+Referências: [modelos e preços](https://api-docs.deepseek.com/quick_start/pricing/) e [controle de raciocínio](https://api-docs.deepseek.com/guides/thinking_mode/).
 
 ### Demonstração com modelo real pelo site
 

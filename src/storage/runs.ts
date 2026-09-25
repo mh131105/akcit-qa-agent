@@ -14,7 +14,8 @@ export type RunOutput = JsonObject & {
 };
 export type PreparationCall = {
   id: string; role: 'artifact-curator' | 'test-designer' | 'output-validator';
-  provider: string; model: string; phase: 'curation' | 'planning' | 'case_design'; attempt: number;
+  provider: string; model: string; thinkingLevel?: 'off' | 'low' | 'high';
+  phase: 'curation' | 'planning' | 'case_design'; attempt: number;
   outputRevision: number; startedAt: string; finishedAt?: string; durationMs?: number;
   status: 'running' | 'completed' | 'invalid' | 'error' | 'cancelled' | 'interrupted';
   budgetCycleId?: string; errorCode?: string; usage?: Record<string, number>; estimatedCost?: number;
@@ -120,6 +121,7 @@ function validPreparation(value: unknown): boolean {
     strings(call, ['id', 'provider', 'model']) && !!call.id && !!call.provider && !!call.model &&
     ['artifact-curator', 'test-designer', 'output-validator'].includes(call.role as string) &&
     ['curation', 'planning', 'case_design'].includes(call.phase as string) && positive(call.attempt) && positive(call.outputRevision) &&
+    (call.thinkingLevel === undefined || ['off', 'low', 'high'].includes(call.thinkingLevel as string)) &&
     utc(call.startedAt) && (call.finishedAt === undefined || utc(call.finishedAt)) &&
     (call.durationMs === undefined || nonnegative(call.durationMs)) &&
     ['running', 'completed', 'invalid', 'error', 'cancelled', 'interrupted'].includes(call.status as string) &&

@@ -403,6 +403,21 @@ das saídas reais. Esses pareceres não são apresentados como revisão humana.
 T6 #9 permanece aberta; o estado dessas verificações será registrado no PR e nas
 evidências.
 
+### Política de distribuição de modelos e raciocínio explícito DeepSeek · 24/09/2026
+
+Entrega técnica de padronização da distribuição de modelos e configuração explícita de raciocínio (`thinkingLevel`), integrando as definições de [INSTRUÇÕES.md](../INSTRUÇÕES.md).
+
+- **Configuração e runtime:** `src/config.ts` valida `PI_*_THINKING_LEVEL` (`off`, `low`, `high`) e resolve a configuração antes da execução. `src/runtime/pi.ts` repassa o nível explicitamente à sessão Pi. `src/storage/runs.ts` persiste o nível em `PreparationCall`, preservando compatibilidade com registros legados sem preenchimento retroativo.
+- **Distribuição adotada:** oficializa a API oficial DeepSeek como padrão do protótipo: Curador (`deepseek-flash` / `low`), Projetista (`deepseek-v4-pro` / `high`) e Validador textual (`deepseek-v4-pro` / `high`).
+- **Vinculação de etapas futuras:** define os contratos das fases futuras vinculados à política:
+  - Projetista em `route_detail`: `deepseek-v4-pro` / `high`, preservando campos lógicos aprovados.
+  - Executor (mapeamento e execução): `deepseek-flash` / `high` (com suporte a imagem e visão).
+  - Redator (relatório): `deepseek-flash` / `low` (consolidação de conclusões validadas).
+  - Validador visual: `deepseek-flash` / `high` (revisão independente de mapa e evidências com imagens).
+- Fases futuras permanecem desabilitadas até suas entregas específicas; a política documentada não pressupõe implementação ou evidência antecipada dessas fases.
+
+> **Ressalva factual:** A execução existente comprova a integração técnica da preparação textual; ainda não comprova a qualidade do navegador, do relatório ou da validação visual, nem superioridade entre modelos.
+
 ## Marcos propostos a partir de agora
 
 | Quando | Verificação |

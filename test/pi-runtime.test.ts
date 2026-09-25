@@ -7,7 +7,7 @@ import { AgentSession, ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { readConfig, resolvePreparationModels } from '../src/config.js';
 import { executeSpecialistTask, preflightSpecialists, type SpecialistTask } from '../src/runtime/pi.js';
 
-const selection = { provider: 'openai', model: 'gpt-4o' };
+const selection = { provider: 'openai', model: 'gpt-4o', thinkingLevel: 'off' as const };
 const models = { 'artifact-curator': selection, 'test-designer': selection, 'output-validator': selection };
 const task = (signal = new AbortController().signal, timeoutMs = 1000): SpecialistTask => ({
   role: 'artifact-curator', task: 'curate-artifacts', model: selection, prompt: 'entrada sintética', signal, timeoutMs,
@@ -22,16 +22,32 @@ function answer(session: AgentSession, text: string, stopReason = 'stop') {
   } as never);
 }
 
-test('configuração dos modelos é validada no início e exige pares completos por papel', () => {
+test('configuração dos modelos é validada no início e exige pares completos por papel e níveis válidos', () => {
   const missing = readConfig({});
   assert.throws(() => resolvePreparationModels(missing), /PI_PROVIDER e PI_MODEL/);
   const partial = readConfig({ PI_PROVIDER: 'openai', PI_MODEL: 'gpt-4o', PI_VALIDATOR_MODEL: 'other' });
   assert.throws(() => resolvePreparationModels(partial), /PI_VALIDATOR_PROVIDER e PI_VALIDATOR_MODEL/);
+  const invalidThinking = readConfig({ PI_PROVIDER: 'openai', PI_MODEL: 'gpt-4o', PI_CURATOR_THINKING_LEVEL: 'invalid' });
+  assert.throws(() => resolvePreparationModels(invalidThinking), /PI_CURATOR_THINKING_LEVEL deve ser off, low ou high/);
+  const invalidGlobal = readConfig({ PI_PROVIDER: 'openai', PI_MODEL: 'gpt-4o', PI_THINKING_LEVEL: 'ultra' });
+  assert.throws(() => resolvePreparationModels(invalidGlobal), /PI_THINKING_LEVEL deve ser off, low ou high/);
+
   const config = readConfig({ PI_PROVIDER: ' openai ', PI_MODEL: ' gpt-4o ', PI_VALIDATOR_PROVIDER: 'anthropic', PI_VALIDATOR_MODEL: 'chosen' });
-  assert.deepEqual(resolvePreparationModels(config), { ...models, 'output-validator': { provider: 'anthropic', model: 'chosen' } });
+  assert.deepEqual(resolvePreparationModels(config), { ...models, 'output-validator': { provider: 'anthropic', model: 'chosen', thinkingLevel: 'off' } });
   assert.equal(missing.piAuthPath, undefined);
   assert.equal(readConfig({ PI_AUTH_PATH: '  ' }).piAuthPath, undefined);
   assert.equal(readConfig({ PI_AUTH_PATH: ' .data/pi/auth.json ' }).piAuthPath, resolve('.data/pi/auth.json'));
+
+  const explicit = readConfig({
+    PI_PROVIDER: 'deepseek', PI_MODEL: 'deepseek-flash',
+    PI_CURATOR_THINKING_LEVEL: 'low',
+    PI_PLANNER_PROVIDER: 'deepseek', PI_PLANNER_MODEL: 'deepseek-v4-pro', PI_PLANNER_THINKING_LEVEL: 'high',
+    PI_VALIDATOR_PROVIDER: 'deepseek', PI_VALIDATOR_MODEL: 'deepseek-flash', PI_VALIDATOR_THINKING_LEVEL: 'high',
+  });
+  const resolvedExplicit = resolvePreparationModels(explicit);
+  assert.equal(resolvedExplicit['artifact-curator'].thinkingLevel, 'low');
+  assert.equal(resolvedExplicit['test-designer'].thinkingLevel, 'high');
+  assert.equal(resolvedExplicit['output-validator'].thinkingLevel, 'high');
 });
 
 test('preflight não chama modelos, não aceita seleção inexistente ou credencial ausente', async t => {
@@ -42,7 +58,7 @@ test('preflight não chama modelos, não aceita seleção inexistente ou credenc
   assert.equal(prompt.mock.callCount(), 0);
 });
 
-test('DeepSeek usa raciocínio baixo no Flash e alto no Pro, preservando os demais provedores', async t => {
+test('DeepSeek suporta raciocínio configurado explicitamente e nível realmente aplicado à sessão', async t => {
   t.mock.method(ModelRuntime.prototype, 'getAuth', async () => ({ auth: { apiKey: 'fake-never-sent' } }));
   const observed: unknown[] = [];
   t.mock.method(AgentSession.prototype, 'prompt', async function (this: AgentSession) {
@@ -52,16 +68,21 @@ test('DeepSeek usa raciocínio baixo no Flash e alto no Pro, preservando os dema
     answer(this, '{"synthetic":true}');
   });
   for (const model of [
-    { provider: 'deepseek', model: 'deepseek-flash' },
-    { provider: 'deepseek', model: 'deepseek-v4-pro' },
+    { provider: 'deepseek', model: 'deepseek-flash', thinkingLevel: 'low' as const },
+    { provider: 'deepseek', model: 'deepseek-flash', thinkingLevel: 'high' as const },
+    { provider: 'deepseek', model: 'deepseek-flash', thinkingLevel: 'off' as const },
+    { provider: 'deepseek', model: 'deepseek-v4-pro', thinkingLevel: 'high' as const },
     selection,
   ]) {
     const result = await executeSpecialistTask({ ...task(), model });
     assert.deepEqual(result.payload, { synthetic: true });
+    assert.equal(result.metadata.thinkingLevel, model.thinkingLevel ?? 'off');
     assert.doesNotMatch(JSON.stringify(result), /não persistir|fake-never-sent/);
   }
   assert.deepEqual(observed, [
     { model: 'deepseek-flash', thinking: 'low' },
+    { model: 'deepseek-flash', thinking: 'high' },
+    { model: 'deepseek-flash', thinking: 'off' },
     { model: 'deepseek-v4-pro', thinking: 'high' },
     { model: selection.model, thinking: 'off' },
   ]);
