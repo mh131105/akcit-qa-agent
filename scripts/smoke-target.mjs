@@ -80,12 +80,19 @@ try {
   // 6. Reserva consultável na lista
   assert.ok((await page.textContent('body')).includes('5'));
   assert.ok((await page.textContent('body')).includes('Comentário de teste'));
+  const savedReservations = await page.locator('tbody tr').allTextContents();
+  assert.equal(savedReservations.length, 1, 'A primeira criação deve produzir uma única reserva');
   checked.push('reserva-na-lista');
 
   // 7. Comentário preservado ao recarregar
-  await page.reload();
+  const reloaded = await page.reload();
+  assert.equal(reloaded.request().method(), 'GET', 'Recarregar deve consultar a lista, sem reenviar o POST');
+  assert.equal(page.url(), `${baseUrl}/reservas`);
   assert.ok((await page.textContent('body')).includes('Comentário de teste'));
+  assert.deepEqual(await page.locator('tbody tr').allTextContents(), savedReservations,
+    'Recarregar deve preservar a reserva original sem duplicá-la');
   checked.push('comentario-preservado-reload');
+  checked.push('reload-sem-duplicacao');
 
   // 8. Quantidade inválida
   await page.click('a[href="/reservas/nova"]');
@@ -96,9 +103,8 @@ try {
   checked.push('quantidade-invalida');
 
   // 9. Ausência de reserva após rejeição (still only 1 reservation)
-  const bodyAfterReject = await page.textContent('body');
-  const countAfterReject = (bodyAfterReject.match(/Comentário de teste/g) || []).length;
-  assert.equal(countAfterReject, 1, 'Deve ter apenas 1 reserva (nenhuma nova após rejeição)');
+  assert.deepEqual(await page.locator('tbody tr').allTextContents(), savedReservations,
+    'Rejeitar uma quantidade inválida deve preservar somente a reserva original');
   checked.push('sem-reserva-apos-rejeicao');
 
   // 10. Percurso completo por links e formulários

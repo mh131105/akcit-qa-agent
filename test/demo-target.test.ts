@@ -234,3 +234,33 @@ test('reserva consultável na lista após criação', async () => {
     assert.ok(html.includes('Meu comentário'), 'Comment should appear in the list');
   } finally { await t.close(); }
 });
+
+test('POST redireciona para GET e recarregar a lista não repete a criação', async () => {
+  for (const mode of ['reference', 'known-defect']) {
+    const t = await startTarget(mode);
+    try {
+      const cookie = await login(t.base);
+      for (const qty of ['5', '0', '10']) {
+        const before = t.reservations.length;
+        const valid = qty === '5' || (qty === '10' && mode === 'reference');
+        const response = await authedFetch(t.base, '/reservas/nova', cookie, {
+          method: 'POST', redirect: 'manual',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ qty, comment: 'Comentário preservado' }).toString(),
+        });
+        assert.equal(response.status, 303, `${mode}: o resultado do POST deve abrir a lista por GET`);
+        assert.equal(response.headers.get('location'), '/reservas');
+        const first = await (await authedFetch(t.base, '/reservas', cookie)).text();
+        assert.ok(first.includes(valid ? 'Reserva criada' : 'Quantidade inválida'));
+        const expected = before + Number(valid);
+        assert.equal(t.reservations.length, expected);
+        const ids = t.reservations.map(reservation => reservation.id);
+        const reloaded = await (await authedFetch(t.base, '/reservas', cookie)).text();
+        assert.ok(reloaded.includes('Comentário preservado'));
+        assert.deepEqual(t.reservations.map(reservation => reservation.id), ids);
+        assert.equal(reloaded.includes('class="msg-success"'), false);
+        assert.equal(reloaded.includes('class="msg-error"'), false);
+      }
+    } finally { await t.close(); }
+  }
+});

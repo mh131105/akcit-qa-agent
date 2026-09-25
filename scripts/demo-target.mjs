@@ -30,10 +30,10 @@ function send(res, status, html) {
   res.end(html);
 }
 
-function redirect(res, location, sid) {
+function redirect(res, location, sid, status = 302) {
   const headers = { Location: location };
   if (sid) headers['Set-Cookie'] = `sid=${sid}; HttpOnly; Path=/; SameSite=Lax`;
-  res.writeHead(302, headers);
+  res.writeHead(status, headers);
   res.end();
 }
 
@@ -187,7 +187,9 @@ export function createDemoTarget(overrides = {}) {
 
     // --- Reservations list ---
     if (path === '/reservas' && method === 'GET') {
-      return send(res, 200, reservationsPage(reservations));
+      const flash = session.flash;
+      delete session.flash;
+      return send(res, 200, reservationsPage(reservations, flash?.message, flash?.messageClass));
     }
 
     // --- New reservation form ---
@@ -199,16 +201,15 @@ export function createDemoTarget(overrides = {}) {
     if (path === '/reservas/nova' && method === 'POST') {
       const body = parseForm(await readBody(req));
       const error = validateQty(body.qty, mode);
-      if (error) {
-        return send(res, 200, reservationsPage(reservations, error, 'msg-error'));
-      }
-      reservations.push({
+      if (!error) reservations.push({
         id: randomUUID(),
         qty: Number(body.qty),
         comment: body.comment || '',
         createdAt: new Date().toISOString(),
       });
-      return send(res, 200, reservationsPage(reservations, 'Reserva criada', 'msg-success'));
+      session.flash = { message: error ?? 'Reserva criada', messageClass: error ? 'msg-error' : 'msg-success' };
+      // POST/Redirect/GET: recarregar a lista não reenvia o formulário de criação.
+      return redirect(res, '/reservas', undefined, 303);
     }
 
     // 404
