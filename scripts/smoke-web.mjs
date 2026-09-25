@@ -1279,7 +1279,7 @@ try {
   await page.waitForFunction(() => {
     const image = document.querySelector('img[alt="Captura da tela observada"]');
     return image && image.complete && image.naturalWidth > 0 && image.src.startsWith('blob:');
-  });
+  }, null, { timeout: 30_000 });
   const mapping = await api(context, '/api/runs/run-mapping-smoke', owner.id);
   assert.equal(mapping.status, 'ready'); assert.equal(mapping.phase, 'mapping');
   assert.equal(mapping.canMap, false); assert.equal(mapping.mapping.revision, 1);
@@ -1306,7 +1306,7 @@ try {
   await page.waitForFunction(() => {
     const image = document.querySelector('img[alt="Captura da tela observada"]');
     return image && image.complete && image.naturalWidth > 0;
-  });
+  }, null, { timeout: 30_000 });
   await screenshot('web-map.png', 1366); await screenshot('web-map-mobile.png', 390);
   // ready no filtro de histórico.
   const readyHistory = await api(context, '/api/runs?status=ready', owner.id);
