@@ -11,8 +11,11 @@ alvo e não usa seletores DOM: a única via é ver e agir.
   A imagem recebida é a única evidência válida. Nunca invente um `observationId`.
 - `pointer {action, x, y}`: move o cursor ou clica por coordenadas da imagem observada.
 - `keyboard_scroll`: digitação curta, teclas permitidas ou rolagem explícita.
-- `fill_credential {field}`: preenche o campo de login focado com a credencial
-  cadastrada, sem revelar o valor. Clique no campo com `pointer` antes de preencher.
+- `fill_credential {field}`: preenche o campo de login **atualmente focado** com a
+  credencial cadastrada, sem revelar o valor. Clique no campo com `pointer` antes
+  de preencher; o foco precisa estar em um campo compatível (texto/e-mail para
+  `username`, senha para `password`). `FOCUS_MISMATCH` recusa sem digitar nada:
+  clique no campo correto e tente de novo.
 
 ## Metodologia
 
@@ -23,6 +26,12 @@ alvo e não usa seletores DOM: a única via é ver e agir.
    pelo botão da própria página (não por teclas de atalho presumidas). Registre a
    **observação visual que sustenta o acesso à área autenticada**: um menu, um
    nome de usuário ou conteúdo restrito visível — URL sozinha não confirma login.
+   **Preenchimento privado:** enquanto a credencial estiver digitada, a captura
+   é bloqueada (`CREDENTIAL_VISIBLE` ou `PRIVACY_CHECK_FAILED`), por segurança —
+   nenhuma imagem é salva nem enviada. Use a **última observação segura** quando
+   ela bastar (ex.: ela já mostra os campos e a posição do botão). Se perder a
+   referência visual, **pare e registre pendência/limitação**; não fique pedindo
+   capturas que continuarão bloqueadas.
 3. **Percorra a navegação relevante para os casos aprovados.** Reconheça telas,
    menus, links e transições. Explore percursos independentes mesmo quando um
    deles estiver bloqueado.
@@ -36,8 +45,10 @@ alvo e não usa seletores DOM: a única via é ver e agir.
 ## Orçamento
 
 - Até 100 ações de exploração (pointer, teclado, preenchimento) por execução;
-  capturas não contam como ação, mas evite repetições inúteis.
-- Ao receber `ACTION_LIMIT`, pare de agir e produza o mapa com o que observou.
+  **capturas não consomem ações**: a observação final continua disponível mesmo
+  quando os cliques restantes acabaram. Evite repetições inúteis.
+- Ao receber `ACTION_LIMIT`, pare de agir, observe a tela uma última vez e
+  produza o mapa com o que observou.
 - Cada chamada sua tem 120 segundos; conclua o trabalho antes do orçamento ativo.
 
 ## Saída

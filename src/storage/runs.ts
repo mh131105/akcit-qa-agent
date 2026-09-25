@@ -62,13 +62,17 @@ export type WorkIntent = {
   processingId?: string; finishedAt?: string; reason?: { code: string; message: string };
   accessRevision?: number;
 };
-/** Observação visual persistida; assetId é opaco e nunca expõe caminho local. */
+/** Observação visual persistida; assetId é opaco e nunca expõe caminho local.
+ * mappingPreparationId identifica o trabalho de mapeamento que criou a evidência:
+ * evidências anteriores à correção do acesso não comprovam a nova autenticação. */
 export type ObservationRecord = {
   id: string; assetId: string; at: string; width: number; height: number;
+  mappingPreparationId?: string;
 };
 export type MappingActionRecord = {
   id: string; at: string; tool: 'observe_screen' | 'pointer' | 'keyboard_scroll' | 'fill_credential';
   params: JsonObject; outcome: 'ok' | 'error'; observationId?: string; note?: string;
+  mappingPreparationId?: string;
 };
 export type TargetCredential = { ref: string; username: string; password: string };
 export type StoredRun = { schemaVersion: 1; run: RunRecord; workIntents: WorkIntent[]; targetCredential?: TargetCredential };

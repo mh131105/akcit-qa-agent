@@ -7,7 +7,8 @@ import { parseVerdict, type Artifact, type TestCasesPayload, type Verdict } from
 import { caseDependencies, preparationAnswers, PreparationError, latestOutput } from './prepare-plan.js';
 import { resolveTargetCredential } from './target-access.js';
 import { StorageError, type RunOutput, type RunRecord, type StoredRun } from '../storage/runs.js';
-import { executeVisualTask, preflightVisualModels, type VisualResult, type VisualTask } from '../runtime/pi-visual.js';
+import { executeVisualTask, preflightVisualModels, type VisualCallUpdate, type VisualResult, type VisualTask } from '../runtime/pi-visual.js';
+import { SpecialistError } from '../runtime/pi.js';
 import { resolveVisualModels, type readConfig, type ResolvedVisualModels } from '../config.js';
 
 export class MappingError extends Error {
@@ -32,6 +33,22 @@ function validAccess(record: StoredRun, config: Pick<ReturnType<typeof readConfi
     return { error: { code: 'TARGET_NOT_ALLOWED', message: 'O endereço configurado não pertence mais às origens autorizadas pela equipe do piloto.', status: 403 } };
   }
   return { url };
+}
+
+/** Tempo ativo gasto quando a preparação está encerrada. `accumulatedActiveMs` já
+ * contém o período encerrado (congelado ao terminar); somá-lo de novo contaria o
+ * mesmo intervalo duas vezes. Registros legados sem o campo calculam o período
+ * encerrado como compatibilidade. Durante trabalho ativo, soma-se apenas o período
+ * ainda em andamento — espera humana nunca entra na conta. */
+function frozenActiveMs(preparation: NonNullable<RunRecord['preparation']>, now: number): number {
+  const accumulated = preparation.accumulatedActiveMs ?? 0;
+  if (preparation.finishedAt === null) {
+    return accumulated + Math.max(0, now - Date.parse(preparation.startedAt));
+  }
+  if (preparation.accumulatedActiveMs === undefined) {
+    return Math.max(0, Date.parse(preparation.finishedAt) - Date.parse(preparation.startedAt));
+  }
+  return accumulated;
 }
 
 /** Verificação específica das condições de início do mapeamento. Não usa canDecideCases:
@@ -67,16 +84,13 @@ export function mappingEligibility(
     return refuse('STALE_VERSION', 'Curadoria ou plano aprovados não são mais vigentes.');
   }
   if (!run.preparation) return refuse('INVALID_STATE', 'A preparação ainda não foi encerrada.');
-  const preparation = structuredClone(run.preparation);
+  const preparation = run.preparation;
   const active = options.checkState === false;
   if (!active && preparation.finishedAt === null) {
     return refuse('INVALID_STATE', 'A preparação ainda não foi encerrada.');
   }
-  const accumulated = preparation.accumulatedActiveMs ?? 0;
-  const spent = active
-    ? Math.max(0, now - Date.parse(preparation.startedAt))
-    : Math.max(0, Date.parse(preparation.finishedAt!) - Date.parse(preparation.startedAt));
-  if (accumulated + spent >= preparation.limits.activeMs) {
+  const spent = frozenActiveMs(preparation, now);
+  if (spent >= preparation.limits.activeMs) {
     return refuse('ACTIVE_LIMIT', 'O orçamento ativo desta execução foi esgotado.');
   }
   const validDeps = cases.dependsOn.length === 2 &&
@@ -141,24 +155,96 @@ export type MappingServices = {
   visualCall?: (task: VisualTask) => Promise<VisualResult>;
 };
 
-async function runVisual(services: MappingServices, task: Omit<VisualTask, 'signal' | 'authPath'>): Promise<VisualResult> {
+/** Executa a sessão visual persistindo início e término de cada inferência
+ * reutilizando `PreparationCall`: o histórico fica registrado mesmo quando a
+ * sessão inteira falha com JSON inválido, erro, timeout ou cancelamento. */
+async function runVisual(services: MappingServices, task: Omit<VisualTask, 'signal' | 'authPath' | 'onCall'>): Promise<VisualResult> {
   const call = services.visualCall ?? executeVisualTask;
-  const result = await call({
-    ...task,
-    signal: services.signal,
-    ...(services.config.piAuthPath ? { authPath: services.config.piAuthPath } : {}),
-  });
-  // Todas as chamadas de modelo são registradas, não apenas a resposta final.
+  const running = new Set<string>();
+  const onCall = async (event: VisualCallUpdate) => {
+    if (event.kind === 'start') {
+      await services.update(record => {
+        const preparation = record.run.preparation;
+        if (!preparation) return undefined;
+        preparation.calls.push({
+          id: event.callId, role: task.role, ...task.model,
+          phase: task.role === 'test-executor' ? 'mapping' : 'mapping_validation',
+          attempt: task.callMeta.attempt, outputRevision: task.callMeta.outputRevision,
+          startedAt: event.at, status: 'running', budgetCycleId: preparation.budgetCycleId,
+        });
+        return undefined;
+      });
+      running.add(event.callId);
+    } else {
+      await services.update(record => {
+        const found = record.run.preparation?.calls.find(item => item.id === event.callId);
+        if (!found || found.status !== 'running') return undefined;
+        found.finishedAt = event.at;
+        found.durationMs = event.durationMs ?? 0;
+        found.status = 'completed';
+        if (event.usage) found.usage = event.usage;
+        return undefined;
+      });
+      running.delete(event.callId);
+    }
+  };
+  let result: VisualResult;
+  try {
+    result = await call({
+      ...task,
+      signal: services.signal, onCall,
+      ...(services.config.piAuthPath ? { authPath: services.config.piAuthPath } : {}),
+    });
+  } catch (error) {
+    // A falha atual também fica registrada; chamadas anteriores foram preservadas.
+    const failure = services.failure(error);
+    const aborted = services.signal.aborted;
+    try {
+      await services.update(record => {
+        const preparation = record.run.preparation;
+        if (!preparation) return undefined;
+        for (const callId of running) {
+          const found = preparation.calls.find(item => item.id === callId);
+          if (found && found.status === 'running') {
+            found.finishedAt = services.time();
+            found.durationMs = Math.max(0, services.now() - Date.parse(found.startedAt));
+            found.status = aborted ? 'cancelled'
+              : ['INVALID_OUTPUT', 'INVALID_MODEL_OUTPUT'].includes(failure.code) ? 'invalid' : 'error';
+            found.errorCode = failure.code;
+          }
+        }
+        return undefined;
+      });
+    } catch {
+      // Cancelamento já finalizou as chamadas em andamento; nada a salvar.
+    }
+    throw error;
+  }
+  // Eventos já foram persistidos; resultados substitutos legados (sem callId)
+  // são registrados como concluídos na chegada.
   for (const callEvent of result.calls) {
     await services.update(record => {
       const preparation = record.run.preparation;
       if (!preparation) return undefined;
+      if (callEvent.callId) {
+        const found = preparation.calls.find(item => item.id === callEvent.callId);
+        if (found) {
+          if (found.status === 'running') {
+            found.finishedAt = callEvent.at;
+            found.durationMs = callEvent.durationMs;
+            found.status = 'completed';
+            if (callEvent.usage) found.usage = callEvent.usage;
+          }
+          return undefined;
+        }
+      }
       preparation.calls.push({
-        id: randomUUID(), role: task.role, ...task.model, phase: task.role === 'test-executor' ? 'mapping' : 'mapping_validation',
+        id: randomUUID(), role: task.role, ...task.model,
+        phase: task.role === 'test-executor' ? 'mapping' : 'mapping_validation',
         attempt: task.callMeta.attempt, outputRevision: task.callMeta.outputRevision,
+        budgetCycleId: preparation.budgetCycleId,
         startedAt: new Date(Math.max(0, Date.parse(callEvent.at) - callEvent.durationMs)).toISOString(),
         finishedAt: callEvent.at, durationMs: callEvent.durationMs, status: 'completed',
-        budgetCycleId: preparation.budgetCycleId,
         ...(callEvent.usage ? { usage: callEvent.usage } : {}),
       });
       return undefined;
@@ -183,6 +269,19 @@ export async function produceMapping(services: MappingServices, request: Mapping
   if (!credential) throw new MappingError('ACCESS_NOT_CONFIGURED', 'Credencial de teste indisponível para o mapeamento.');
   const credentials = credential;
   const startUrl = initial.run.input!.startUrl as string;
+  // Evidências anteriores à correção do acesso não comprovam a nova autenticação:
+  // apenas observações e ações criadas no trabalho vigente sustentam o mapa.
+  // O marcador mappingPreparationId é gravado junto da evidência (imune a relógios
+  // divergentes); registros legados sem o marcador usam o início do trabalho.
+  const activePreparationId = initial.run.preparation!.id;
+  const activeStartedAt = Date.parse(initial.run.preparation!.startedAt);
+  const belongsToCurrentWork = (item: { mappingPreparationId?: string; at: string }) =>
+    item.mappingPreparationId !== undefined ? item.mappingPreparationId === activePreparationId
+      : Date.parse(item.at) >= activeStartedAt;
+  const currentObservations = (run: RunRecord) =>
+    (run.observations ?? []).filter(observation => belongsToCurrentWork(observation));
+  const currentActions = (run: RunRecord) =>
+    (run.mappingActions ?? []).filter(action => belongsToCurrentWork(action));
   let previous = latestOutput(initial.run, 'mapping');
   const outputId = previous?.id ?? randomUUID();
   let feedback: unknown = null;
@@ -199,7 +298,7 @@ export async function produceMapping(services: MappingServices, request: Mapping
     try {
       const result = await runVisual(services, {
         role: 'test-executor', kind: 'map-application', model: services.models.executor,
-        prompt: JSON.stringify({ task: 'map-application', artifacts, approvedCases: cases, access: {
+        prompt: JSON.stringify({ task: 'map-application', artifacts, curation, plan, approvedCases: cases, access: {
           startUrl, accessProfile: current.run.input?.accessProfile ?? null,
           dataPreparation: current.run.input?.dataPreparation ?? null, hasCredential: true },
         previousOutput: previous, feedback }),
@@ -207,15 +306,20 @@ export async function produceMapping(services: MappingServices, request: Mapping
         callMeta: { attempt, outputRevision: revision },
         browser: {
           startUrl, allowedOrigins: services.config.targetAllowedOrigins, credential: credentials,
-          mediaDir: services.mediaDir, remainingActions,
+          mediaDir: services.mediaDir, signal: services.signal, remainingActions,
           onObservation: observation => services.update(record => {
-            record.run.observations = [...(record.run.observations ?? []), observation];
+            record.run.observations = [...(record.run.observations ?? []), {
+              id: observation.id, assetId: observation.assetId, at: observation.at,
+              width: observation.width, height: observation.height,
+              ...(record.run.preparation?.id !== undefined
+                ? { mappingPreparationId: record.run.preparation.id } : {}),
+            }];
             return undefined;
           }),
           onAction: action => services.update(record => {
             const preparation = record.run.preparation;
             if (!preparation) return undefined;
-            const saved: typeof action = { ...action };
+            const saved = { ...action, mappingPreparationId: preparation.id };
             const consumed = preparation.consumedActions ?? 0;
             if (consumed >= (preparation.limits.maxActions ?? 100)) {
               saved.outcome = 'error';
@@ -230,16 +334,47 @@ export async function produceMapping(services: MappingServices, request: Mapping
       });
       // As observações/ações criadas durante a sessão também sustentam o mapa.
       const freshRecord = await services.read();
+      const observations = currentObservations(freshRecord.run);
+      const actions = currentActions(freshRecord.run);
       payload = parseNavigation(result.payload, {
-        observations: (freshRecord.run.observations ?? []).map(observation => observation.id),
-        actions: (freshRecord.run.mappingActions ?? []).map(action => action.id),
+        observations: observations.map(observation => observation.id),
+        actions: actions.map(action => action.id),
         caseIds,
       });
+      // Uma ação com erro não sustenta uma transição bem-sucedida.
+      const failedActions = new Set(actions.filter(action => action.outcome !== 'ok').map(action => action.id));
+      if (payload.map.transitions.some(transition => failedActions.has(transition.actionId))) {
+        throw new InvalidNavigationOutput('ACTION_NOT_SUPPORTED');
+      }
     } catch (error) {
       if (services.signal.aborted) throw services.signal.reason;
       if (error instanceof MappingError || error instanceof StorageError) throw error;
-      feedback = services.failure(error);
-      continue;
+      // Saída de modelo inválida gera nova revisão dentro do limite; falhas técnicas
+      // ou de navegador conservam a causa identificável em vez de virarem
+      // esgotamento de revisões.
+      if (error instanceof InvalidNavigationOutput ||
+        (error instanceof SpecialistError && error.code === 'INVALID_OUTPUT')) {
+        const failure = services.failure(error);
+        feedback = failure;
+        // A inferência terminou, mas a saída não atendeu ao contrato: as chamadas
+        // da tentativa ficam registradas como inválidas, preservando o motivo.
+        await services.update(record => {
+          for (const saved of record.run.preparation?.calls ?? []) {
+            if (saved.role === 'test-executor' && saved.attempt === attempt &&
+                ['running', 'completed'].includes(saved.status)) {
+              saved.status = 'invalid';
+              saved.errorCode = failure.code;
+              if (saved.finishedAt === undefined) {
+                saved.finishedAt = services.time();
+                saved.durationMs = Math.max(0, services.now() - Date.parse(saved.startedAt));
+              }
+            }
+          }
+          return undefined;
+        });
+        continue;
+      }
+      throw error;
     }
     // Dependência exata reconferida antes de publicar a revisão do mapa.
     const output = await services.update(record => {
@@ -270,17 +405,26 @@ export async function produceMapping(services: MappingServices, request: Mapping
           ...(payload.authentication.status === 'authenticated' ? [payload.authentication.observationId] : []),
         ]);
         if (references.size > MAP_LIMITS.validatorImages) throw new InvalidNavigationOutput('IMAGE_LIMIT');
-        const images = await Promise.all([...references].map(async observationId => {
-          const observation = (fresh.run.observations ?? []).find(item => item.id === observationId);
+        // Manifesto ordenado: a ordem corresponde exatamente às imagens anexadas.
+        const ordered = [...references];
+        const observations = currentObservations(fresh.run);
+        const images = await Promise.all(ordered.map(async observationId => {
+          const observation = observations.find(item => item.id === observationId);
           if (!observation) throw new StorageError('STORAGE_FAILURE');
           return { data: (await readFile(join(services.mediaDir, observation.assetId + '.png'))).toString('base64'), mimeType: 'image/png' as const };
         }));
+        const manifest = ordered.map((observationId, imageIndex) => {
+          const observation = observations.find(item => item.id === observationId)!;
+          return { imageIndex, observationId, assetId: observation.assetId, at: observation.at,
+            width: observation.width, height: observation.height };
+        });
         // Registro das ações relevantes para conferir cada transição declarada.
         const referencedActionIds = new Set(payload.map.transitions.map(transition => transition.actionId));
-        const actions = (fresh.run.mappingActions ?? []).filter(action => referencedActionIds.has(action.id));
+        const actions = currentActions(fresh.run).filter(action => referencedActionIds.has(action.id));
         const result = await runVisual(services, {
           role: 'output-validator', kind: 'validate-navigation', model: services.models['validator-visual'],
-          prompt: JSON.stringify({ task: 'validation', artifacts, approvedCases: cases, output, actions,
+          prompt: JSON.stringify({ task: 'validation', artifacts, curation, plan, approvedCases: cases,
+            output, manifest: { observations: manifest }, actions,
             previousOutput: fresh.run.outputs.filter(item => item.id === outputId && item.revision < output.revision).at(-1) ?? null,
             previousVerdicts: fresh.run.validations.filter(validation => validation.outputId === outputId) }),
           images, perCallTimeoutMs: limits.timeoutMs,
@@ -288,11 +432,25 @@ export async function produceMapping(services: MappingServices, request: Mapping
         });
         const parsed = parseVerdict(result.payload);
         verdict = parsed;
+        // Resposta contraditória é validação inválida, dentro das tentativas existentes:
+        // autenticação não concluída não pode receber parecer aprovado.
+        const contradictory = parsed.status === 'approved' && payload.authentication.status === 'not_authenticated';
         await services.update(record => {
-          record.run.validations.push({ id: randomUUID(), outputId, outputRevision: revision,
-            validator: 'output-validator', at: services.time(), attempt: validatorAttempt, ...parsed });
+          record.run.validations.push(contradictory
+            ? { id: randomUUID(), outputId, outputRevision: revision, validator: 'output-validator',
+              at: services.time(), attempt: validatorAttempt, status: 'error' as const,
+              reason: 'O parecer aprovado contradiz a autenticação não concluída declarada no mapa.',
+              findings: [{ code: 'CONTRADICTORY_APPROVAL', message: 'O parecer aprovado contradiz a autenticação não concluída declarada no mapa.', location: null }] }
+            : { id: randomUUID(), outputId, outputRevision: revision,
+              validator: 'output-validator', at: services.time(), attempt: validatorAttempt, ...parsed });
           return undefined;
         });
+        if (contradictory) {
+          if (validatorAttempt === (limits.maxValidatorAttempts ?? 2)) {
+            throw new MappingError('VALIDATOR_LIMIT', 'O limite de tentativas técnicas do validador visual foi esgotado sem parecer válido.');
+          }
+          continue;
+        }
       } catch (error) {
         if (error instanceof MappingError || error instanceof StorageError || services.signal.aborted) throw error;
         const reason = services.failure(error);

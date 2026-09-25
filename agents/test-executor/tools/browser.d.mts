@@ -5,6 +5,8 @@ export interface BrowserObservationRecord {
   at: string;
   width: number;
   height: number;
+  /** Preenchido pelo backend ao persistir; identifica o trabalho que criou a evidência. */
+  mappingPreparationId?: string;
 }
 export interface BrowserActionRecord {
   id: string;
@@ -14,6 +16,8 @@ export interface BrowserActionRecord {
   outcome: 'ok' | 'error';
   observationId?: string;
   note?: string;
+  /** Preenchido pelo backend ao persistir; identifica o trabalho que criou a ação. */
+  mappingPreparationId?: string;
 }
 export interface BrowserSessionOptions {
   startUrl: string;
@@ -22,6 +26,8 @@ export interface BrowserSessionOptions {
   mediaDir: string;
   display?: string;
   chromiumPath?: string;
+  /** Cancelamento propagado: interrompe inicialização, processos e operações. */
+  signal?: AbortSignal;
   remainingActions: () => Promise<number>;
   onObservation: (record: BrowserObservationRecord) => Promise<void>;
   onAction: (record: BrowserActionRecord) => Promise<void>;

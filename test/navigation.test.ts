@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import test, { type TestContext } from 'node:test';
 import { createApp } from '../src/app.js';
 import { readConfig } from '../src/config.js';
+import { mappingEligibility } from '../src/application/map-application.js';
 import { RunStore } from '../src/storage/runs.js';
 
 // T8.2 — Contratos, autorização, revisões, pareceres e transições do mapeamento.
@@ -138,9 +139,11 @@ async function pollReview(h: { request: (path: string, body?: unknown, cookie?: 
   throw new Error('A execução não alcançou o estado esperado.');
 }
 
-type VisualTaskStub = { role: string; prompt: string; browser?: { mediaDir: string; onObservation: (record: unknown) => Promise<void>; onAction: (record: unknown) => Promise<void> } };
-type ExecutorFactory = (attempt: number, input: Record<string, unknown>) => unknown;
-type ValidatorFactory = (attempt: number, input: Record<string, unknown>) => unknown;
+type VisualTaskStub = { role: string; prompt: string; images?: unknown[];
+  onCall?: (event: unknown) => Promise<void>;
+  browser?: { mediaDir: string; onObservation: (record: unknown) => Promise<void>; onAction: (record: unknown) => Promise<void> } };
+type ExecutorFactory = (attempt: number, input: Record<string, unknown>, task: VisualTaskStub) => unknown;
+type ValidatorFactory = (attempt: number, input: Record<string, unknown>, task: VisualTaskStub) => unknown;
 function fakeVisual(factory: { executor?: ExecutorFactory; validator?: ValidatorFactory }) {
   const calls: string[] = [];
   let executorAttempt = 0;
@@ -160,7 +163,7 @@ function fakeVisual(factory: { executor?: ExecutorFactory; validator?: Validator
         await task.browser.onObservation({ id: observationId, assetId, at: new Date().toISOString(), width: 1366, height: 768 });
         await task.browser.onAction({ id: actionId, at: new Date().toISOString(), tool: 'pointer', params: { action: 'click', x: 40, y: 200 }, outcome: 'ok' });
       }
-      const payload = factory.executor ? await factory.executor(attempt, input) : {
+      const payload = factory.executor ? await factory.executor(attempt, input, task) : {
         authentication: { status: 'authenticated', observationId },
         map: { screens: [{ id: 'tela-' + attempt, name: 'Início', recognition: 'Página inicial após o login.', observationIds: [observationId] }], transitions: [], paths: [] },
         pending: [], limitations: [],
@@ -168,7 +171,7 @@ function fakeVisual(factory: { executor?: ExecutorFactory; validator?: Validator
       return { payload, metadata: { provider: 'deepseek', model: 'deepseek-flash', thinkingLevel: 'high', durationMs: 1 }, calls: [{ at: new Date().toISOString(), durationMs: 1 }] };
     }
     validatorAttempt += 1;
-    const payload = factory.validator ? await factory.validator(validatorAttempt, input) : { status: 'approved', reason: 'Mapa sustentado pelas imagens.', findings: [] };
+    const payload = factory.validator ? await factory.validator(validatorAttempt, input, task) : { status: 'approved', reason: 'Mapa sustentado pelas imagens.', findings: [] };
     return { payload, metadata: { provider: 'deepseek', model: 'deepseek-flash', thinkingLevel: 'high', durationMs: 1 }, calls: [{ at: new Date().toISOString(), durationMs: 1 }] };
   };
   return { visualCall, calls };
@@ -434,14 +437,338 @@ test('CA-10: ready entra no filtro de histórico; nenhum teste apresentado como 
   assert.ok(!JSON.stringify(review.body.mapping.payload).includes('caseId'), 'capturas de mapeamento não usam contrato de execução');
 });
 
-test('falha do executor esgota revisões sem aprovar por padrão', async t => {
+test('falha técnica do executor conserva a causa, sem virar esgotamento de revisões', async t => {
   const { h, owner, run } = await mappedRun(t, {
     executor: () => { throw new Error('MODEL_ERROR simulado'); },
   });
   const result = await h.request('/api/runs/' + run.id + '/continue', { outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1 }, owner.cookie);
   assert.equal(result.status, 202);
   const review = await pollReview(h, run.id, owner.cookie, item => item.status !== 'running');
-  assert.equal(review.status, 'interrupted');
+  assert.equal(review.status, 'error');
   assert.equal(review.phase, 'mapping');
+  assert.equal(review.stopReason.code, 'MODEL_ERROR', 'causa identificável preservada');
   assert.equal(review.mapping, null, 'nenhum mapa foi publicado');
+});
+// ---- T8.2-R1: regressões de orçamento, cancelamento, chamadas e validação ----
+
+test('orçamento: período encerrado não é somado duas vezes; espera humana não conta; legado calcula', async t => {
+  const dataDir = await fs.mkdtemp(join(tmpdir(), 'akcit-budget-'));
+  t.after(async () => { await fs.rm(dataDir, { recursive: true, force: true }); });
+  const store = new RunStore(dataDir);
+  await store.initialize();
+  const at = '2026-09-24T10:00:00.000Z';
+  await store.create({
+    id: 'run-budget', ownerId: 'owner-budget', name: 'Orçamento', applicationName: 'Alvo', createdAt: at,
+    status: 'draft', phase: 'intake',
+    input: { credentialRef: null, artifactIds: ['artifact-1'], objective: 'Mapear.' },
+    artifacts: [{ id: 'artifact-1', name: 'historias.txt', version: '1', text: 'US-01: Fazer reservas.\nCA-01: Quantidade de 1 a 10.' }],
+    outputs: [], validations: [], approvals: [], questions: [], answers: [], budgetCycles: [],
+    validationPolicy: { maxValidationRevisions: 3, maxValidatorAttempts: 2, timeoutMs: 120000 },
+  });
+  await seedApproved({ store }, 'run-budget', 'owner-budget');
+  await store.update('run-budget', record => {
+    record.run.input = { ...record.run.input, credentialRef: 'cred-1', startUrl: targetOrigin,
+      accessProfile: 'Operador', authorizedTarget: true, accessRevision: 1 };
+    record.targetCredential = { ref: 'cred-1', username: 'demo', password: 'demo1234' };
+    return { save: true, value: undefined };
+  });
+  const config = readConfig({ DATA_DIR: dataDir, APP_ORIGIN: appOrigin, TARGET_ALLOWED_ORIGINS: targetOrigin, PILOT_ALLOWED_EMAILS: accounts.map(account => account.email).join(',') });
+  const request = { outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1 };
+  const record = await store.read('run-budget');
+  record.run.preparation!.finishedAt = at;
+  // 44 minutos acumulados (já incluindo o período encerrado): continuar é permitido.
+  // A espera humana (10 horas depois do término) não entra na soma.
+  record.run.preparation!.accumulatedActiveMs = 2_640_000;
+  let result = mappingEligibility(record, request, config, Date.parse('2026-09-24T20:00:00.000Z'));
+  assert.ok(result.ok, '30+ minutos consumidos e espera humana não esgotam o orçamento');
+  // 45 minutos esgotados impedem.
+  record.run.preparation!.accumulatedActiveMs = 2_700_000;
+  result = mappingEligibility(record, request, config, Date.parse(at));
+  assert.equal(result.ok, false);
+  assert.equal(!result.ok && result.error.code, 'ACTIVE_LIMIT');
+  // Registro legado sem accumulatedActiveMs: o período encerrado é calculado.
+  delete record.run.preparation!.accumulatedActiveMs;
+  result = mappingEligibility(record, request, config, Date.parse(at));
+  assert.ok(result.ok, 'compatibilidade legada calcula o período encerrado');
+  // Trabalho ativo: soma apenas o período ainda em andamento.
+  const now = Date.parse('2026-09-24T10:30:00.000Z');
+  record.run.preparation!.finishedAt = null;
+  record.run.preparation!.startedAt = '2026-09-24T10:20:00.000Z'; // 10 min em andamento
+  record.run.preparation!.accumulatedActiveMs = 1_800_000; // 30 min anteriores
+  result = mappingEligibility(record, request, config, now, { checkState: false });
+  assert.ok(result.ok, '30 minutos consumidos permitem continuar o trabalho ativo');
+  record.run.preparation!.startedAt = '2026-09-24T10:00:00.000Z'; // 30 min em andamento
+  result = mappingEligibility(record, request, config, now, { checkState: false });
+  assert.equal(!result.ok && result.error.code, 'ACTIVE_LIMIT', '45 minutos esgotados impedem');
+});
+
+test('falha de inferência registra a falha atual e preserva o histórico de chamadas', async t => {
+  const fake = fakeVisual({
+    executor: async (_attempt, _input, task) => {
+      await task.onCall?.({ kind: 'start', callId: 'call-falha-1', at: new Date().toISOString() });
+      throw new Error('falha técnica de inferência simulada');
+    },
+  });
+  const h = await harness(t, { visualCall: fake.visualCall });
+  const owner = await h.register(0);
+  const run = await h.createRun(owner.cookie);
+  await seedApproved(h, run.id, owner.user.id);
+  await configureAccess(h, run.id, owner.cookie, 0);
+  await h.store.update(run.id, record => {
+    record.run.preparation!.calls.push({ id: 'call-anterior', role: 'output-validator', provider: 'deepseek',
+      model: 'deepseek-v4-pro', thinkingLevel: 'high', phase: 'case_design', attempt: 1, outputRevision: 1,
+      budgetCycleId: 'cycle-1', startedAt: '2026-09-24T09:59:00.000Z', finishedAt: '2026-09-24T09:59:05.000Z',
+      durationMs: 5000, status: 'completed' });
+    return { save: true, value: undefined };
+  });
+  await h.request('/api/runs/' + run.id + '/continue', { outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1 }, owner.cookie);
+  const review = await pollReview(h, run.id, owner.cookie, item => item.status !== 'running');
+  assert.equal(review.status, 'error');
+  const stored = await h.store.read(run.id);
+  const previous = stored.run.preparation!.calls.find(call => call.id === 'call-anterior');
+  const failed = stored.run.preparation!.calls.find(call => call.id === 'call-falha-1');
+  assert.ok(previous && previous.status === 'completed', 'histórico anterior preservado');
+  assert.ok(failed, 'falha atual registrada');
+  assert.equal(failed.status, 'error');
+  assert.equal(failed.errorCode, 'MODEL_ERROR');
+  assert.ok(failed.finishedAt, 'término da falha persistido');
+});
+
+test('saída inválida do executor gera revisões e registra chamadas como inválidas', async t => {
+  const fake = fakeVisual({
+    executor: async (_attempt, _input, task) => {
+      await task.onCall?.({ kind: 'start', callId: 'call-invalida-' + _attempt, at: new Date().toISOString() });
+      return { authentication: { status: 'authenticated', observationId: 'obs-inventada' },
+        map: { screens: [{ id: 'tela-x', name: 'x', recognition: 'x', observationIds: ['obs-inventada'] }], transitions: [], paths: [] },
+        pending: [], limitations: [] };
+    },
+  });
+  const h = await harness(t, { visualCall: fake.visualCall });
+  const owner = await h.register(0);
+  const run = await h.createRun(owner.cookie);
+  await seedApproved(h, run.id, owner.user.id);
+  await configureAccess(h, run.id, owner.cookie, 0);
+  await h.request('/api/runs/' + run.id + '/continue', { outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1 }, owner.cookie);
+  const review = await pollReview(h, run.id, owner.cookie, item => item.status !== 'running');
+  assert.equal(review.status, 'interrupted');
+  assert.equal(review.stopReason.code, 'REVISION_LIMIT', 'três produções inválidas esgotam o limite');
+  assert.equal(review.mapping, null, 'nenhum mapa publicado');
+  assert.equal(review.observations.length, 3, 'observações reais preservadas');
+  const stored = await h.store.read(run.id);
+  const invalid = stored.run.preparation!.calls.filter(call => call.id.startsWith('call-invalida-'));
+  assert.equal(invalid.length, 3, 'as três chamadas ficaram registradas');
+  assert.ok(invalid.every(call => call.status === 'invalid' && call.errorCode === 'INVALID_MODEL_OUTPUT'));
+});
+
+test('validador recebe manifesto ordenado com as imagens e as ações das transições', async t => {
+  const { h, owner, run } = await mappedRun(t, {
+    validator: (_index, input, task) => {
+      const manifest = (input.manifest as { observations: { imageIndex: number; observationId: string; assetId: string; at: string; width: number; height: number }[] }).observations;
+      assert.equal(manifest.length, task.images?.length, 'uma entrada do manifesto por imagem anexada');
+      manifest.forEach((entry, index) => {
+        assert.equal(entry.imageIndex, index, 'ordem do manifesto corresponde aos anexos');
+        assert.ok(entry.observationId && entry.assetId && entry.at, 'manifesto identifica cada observação');
+        assert.ok(entry.width > 0 && entry.height > 0, 'manifesto registra as dimensões da captura');
+      });
+      assert.ok(Array.isArray(input.actions), 'validador recebe as ações relevantes');
+      return { status: 'approved', reason: 'Manifesto conferido.', findings: [] };
+    },
+  });
+  await h.request('/api/runs/' + run.id + '/continue', { outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1 }, owner.cookie);
+  const review = await pollReview(h, run.id, owner.cookie, item => item.status !== 'running');
+  assert.equal(review.status, 'ready');
+  const stored = await h.store.read(run.id);
+  assert.equal(stored.run.observations![0]!.width, 1366);
+});
+
+test('executor e validador recebem curadoria, plano e casos vigentes', async t => {
+  let executorInput: Record<string, unknown> | undefined;
+  let validatorInput: Record<string, unknown> | undefined;
+  const { h, owner, run } = await mappedRun(t, {
+    executor: (attempt, input) => { executorInput = input;
+      return { authentication: { status: 'authenticated', observationId: 'obs-' + attempt },
+        map: { screens: [{ id: 'tela-' + attempt, name: 'Início', recognition: 'x', observationIds: ['obs-' + attempt] }], transitions: [], paths: [] },
+        pending: [], limitations: [] }; },
+    validator: (_index, input) => { validatorInput = input; return { status: 'approved', reason: 'Contexto conferido.', findings: [] }; },
+  });
+  await h.request('/api/runs/' + run.id + '/continue', { outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1 }, owner.cookie);
+  await pollReview(h, run.id, owner.cookie, item => item.status !== 'running');
+  assert.ok(executorInput, 'executor chamado');
+  assert.equal((executorInput!.curation as { id: string }).id, 'out-curation');
+  assert.equal((executorInput!.plan as { id: string }).id, 'out-plan');
+  assert.equal((executorInput!.approvedCases as { id: string }).id, 'out-cases');
+  assert.equal((validatorInput!.curation as { id: string }).id, 'out-curation');
+  assert.equal((validatorInput!.plan as { id: string }).id, 'out-plan');
+  assert.equal((validatorInput!.approvedCases as { id: string }).id, 'out-cases');
+});
+
+test('aprovação contraditória (not_authenticated) é validação inválida dentro das tentativas', async t => {
+  const { h, owner, run } = await mappedRun(t, {
+    executor: (attempt) => ({
+      authentication: { status: 'not_authenticated', observationId: null },
+      map: { screens: [{ id: 'tela-login', name: 'Login', recognition: 'Formulário de login.', observationIds: ['obs-' + attempt] }], transitions: [], paths: [] },
+      pending: [], limitations: ['Autenticação não concluída.'],
+    }),
+    validator: () => ({ status: 'approved', reason: 'Parecer contraditório simulado.', findings: [] }),
+  });
+  await h.request('/api/runs/' + run.id + '/continue', { outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1 }, owner.cookie);
+  const review = await pollReview(h, run.id, owner.cookie, item => item.status !== 'running');
+  assert.equal(review.status, 'interrupted');
+  assert.equal(review.stopReason.code, 'VALIDATOR_LIMIT', 'contradição consome as tentativas técnicas');
+  const validations = review.mapping?.validations ?? [];
+  assert.equal(validations.length, 2);
+  assert.ok(validations.every(item => item.status === 'error' && item.findings?.[0]?.code === 'CONTRADICTORY_APPROVAL'));
+  assert.ok(!validations.some(item => item.status === 'approved'), 'nenhum avanço contraditório');
+});
+
+test('aprovação contraditória seguida de correção não trava a execução', async t => {
+  const { h, owner, run } = await mappedRun(t, {
+    executor: (attempt) => attempt === 1 ? {
+      authentication: { status: 'not_authenticated', observationId: null },
+      map: { screens: [{ id: 'tela-login', name: 'Login', recognition: 'Formulário de login.', observationIds: ['obs-' + attempt] }], transitions: [], paths: [] },
+      pending: [], limitations: ['Autenticação não concluída.'],
+    } : {
+      authentication: { status: 'authenticated', observationId: 'obs-' + attempt },
+      map: { screens: [{ id: 'tela-inicio', name: 'Início', recognition: 'Área autenticada.', observationIds: ['obs-' + attempt] }], transitions: [], paths: [] },
+      pending: [], limitations: [],
+    },
+    validator: (index) => index === 1 ? { status: 'approved', reason: 'Contraditório.', findings: [] }
+      : index === 2 ? { status: 'changes_requested', reason: 'Corrija a autenticação.', findings: [{ code: 'UNSUPPORTED_AUTH', message: 'Sem área autenticada.', location: null }] }
+      : { status: 'approved', reason: 'Corrigido.', findings: [] },
+  });
+  await h.request('/api/runs/' + run.id + '/continue', { outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1 }, owner.cookie);
+  const review = await pollReview(h, run.id, owner.cookie, item => item.status !== 'running');
+  assert.equal(review.status, 'ready');
+  assert.equal(review.mapping.revision, 2, 'correção gera nova revisão');
+  const stored = await h.store.read(run.id);
+  const verdicts = stored.run.validations.filter(item => stored.run.outputs.some(output => output.phase === 'mapping' && output.id === item.outputId));
+  assert.equal(verdicts.length, 3, 'parecer contraditório registrado + correção + aprovação');
+  assert.equal(verdicts[0]!.status, 'error');
+  assert.equal(verdicts[1]!.status, 'changes_requested');
+  assert.equal(verdicts[2]!.status, 'approved');
+});
+
+test('ação registrada com erro não sustenta transição bem-sucedida', async t => {
+  const { h, owner, run } = await mappedRun(t, {
+    executor: (attempt, _input, task) => {
+      const observationId = 'obs-' + attempt;
+      const actionId = 'act-erro-' + attempt;
+      void task.browser?.onAction({ id: actionId, at: new Date().toISOString(), tool: 'pointer', params: { action: 'click', x: 40, y: 200 }, outcome: 'error' });
+      return attempt === 1 ? {
+        authentication: { status: 'authenticated', observationId },
+        map: { screens: [{ id: 'tela-1', name: 'Início', recognition: 'x', observationIds: [observationId] }],
+          transitions: [{ id: 't-1', from: 'tela-1', actionId, to: 'tela-1', observationIds: [observationId] }], paths: [] },
+        pending: [], limitations: [],
+      } : {
+        authentication: { status: 'authenticated', observationId },
+        map: { screens: [{ id: 'tela-2', name: 'Início', recognition: 'x', observationIds: [observationId] }], transitions: [], paths: [] },
+        pending: [], limitations: [],
+      };
+    },
+  });
+  await h.request('/api/runs/' + run.id + '/continue', { outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1 }, owner.cookie);
+  const review = await pollReview(h, run.id, owner.cookie, item => item.status !== 'running');
+  assert.equal(review.status, 'ready');
+  assert.equal(review.mapping.revision, 1, 'a produção inválida não publicou revisão');
+  assert.equal(review.mapping.payload.map.transitions.length, 0, 'transição sem suporte não entrou no mapa');
+  assert.equal(review.mappingActions.find(action => action.id === 'act-erro-1')?.outcome, 'error', 'ação com erro preservada no registro');
+});
+
+test('recarregar preserva mapa, parecer e evidências após novo login', async t => {
+  const { h, owner, run } = await mappedRun(t);
+  await h.request('/api/runs/' + run.id + '/continue', { outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1 }, owner.cookie);
+  const before = await pollReview(h, run.id, owner.cookie, item => item.status !== 'running');
+  assert.equal(before.status, 'ready');
+  const observation = before.observations[0];
+  // Novo processo no mesmo armazenamento: sessões antigas não sobrevivem ao reinício.
+  const restartedConfig = readConfig({ DATA_DIR: h.dataDir, APP_ORIGIN: appOrigin, TARGET_ALLOWED_ORIGINS: targetOrigin, PILOT_ALLOWED_EMAILS: accounts.map(account => account.email).join(',') });
+  const restarted = await createApp(restartedConfig, { visualCall: async () => { throw new Error('não deve ser chamado'); }, visualPreflight: async () => visualModels });
+  restarted.listen(0, '127.0.0.1');
+  await once(restarted, 'listening');
+  t.after(async () => { await restarted.shutdown(); restarted.close(); restarted.closeAllConnections(); await once(restarted, 'close'); });
+  const restartedBase = 'http://127.0.0.1:' + (restarted.address() as { port: number }).port;
+  const login = await fetch(restartedBase + '/api/auth/login', {
+    method: 'POST', headers: { Origin: appOrigin, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: accounts[0]!.email, password: accounts[0]!.password }),
+  });
+  assert.equal(login.status, 200);
+  const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
+  const review = await fetch(restartedBase + '/api/runs/' + run.id, { headers: { Cookie: cookie, 'X-Expected-User-Id': owner.user.id } });
+  assert.equal(review.status, 200);
+  const body = await review.json();
+  assert.equal(body.status, 'ready');
+  assert.equal(body.mapping.revision, 1);
+  assert.equal(body.mapping.validations.at(-1).status, 'approved');
+  assert.equal(body.observations.length, before.observations.length);
+  const evidence = await fetch(restartedBase + '/api/runs/' + run.id + '/evidence/' + observation.assetId, { headers: { Cookie: cookie, 'X-Expected-User-Id': owner.user.id } });
+  assert.equal(evidence.status, 200);
+  assert.ok((await evidence.arrayBuffer()).byteLength > 0);
+});
+
+test('reinício durante o mapeamento aparece interrompido, sem conclusão ou retomada automática', async t => {
+  let release = () => {};
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const fake = fakeVisual({
+    executor: async (attempt) => {
+      await gate;
+      return { authentication: { status: 'authenticated', observationId: 'obs-' + attempt },
+        map: { screens: [{ id: 'tela-' + attempt, name: 'Início', recognition: 'x', observationIds: ['obs-' + attempt] }], transitions: [], paths: [] },
+        pending: [], limitations: [] };
+    },
+  });
+  const h = await harness(t, { visualCall: fake.visualCall });
+  const owner = await h.register(0);
+  const run = await h.createRun(owner.cookie);
+  await seedApproved(h, run.id, owner.user.id);
+  await configureAccess(h, run.id, owner.cookie, 0);
+  await h.request('/api/runs/' + run.id + '/continue', { outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1 }, owner.cookie);
+  await new Promise(resolve => setTimeout(resolve, 50));
+  // Reinício do processo: a recuperação marca o trabalho ativo como interrompido.
+  const recovered = await h.store.recoverInterrupted();
+  assert.equal(recovered, 1, 'recuperação identificou o trabalho ativo');
+  const review = await h.request('/api/runs/' + run.id, undefined, owner.cookie);
+  assert.equal(review.body.status, 'interrupted');
+  assert.equal(review.body.stopReason.code, 'SERVICE_RESTART');
+  assert.equal(review.body.mapping, null, 'nenhum mapa publicado');
+  const stored = await h.store.read(run.id);
+  assert.equal(stored.workIntents[0]!.status, 'interrupted');
+  // A produção pendurada termina depois, sem concluir nem retomar nada.
+  release();
+  await new Promise(resolve => setTimeout(resolve, 100));
+  const after = await h.request('/api/runs/' + run.id, undefined, owner.cookie);
+  assert.equal(after.body.status, 'interrupted', 'sem conclusão posterior');
+  assert.deepEqual(fake.calls, ['test-executor'], 'nenhuma chamada nova');
+});
+
+test('após cancelamento, outra execução consegue reservar o ambiente', async t => {
+  let release = () => {};
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let executions = 0;
+  const fake = fakeVisual({
+    executor: async (attempt) => {
+      executions += 1;
+      if (executions === 1) { await gate; throw new Error('liberado'); }
+      return { authentication: { status: 'authenticated', observationId: 'obs-' + attempt },
+        map: { screens: [{ id: 'tela-' + executions, name: 'Início', recognition: 'x', observationIds: ['obs-' + attempt] }], transitions: [], paths: [] },
+        pending: [], limitations: [] };
+    },
+  });
+  const h = await harness(t, { visualCall: fake.visualCall });
+  const owner = await h.register(0);
+  const first = await h.createRun(owner.cookie);
+  await seedApproved(h, first.id, owner.user.id);
+  await configureAccess(h, first.id, owner.cookie, 0);
+  await h.request('/api/runs/' + first.id + '/continue', { outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1 }, owner.cookie);
+  await new Promise(resolve => setTimeout(resolve, 50));
+  await h.request('/api/runs/' + first.id + '/cancel', {}, owner.cookie);
+  release();
+  await new Promise(resolve => setTimeout(resolve, 100));
+  // A reserva foi liberada: a próxima execução inicia e conclui normalmente.
+  const second = await h.createRun(owner.cookie, 'Segunda execução');
+  await seedApproved(h, second.id, owner.user.id);
+  await configureAccess(h, second.id, owner.cookie, 0);
+  const result = await h.request('/api/runs/' + second.id + '/continue', { outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1 }, owner.cookie);
+  assert.equal(result.status, 202, 'ambiente reservável após o cancelamento');
+  const review = await pollReview(h, second.id, owner.cookie, item => item.status !== 'running');
+  assert.equal(review.status, 'ready');
 });

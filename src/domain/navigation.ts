@@ -52,13 +52,15 @@ export type NavigationParseContext = {
 };
 
 export class InvalidNavigationOutput extends Error {
-  constructor(readonly code: 'INVALID_MODEL_OUTPUT' | 'IMAGE_LIMIT' | 'SCREEN_LIMIT' | 'ACTION_LIMIT' = 'INVALID_MODEL_OUTPUT') {
+  constructor(readonly code: 'INVALID_MODEL_OUTPUT' | 'IMAGE_LIMIT' | 'SCREEN_LIMIT' | 'ACTION_LIMIT' | 'ACTION_NOT_SUPPORTED' = 'INVALID_MODEL_OUTPUT') {
     super(code === 'IMAGE_LIMIT'
       ? 'O mapa referencia observações demais para a validação visual desta revisão.'
       : code === 'SCREEN_LIMIT'
       ? 'O mapa excede o limite de telas, transições, caminhos ou pendências.'
       : code === 'ACTION_LIMIT'
       ? 'O limite de cem ações de exploração foi esgotado.'
+      : code === 'ACTION_NOT_SUPPORTED'
+      ? 'Uma ação registrada com erro não sustenta uma transição bem-sucedida do mapa.'
       : 'A resposta do executor não atende ao contrato do mapa de navegação.');
     this.name = 'InvalidNavigationOutput';
   }
