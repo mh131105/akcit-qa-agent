@@ -1275,9 +1275,11 @@ try {
   await bodyIncludes('Ações registradas (2)');
   await bodyIncludes('Acesso autenticado observado');
   await bodyIncludes('Limitações do mapa');
-  // A captura chega por blob com a autenticação existente.
+  // A captura chega por blob com a autenticação existente (rolar até a imagem:
+  // ela usa carregamento preguiçoso e fora da viewport nunca completa).
   await page.waitForFunction(() => {
     const image = document.querySelector('img[alt="Captura da tela observada"]');
+    image?.scrollIntoView();
     return image && image.complete && image.naturalWidth > 0 && image.src.startsWith('blob:');
   }, null, { timeout: 30_000 });
   const mapping = await api(context, '/api/runs/run-mapping-smoke', owner.id);
@@ -1305,6 +1307,7 @@ try {
   await bodyIncludes('Mapa validado — aguardando detalhamento dos percursos.');
   await page.waitForFunction(() => {
     const image = document.querySelector('img[alt="Captura da tela observada"]');
+    image?.scrollIntoView();
     return image && image.complete && image.naturalWidth > 0;
   }, null, { timeout: 30_000 });
   await screenshot('web-map.png', 1366); await screenshot('web-map-mobile.png', 390);
