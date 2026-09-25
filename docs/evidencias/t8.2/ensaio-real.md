@@ -12,7 +12,7 @@
 | --- | --- |
 | Branch | `feat/validated-navigation-map` |
 | SHA da jornada A | `f46c504ce78beb76cbcdccd04fadd9d4ed4be997` (imagem `28ff5f9c5761`) |
-| SHA final (jornada B, credencial e controles) | `58daf904b610d37c5153f60e42bd59634ba142a5` (imagem `47bd28ecd54b`) |
+| SHA final (jornada B, credencial e controles) | `58daf904b610d37c5153f60e42bd59634ba142a5` (imagem `47bd28ecd54b`); commits posteriores (`ebb1b0c`) alteram apenas o smoke web, sem tocar a composição avaliada |
 | Base da imagem | `docker build --target runtime`, Node 24, usuário `node`, restrições do CI (`--cap-drop=ALL --security-opt=no-new-privileges`) |
 | Alvo | T7 (`scripts/demo-target.mjs`, modo `reference`), conta `demo`/`demo1234` |
 | Entrada | `US-01: Criar reservas.` / `CA-01: A quantidade de reserva aceita está entre 1 e 10.` |

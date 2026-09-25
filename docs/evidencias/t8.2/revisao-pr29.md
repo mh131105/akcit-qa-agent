@@ -4,7 +4,7 @@
 - **SHA inicial revisado:** `14ca870` (não havia commits posteriores em `origin`).
 - **SHA do candidato corrigido:** `58daf904b610d37c5153f60e42bd59634ba142a5`
   (imagem `47bd28ecd54b`), conforme [ensaio-real.md](ensaio-real.md); a revisão
-  evoluiu em commits na própria branch.
+  evoluiu em commits na própria branch (HEAD `ebb1b0c`, que só ajusta o smoke web).
 - **Imagem final validada:** construída do código versionado (`docker build --target runtime`),
   executada com o usuário `node` e as restrições do CI (`--cap-drop=ALL --read-only`, tmpfs).
 
