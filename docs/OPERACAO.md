@@ -949,7 +949,7 @@ npm test                 # inclui test/navigation.test.ts (contratos e transiç�
 #### Preparação do alvo e reprodução do ensaio real
 
 1. Suba o alvo T7 (`node scripts/demo-target.mjs`, modo `reference`, credenciais `demo`/`demo1234`).
-2. Configure `TARGET_ALLOWED_ORIGINS=http://127.0.0.1:4000` e os quatro pares de
+2. Configure `TARGET_ALLOWED_ORIGINS=http://127.0.0.1:4000` e os pares de
    perfil visual no `.env` do ambiente (local, dev ou produção).
 3. No site, crie uma execução, prepare e aprove o plano, gere e aprove os casos.
 4. Configure o acesso no painel (URL inicial `http://127.0.0.1:4000`, perfil, preparo,
@@ -959,21 +959,60 @@ npm test                 # inclui test/navigation.test.ts (contratos e transiç�
    texto *"Mapa validado — aguardando detalhamento dos percursos"*.
 6. Confira no painel: telas com capturas, transições, caminhos, parecer do validador,
    pendências com casos afetados e limitações. As capturas são servidas por
-   `GET /api/runs/:id/evidence/:assetId`.
+   `GET /api/runs/:id/evidence/:assetId` (sessão + `X-Expected-User-Id` do
+   proprietário; outra conta recebe 404).
 7. Para o ensaio do validador, force uma transição sem suporte (ex.: remova a
    captura de destino antes da validação) e registre o parecer.
+
+#### Ensaio real automatizado (T8.2-R1)
+
+`npm run eval:mapping:real` executa o roteiro `scripts/eval-mapping-real.mjs`
+**na imagem final**, com a composição normal do aplicativo (nenhuma substituição
+de `modelCall`, `visualCall`, preflight, navegador ou pareceres), armazenamento
+isolado e credenciais privadas do ambiente:
+
+```bash
+docker build --target runtime -t akcit-qa:ci .
+mkdir -p artifacts/ensaio-real artifacts/human
+docker run --rm --cpus=2 --memory=4g --shm-size=512m   --cap-drop=ALL --security-opt=no-new-privileges   --tmpfs /tmp:rw,size=1g,mode=1777   --tmpfs /home/node:rw,size=128m,uid=1000,gid=1000,mode=0700   --tmpfs /data:rw,size=256m,uid=1000,gid=1000,mode=0700   -v "$PWD/.data/pi:/data/pi:ro"   -v "$PWD/artifacts/ensaio-real:/evidence"   -v "$PWD/artifacts/human:/human"   -e PI_CODING_AGENT_DIR=/data/pi   -e DEEPSEEK_API_KEY="$DEEPSEEK_API_KEY"   -e DATA_DIR=/data/eval -e EVAL_EVIDENCE_DIR=/evidence -e EVAL_HUMAN_DIR=/human   -e APP_REVISION="$(git rev-parse HEAD)"   akcit-qa:ci node scripts/eval-mapping-real.mjs --run
+```
+
+O roteiro força os perfis documentados (curador `deepseek-flash/low`; projetista
+e validador textual `deepseek-v4-pro/high`; executor e validador visual
+`deepseek-flash/high`), sem fallback silencioso, e executa:
+
+1. **Jornada completa pela interface com revisão humana:** o roteiro imprime o
+   plano e os casos em `artifacts/human/awaiting-*.json` e aguarda a decisão do
+   operador em `artifacts/human/decision-*.json` (`{"decision": "approved"}` ou
+   `"changes_requested"`). Sem decisão registrada, a jornada falha com motivo.
+2. **Jornada completa com aprovações automatizadas** (registrada como tal no relatório).
+3. **Credencial inválida e correção** pelo fluxo suportado.
+4. **Controles positivo e negativo do validador** a partir do mapa real.
+
+As evidências (registros sanitizados, capturas, pareceres, chamadas, consumo e
+`report.json`) ficam em `artifacts/ensaio-real/`; o relato humano fica em
+[docs/evidencias/t8.2/ensaio-real.md](evidencias/t8.2/ensaio-real.md). O gabarito
+não entra no contexto dos agentes; ele serve apenas à avaliação externa.
 
 #### Limites
 
 - Três produções/revisões do mapa e duas tentativas técnicas de validação por revisão.
-- Cem ações de exploração por execução e 45 minutos ativos acumulados (compartilhados
-  com a preparação; sem reinício a cada correção).
-- 120 segundos por chamada de modelo; todas as chamadas e ações são registradas.
+- Cem ações de exploração por execução (**capturas não consomem ações**; a
+  observação final segura continua disponível com os cliques esgotados) e
+  45 minutos ativos acumulados (compartilhados com a preparação; sem reinício a
+  cada correção e sem contar espera humana).
+- 120 segundos por chamada de modelo; todas as chamadas são registradas com
+  início e término — erro, timeout, cancelamento e saída inválida preservam o
+  histórico. Falhas técnicas e de navegador conservam a causa identificável; o
+  esgotamento de revisões é reservado a saídas de modelo fora do contrato.
 - Piloto simples: uma única aba; novas abas e destinos fora de
   `TARGET_ALLOWED_ORIGINS` são bloqueados com motivo legível.
 - Erro de credencial antes da autenticação: corrija a credencial no painel (nova
   revisão de acesso) e use **Mapear aplicação (nova tentativa)**; histórico e tempo
   consumido são preservados.
+- O validador recebe o manifesto ordenado das imagens; referências de trabalhos
+  anteriores, ações com erro e aprovação contraditória de autenticação não
+  liberam `ready`.
 
 ## Referências
 

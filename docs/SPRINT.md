@@ -656,6 +656,59 @@ Evidências em [evidencias/t8.2](evidencias/t8.2/README.md). Contratos em
 válidas/inválidas, vídeos por tentativa, retomada completa das dúvidas visuais e
 relatório ainda precisam ser entregues.
 
+### T8.2-R1 · Corrigir e validar o fluxo até o mapa de navegação
+
+Card de correção de bugs e revisão de integração, bloqueando o merge do PR #29.
+Branch aproveitada: `feat/validated-navigation-map` (SHA revisado `14ca870`, sem
+commits posteriores em `origin`; candidato corrigido registrado em
+[ensaio-real.md](evidencias/t8.2/ensaio-real.md)).
+
+Correções (defeito → reprodução → correção → teste de regressão em
+[revisao-pr29.md](evidencias/t8.2/revisao-pr29.md)):
+
+- **Build/smoke:** `COPY agents ./agents` antes da compilação (TS2307);
+  `smoke-mapping.mjs` registra conta pela API e envia `Cookie` +
+  `X-Expected-User-Id` em todas as chamadas (recusas sem sessão preservadas),
+  associa a transição de login ao clique em **Entrar** e percorre até
+  **Reservas → Nova reserva** sem confirmar; `smoke-web.mjs` tinha a jornada T8.2
+  em escopo inexistente (nunca executável) — bloco movido para depois da
+  preparação, snapshot devolvido e evidência estrangeira conferida com sessão
+  própria (404).
+- **Navegador:** aba principal antes do bloqueio de popups; limpeza em falha de
+  inicialização; imagem e cursor na mesma geometria real do display (x11grab +
+  `getdisplaygeometry`, sem deslocamento fixo); `fill_credential` exige foco em
+  campo compatível (`FOCUS_MISMATCH` sem digitar); captura bloqueada quando a
+  verificação de privacidade falha ou a credencial está visível (nada salvo nem
+  enviado); capturas não consomem ações e a observação final segura permanece.
+- **Orçamento/cancelamento/chamadas:** período encerrado não é somado duas vezes
+  (compatibilidade legada; espera humana fora da soma); cancelamento atravessa
+  navegador e ferramentas e a reserva só é liberada após a limpeza; início e
+  término de cada inferência persistidos em `PreparationCall` (histórico
+  preservado em erro, timeout, cancelamento e saída inválida); falhas técnicas
+  e de navegador conservam a causa, sem virar esgotamento de revisões.
+- **Validador:** executor e validador recebem curadoria, plano e casos vigentes;
+  manifesto ordenado das imagens (`imageIndex`/`observationId`/`assetId`/dimensões)
+  na ordem dos anexos, com as ações das transições; ações com erro não sustentam
+  transições; evidências anteriores à correção do acesso não comprovam a nova
+  autenticação (`mappingPreparationId`); `not_authenticated` + `approved` é
+  validação inválida (`CONTRADICTORY_APPROVAL`) dentro das tentativas; o caminho
+  de credencial recusada (`blocked`/`AUTHENTICATION_MISSING` → `awaiting_input` →
+  correção → nova tentativa) permanece.
+
+Verificações: `npm run check` limpo; `npm test` **195/195** (regressões de
+orçamento, cancelamento, falha de inferência, validação, recarga, reinício e
+isolamento; novo `test/pi-visual.test.ts`); imagem final construída do código
+versionado com os quatro smokes `passed` na imagem (`smoke-mapping` com 18
+verificações de integração real). Ensaio com LLM real (duas jornadas completas,
+credencial inválida com correção e controles positivo/negativo do validador) em
+[ensaio-real.md](evidencias/t8.2/ensaio-real.md), executado com
+`npm run eval:mapping:real`.
+
+**Pendências verdadeiras:** detalhamento dos percursos (`route_detail`), execução
+dos testes com entradas válidas/inválidas, vídeos por tentativa, retomada
+completa por esclarecimentos de navegação e relatório final validado. Revisão
+independente de outro integrante antes do merge em `develop`.
+
 ## Como encerrar uma tarefa
 
 O PR referencia requisitos e mostra o critério funcionando na integração. Anexar

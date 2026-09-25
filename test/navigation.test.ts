@@ -772,3 +772,31 @@ test('após cancelamento, outra execução consegue reservar o ambiente', async 
   const review = await pollReview(h, second.id, owner.cookie, item => item.status !== 'running');
   assert.equal(review.status, 'ready');
 });
+
+test('evidências anteriores à correção do acesso não sustentam a nova autenticação', async t => {
+  let attempts = 0;
+  const { h, owner, run } = await mappedRun(t, {
+    executor: (attempt) => {
+      attempts = attempt;
+      const observationId = attempt === 1 ? 'obs-antiga' : 'obs-' + attempt;
+      return {
+        authentication: { status: 'authenticated', observationId },
+        map: { screens: [{ id: 'tela-' + attempt, name: 'Início', recognition: 'x', observationIds: [observationId] }], transitions: [], paths: [] },
+        pending: [], limitations: [],
+      };
+    },
+  });
+  // Observação persistida por um trabalho de mapeamento anterior (antes da
+  // correção do acesso): não pertence ao trabalho vigente.
+  await h.store.update(run.id, record => {
+    record.run.observations = [...(record.run.observations ?? []),
+      { id: 'obs-antiga', assetId: 'asset-antiga-01', at: '2026-09-24T09:55:00.000Z', width: 1366, height: 768, mappingPreparationId: 'prep-antiga' }];
+    return { save: true, value: undefined };
+  });
+  await h.request('/api/runs/' + run.id + '/continue', { outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1 }, owner.cookie);
+  const review = await pollReview(h, run.id, owner.cookie, item => item.status !== 'running');
+  assert.equal(review.status, 'ready');
+  assert.equal(attempts, 2, 'a referência antiga foi recusada e nova produção ocorreu');
+  assert.equal(review.mapping.payload.authentication.observationId, 'obs-2', 'autenticação sustentada por evidência do trabalho vigente');
+  assert.ok(!JSON.stringify(review.mapping.payload).includes('obs-antiga'));
+});

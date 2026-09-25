@@ -1627,6 +1627,26 @@ mesmo acumulado da execução, sem reinício a cada correção; somam-se o teto 
 ações de exploração**, três produções/revisões do mapa e duas tentativas técnicas de
 validação por revisão, com 120 segundos por chamada de modelo.
 
+**Tempo acumulado:** quando a preparação está encerrada, `accumulatedActiveMs` já
+contém o período encerrado (congelado ao terminar) — não é somado de novo;
+registros legados sem o campo calculam o período encerrado como compatibilidade.
+Durante trabalho ativo, soma-se apenas o período em andamento. Espera humana
+nunca entra na conta.
+
+**Chamadas:** cada inferência é persistida com início (`status: running`) e
+término, reutilizando `PreparationCall` (papel, modelo, nível, fase, tentativa e
+revisão). Saída fora do contrato marca as chamadas da tentativa como `invalid`
+com o código da falha; erro, timeout ou cancelamento preservam as chamadas
+anteriores e registram a atual (`error`/`cancelled`). Falhas técnicas e de
+navegador conservam a causa identificável (a execução termina `error` com o
+código original); apenas saída de modelo fora do contrato gera nova revisão, e o
+esgotamento real das três revisões termina `interrupted / REVISION_LIMIT`.
+
+**Cancelamento:** o sinal atravessa a inicialização do navegador e as operações
+das ferramentas; processos em andamento são encerrados, o navegador é fechado e a
+reserva só é liberada depois da limpeza. Capturas não consomem ações de
+interação.
+
 ### Sessão visual e ferramentas
 
 A sessão Pi é exclusiva do papel `test-executor`, com `customTools` do SDK, imagens
@@ -1640,11 +1660,17 @@ A infraestrutura abre a `startUrl`; as ferramentas validam parâmetros, coordena
 cancelamento e limite de ações antes de executar.
 
 `StoredRun.targetCredential` só é resolvida pelo backend. Captura de tela de login
-com a credencial digitada visível não é enviada ao modelo nem persistida. HTTP 200 ou
-mudança de URL não confirmam login: o mapa registra a **observação visual** da área
-autenticada. Destinos são conferidos por `TARGET_ALLOWED_ORIGINS` antes de cada
-requisição (incluindo redirecionamentos e recursos); novas abas e mecanismos não
-suportados são bloqueados e destino bloqueado produz motivo legível.
+com a credencial digitada visível não é enviada ao modelo nem persistida; uma
+credencial também pode aparecer em texto ou em outro campo, e a falha da própria
+verificação de privacidade bloqueia a captura (nada é salvo nem enviado).
+`fill_credential` exige foco em campo compatível (`FOCUS_MISMATCH` recusa sem
+digitar). Capturas não consomem ações de interação: a observação final segura
+continua disponível quando os cliques restantes acabam. Imagem e cursor
+compartilham a geometria real do display (captura X11); não há deslocamento fixo.
+HTTP 200 ou mudança de URL não confirmam login: o mapa registra a **observação
+visual** da área autenticada. Destinos são conferidos por `TARGET_ALLOWED_ORIGINS`
+antes de cada requisição (incluindo redirecionamentos e recursos); novas abas e
+mecanismos não suportados são bloqueados e destino bloqueado produz motivo legível.
 
 ### Contrato do mapa
 
@@ -1673,11 +1699,53 @@ não há `caseId` nem `attemptId` no contrato de execução.
 
 O papel `output-validator` usa a skill `validate-navigation` com perfil visual
 `deepseek-flash` / `high`, em sessão independente, recebendo requisitos originais,
-plano e casos aprovados, a revisão exata do mapa, o registro das ações e **as próprias
-imagens referenciadas**. Não controla o navegador nem modifica o mapa. Pareceres:
-`approved`, `changes_requested` (nova revisão do mesmo mapa, anterior preservada) ou
-`blocked`; falha técnica vira `error` e não aprova. O executor recebe os achados
-localizados e faz novas observações quando necessário, dentro dos mesmos limites.
+**curadoria, plano e casos aprovados**, a revisão exata do mapa, o registro das
+ações relevantes e **as próprias imagens referenciadas**, com manifesto ordenado:
+
+```json
+{
+  "manifest": {
+    "observations": [
+      {
+        "imageIndex": 0,
+        "observationId": "obs-real",
+        "assetId": "asset-real",
+        "at": "instante-da-captura",
+        "width": 1366,
+        "height": 768
+      }
+    ]
+  }
+}
+```
+
+A ordem de `manifest.observations` corresponde exatamente à ordem das imagens
+anexadas; `imageIndex` identifica a posição do anexo. Não controla o navegador
+nem modifica o mapa. Pareceres: `approved`, `changes_requested` (nova revisão do
+mesmo mapa, anterior preservada) ou `blocked`; falha técnica vira `error` e não
+aprova. O executor recebe os achados localizados e faz novas observações quando
+necessário, dentro dos mesmos limites.
+
+### Condições de avanço verificadas pelo backend
+
+Antes de aceitar o parecer, o backend confere determinísticamente (a avaliação
+semântica permanece do validador):
+
+- **Pertença e validade das referências:** observações e ações citadas existem no
+  trabalho vigente; referências inventadas recusam a saída.
+- **Ações com erro não sustentam transições:** uma transição cuja `actionId` está
+  registrada com `outcome: "error"` (ex.: limite de ações esgotado) não libera a
+  revisão.
+- **Evidências do trabalho vigente:** observações e ações carregam o
+  `mappingPreparationId` do trabalho que as criou; evidências anteriores à
+  correção do acesso não comprovam a nova autenticação.
+- **Contradição de autenticação:** `authentication.status = "not_authenticated"`
+  com parecer `approved` é validação inválida (`CONTRADICTORY_APPROVAL`),
+  registrada como `error` e contada nas tentativas técnicas existentes.
+- O caminho documentado de credencial recusada continua: parecer independente
+  `blocked` com achado `AUTHENTICATION_MISSING` → `awaiting_input` com
+  `CREDENTIAL_REJECTED` → correção do acesso (nova revisão) → nova tentativa
+  explícita, preservando histórico e tempo consumido.
 
 ### Estados e transições (com `ready`)
 

@@ -5,15 +5,20 @@ Vínculos: [T8 #11](https://github.com/mh131105/akcit-qa-agent/issues/11) e
 [T10 #14](https://github.com/mh131105/akcit-qa-agent/issues/14) — **nenhuma das
 duas é encerrada por esta entrega**.
 
-## Dois tipos de evidência
+Revisão T8.2-R1 (correções do PR #29): [revisao-pr29.md](revisao-pr29.md).
+Ensaio com inferência real: [ensaio-real.md](ensaio-real.md).
+
+## Três tipos de evidência
 
 | Tipo | Onde roda | Modelo | Objetivo |
 | --- | --- | --- | --- |
+| **Testes** | `npm test` (local e CI) | substituído por fakes determinísticos, identificados | contratos, limites, cancelamento, orçamento, chamadas e validação |
 | **Smoke** | imagem final (CI, container com Xvfb/Chromium/xdotool) | substituído por roteiro, identificado como simulação | provar integração de navegador, cursor, capturas, destinos e interface reais |
-| **Ensaio real** | ambiente operado (local/VPS com Pi autenticado) | `deepseek/deepseek-flash` `high` para executor e validador visual | avaliar a qualidade da navegação escolhida pelo modelo |
+| **Ensaio real** | ambiente operado (container da imagem final com Pi autenticado) | DeepSeek Flash/Pro conforme perfis documentados | avaliar a qualidade da navegação escolhida pelo modelo |
 
-Nada nesta pasta comprova o ensaio com modelo real; os arquivos abaixo são
-sintéticos e sanitizados (sem credenciais, sem conteúdo de usuários).
+Nada nesta pasta, exceto [ensaio-real.md](ensaio-real.md), comprova inferência
+real; os arquivos sintéticos são sanitizados (sem credenciais, sem conteúdo de
+usuários) e identificados como exemplos.
 
 ## Configuração
 
@@ -26,46 +31,65 @@ sintéticos e sanitizados (sem credenciais, sem conteúdo de usuários).
 
 ```bash
 npm run check
-npm test          # 176/176, incluindo test/navigation.test.ts (10 novos)
+npm test            # 195/195
 npm run build
-node scripts/smoke-mapping.mjs   # na imagem final: navegador/cursor/capturas/destinos reais
-node scripts/smoke-web.mjs       # jornada do site até a consulta do mapa e das capturas
+# na imagem final (construída do SHA registrado em ensaio-real.md), como o CI:
+docker build --target runtime -t akcit-qa:ci .
+docker run --rm --cpus=1 --memory=2g --shm-size=512m --cap-drop=ALL \
+  --security-opt=no-new-privileges --read-only \
+  --tmpfs /tmp:rw,size=512m,mode=1777 --tmpfs /home/node:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+  --tmpfs /data:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+  akcit-qa:ci node scripts/smoke-runtime.mjs    # passed
+docker run … akcit-qa:ci node scripts/smoke-target.mjs      # passed
+docker run … akcit-qa:ci node scripts/smoke-web.mjs         # passed
+docker run … akcit-qa:ci node scripts/smoke-mapping.mjs     # passed
 ```
+
+Os smokes executam na imagem final com o usuário `node` e as restrições do CI;
+os resultados dos smokes na revisão T8.2-R1 estão vinculados ao SHA do candidato
+em [ensaio-real.md](ensaio-real.md) e aos artefatos do CI (`mapping-smoke`,
+`web-smoke`, `target-smoke`). A afirmação de execução da revisão anterior
+(`14ca870`) era incorreta para `smoke-web` e `smoke-mapping`: ambos falhavam na
+imagem (ver [revisao-pr29.md](revisao-pr29.md), itens 2 e 3).
 
 ## Limites aplicados
 
 - Três produções/revisões do mapa e duas tentativas técnicas de validação por revisão.
-- Cem ações de exploração por execução; 45 minutos ativos acumulados com a
-  preparação (sem reinício a cada correção); 120 s por chamada de modelo.
-- Todas as chamadas de modelo e ações são registradas (não apenas a resposta final).
+- Cem ações de exploração por execução; capturas não consomem ações; 45 minutos
+  ativos acumulados com a preparação (sem reinício a cada correção e sem contar
+  espera humana); 120 s por chamada de modelo.
+- Todas as chamadas de modelo e ações são registradas, com início e término;
+  falhas, cancelamentos e saídas inválidas preservam o histórico.
 - Uma única aba; destinos fora de `TARGET_ALLOWED_ORIGINS` bloqueados com motivo.
-- Captura de tela de login com a credencial digitada visível não é enviada ao
-  modelo nem persistida.
+- Captura com a credencial visível, ou com verificação de privacidade
+  indisponível, nunca é salva nem enviada ao modelo.
+- Manifesto ordenado das imagens entregue ao validador; referências inventadas,
+  ações com erro e aprovação contraditória de autenticação não liberam `ready`.
 
 ## Artefatos
 
-- [mapa-sintetico.json](mapa-sintetico.json): mapa sanitizado usado na avaliação
-  (smoke com modelo substituído), com os pareceres do validador.
+- [mapa-sintetico.json](mapa-sintetico.json): **exemplo sintético** do mapa
+  usado nos smokes com modelo substituído; não é captura real nem inferência real.
 - [capturas-sinteticas/](capturas-sinteticas/): PNGs sintéticos de 1×1 px que
-  simulam as observações referenciadas; **não são capturas reais de tela** (as
-  capturas reais do smoke ficam nos artefatos do CI e não são versionadas).
+  simulam observações; **não são capturas reais de tela** (as capturas reais do
+  smoke ficam nos artefatos do CI e não são versionadas).
+- [ensaio-real.md](ensaio-real.md): registros do ensaio com inferência real
+  (execuções, pareceres, chamadas, consumo e links para as evidências exportadas).
 
 ## Resultados
 
 | Verificação | Resultado |
 | --- | --- |
 | `npm run check` | limpo |
-| `npm test` | 176/176 aprovados |
-| `npm run build` | completa |
-| `smoke-mapping.mjs` (imagem final) | `passed`: observação de login e da área autenticada, cursor/clique reais, preenchimento privado de credencial, destino bloqueado com motivo, 202/repetição 200, `ready/mapping`, captura real servida pela rota de evidência, segredo fora da projeção |
-| `smoke-web.mjs` | jornada completa: botão **Mapear aplicação**, painel do mapa, capturas por `blob:`, isolamento entre contas, persistência após recarregar, filtro `ready` |
+| `npm test` | 195/195 aprovados |
+| `npm run build` | completa (com `agents/` no contexto) |
+| `smoke-mapping.mjs` (imagem final) | `passed` com 18 verificações: conta pela API, recusas sem sessão, 202/repetição 200, foco errado recusado, preenchimento privado, captura insegura bloqueada, percurso login → início → reservas → nova reserva sem criar reserva, destino bloqueado, `ready/mapping`, chamadas persistidas, evidência real servida, segredo fora da projeção, aba única com popup bloqueado, cliques em alvos pequenos, capturas sem consumo de ação e privacidade indisponível bloqueando captura |
+| `smoke-web.mjs` | jornada completa: botão **Mapear aplicação**, painel do mapa, capturas por `blob:`, isolamento entre contas (404 com sessão própria), persistência após recarregar, filtro `ready` |
+| `smoke-runtime.mjs` / `smoke-target.mjs` | `passed` |
 
-## Pendências desta entrega (fora do escopo)
+## Pendências desta entrega
 
 - Detalhar os percursos dos casos (`route_detail`).
 - Executar entradas válidas/inválidas e gravar vídeos por tentativa.
 - Retomada completa por esclarecimentos de navegação (sem botão de resposta ainda).
 - Relatório final validado (`completed` continua reservado a ele).
-- Ensaio com modelo real: deve ser executado no ambiente operado com o gabarito
-  fora do contexto dos agentes (conferir cada transição declarada e um parecer do
-  validador com transição deliberadamente sem suporte).
