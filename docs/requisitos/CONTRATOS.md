@@ -1586,6 +1586,141 @@ Permite configurar ou atualizar exclusivamente os dados de acesso ao alvo de uma
    - Quando configurado: *"Acesso configurado. O login ainda não foi verificado pelo navegador."*
    - Salvar o acesso não realiza chamadas de rede externas, não abre o navegador, não verifica login nem dispara modelos ou transição de etapas. A verificação do login pertence à etapa seguinte (T8).
 
+## Mapeamento visual validado — T8.2
+
+Implementa o RF-03 recortado em T8.2: após as duas aprovações humanas e o acesso
+configurado, o executor entra na aplicação, autentica pela interface e percorre as
+telas relevantes; o validador visual examina o mapa e as imagens em sessão
+independente. **A entrega termina no mapa validado.**
+
+### Continuidade autenticada
+
+`POST /api/runs/:id/continue` aceita, além do corpo de casos, a continuidade dos
+casos aprovados para o mapeamento:
+
+```json
+{ "outputId": "id-do-conjunto-de-casos", "outputRevision": 1, "expectedAccessRevision": 1 }
+```
+
+`expectedAccessRevision` é a revisão exata da configuração de acesso utilizada.
+O backend reconfere, antes de reservar e despachar: proprietário autenticado e
+identidade esperada; curadoria, plano e casos vigentes com dependências
+consistentes (`caseDependencies`); pareceres aprovados e as **duas aprovações
+humanas** das versões exatas; ausência de esclarecimento pendente; configuração de
+acesso completa com credencial privada correspondente e origem ainda habilitada;
+modelos visuais disponíveis; orçamento restante. `canDecideCases` **não** autoriza
+mapeamento (fica falsa após a decisão); há verificação própria das condições de
+início.
+
+| Situação | Resposta / efeito |
+| --- | --- |
+| Primeiro aceite | `202`, intenção `create_map` persistida antes do despacho |
+| Mesma referência repetida | `200`, consulta o trabalho existente, sem novo navegador |
+| Ambiente ocupado | `409 / RESOURCE_UNAVAILABLE`; decisões preservadas |
+| Dependências/validações/aprovações ausentes | `409` com código específico |
+| Acesso pendente ou origem desabilitada | `409 / ACCESS_NOT_CONFIGURED` ou `403 / TARGET_NOT_ALLOWED` |
+| Revisão de acesso divergente | `409 / STALE_VERSION` |
+
+Reutiliza a reserva do coordenador existente: não há segunda trava que permita
+preparação textual e mapeamento simultâneos. O orçamento ativo de 45 minutos é o
+mesmo acumulado da execução, sem reinício a cada correção; somam-se o teto de **cem
+ações de exploração**, três produções/revisões do mapa e duas tentativas técnicas de
+validação por revisão, com 120 segundos por chamada de modelo.
+
+### Sessão visual e ferramentas
+
+A sessão Pi é exclusiva do papel `test-executor`, com `customTools` do SDK, imagens
+nas mensagens e contagem de **todas** as chamadas de modelo e ações (não apenas a
+resposta final). Ferramentas mínimas: `observe_screen` (captura, dimensões e
+`observationId`), `pointer` (mover/clicar por coordenadas), `keyboard_scroll`
+(teclado/rolagem explícitos) e `fill_credential` (preenchimento por referência
+interna, sem revelar o valor). O executor não recebe shell, leitura de código,
+chamadas à API do alvo, `evaluate`, seletores DOM nem navegação direta a URLs.
+A infraestrutura abre a `startUrl`; as ferramentas validam parâmetros, coordenadas,
+cancelamento e limite de ações antes de executar.
+
+`StoredRun.targetCredential` só é resolvida pelo backend. Captura de tela de login
+com a credencial digitada visível não é enviada ao modelo nem persistida. HTTP 200 ou
+mudança de URL não confirmam login: o mapa registra a **observação visual** da área
+autenticada. Destinos são conferidos por `TARGET_ALLOWED_ORIGINS` antes de cada
+requisição (incluindo redirecionamentos e recursos); novas abas e mecanismos não
+suportados são bloqueados e destino bloqueado produz motivo legível.
+
+### Contrato do mapa
+
+```ts
+type NavigationPayload = {
+  authentication: { status: 'authenticated'; observationId: string } | { status: 'not_authenticated'; observationId: null };
+  map: {
+    screens: { id: string; name: string; recognition: string; observationIds: string[] }[];
+    transitions: { id: string; from: string; actionId: string; to: string; observationIds: string[] }[];
+    paths: { id: string; startScreenId: string; transitionIds: string[] }[];
+  };
+  pending: { id: string; description: string; affectedCaseIds: string[] }[];
+  limitations: string[];
+};
+```
+
+Identificadores de observações e ações são criados pelas ferramentas; o backend
+recusa referências inventadas. Caminhos encadeiam transições reais; pendências
+apontam casos aprovados existentes. A saída registra `phase: "mapping"`,
+`producer: "test-executor"`, ID/revisão, dependências exatas de curadoria, plano e
+casos, a revisão da configuração de acesso utilizada, o mapa, pendências, limitações
+e referências às observações. Capturas de mapeamento **não** são tentativas de teste:
+não há `caseId` nem `attemptId` no contrato de execução.
+
+### Validação em outra sessão
+
+O papel `output-validator` usa a skill `validate-navigation` com perfil visual
+`deepseek-flash` / `high`, em sessão independente, recebendo requisitos originais,
+plano e casos aprovados, a revisão exata do mapa, o registro das ações e **as próprias
+imagens referenciadas**. Não controla o navegador nem modifica o mapa. Pareceres:
+`approved`, `changes_requested` (nova revisão do mesmo mapa, anterior preservada) ou
+`blocked`; falha técnica vira `error` e não aprova. O executor recebe os achados
+localizados e faz novas observações quando necessário, dentro dos mesmos limites.
+
+### Estados e transições (com `ready`)
+
+`ready` é acrescentado como "etapa concluída, aguardando continuidade"; `completed`
+continua reservado ao relatório final validado.
+
+| Evento | Estado esperado |
+| --- | --- |
+| Início aceito | `running / mapping` |
+| Executor termina; validador trabalha | Continua `running / mapping`, atividade atualizada |
+| Validador pede correção | Nova revisão, dentro dos limites |
+| Mapa aprovado | `ready / mapping` — "Mapa validado — aguardando detalhamento dos percursos" |
+| Falta acesso ou informação indispensável | `awaiting_input / mapping`, com motivo |
+| Limite esgotado | `interrupted / mapping` |
+| Falha técnica sem recuperação | `error / mapping` |
+| Cancelamento | `cancelled`; sem novas ações |
+| Reinício durante trabalho | `interrupted`; sem retomada automática |
+
+Para erro de credencial antes de concluir a autenticação (parecer `blocked` com
+achado `AUTHENTICATION_MISSING`), a mesma aplicação permite corrigir a credencial
+(nova revisão de acesso) e solicitar nova tentativa explícita; o histórico e o tempo
+consumido são preservados. Caminhos não encontrados aparecem como pendências com os
+casos afetados; a retomada por esclarecimentos de navegação será entregue depois, sem
+botão de resposta que ainda não funcione.
+
+### Mídia autenticada
+
+`GET /api/runs/:id/evidence/:assetId` verifica sessão, identidade esperada,
+proprietário e pertencimento do `assetId` às observações da execução; entrega
+`image/png` sem expor caminhos locais. A interface busca com as proteções existentes
+e exibe por `blob:` (CSP ajustada somente em `img-src`), revogando as URLs ao sair.
+
+### Perfis de modelo
+
+| Tarefa | Perfil | Configuração |
+| --- | --- | --- |
+| Autenticar e mapear visualmente | `test-executor` | `PI_EXECUTOR_PROVIDER/MODEL/THINKING_LEVEL` (`deepseek/deepseek-flash`, raciocínio `high`) |
+| Validar mapa e capturas | `output-validator` visual | `PI_VALIDATOR_VISUAL_PROVIDER/MODEL/THINKING_LEVEL` (`deepseek/deepseek-flash`, raciocínio `high`) |
+| Validador textual (curadoria/plano/casos) | `output-validator` textual | `PI_VALIDATOR_*` (Pro/high), inalterado |
+
+Sem fallback silencioso de modelo; indisponibilidade recusa o início com motivo.
+
+
 ## Mapeamento, dúvidas e execução
 
 Tela: `{id, name, recognition}`. Transição: `{id, from, action, to}`. Caminho:

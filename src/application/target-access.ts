@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { RunRecord, RunStore } from '../storage/runs.js';
+import type { RunRecord, RunStore, TargetCredential } from '../storage/runs.js';
 import { StorageError } from '../storage/runs.js';
 
 export type TargetAccessReview = {
@@ -35,8 +35,16 @@ export type ConfigureTargetAccessResult =
 
 export function canEditTargetAccess(run: RunRecord): boolean {
   const allowedPhases = ['intake', 'curation', 'planning', 'case_design'];
+  // Após falha de credencial no mapeamento, a mesma aplicação permite corrigir a
+  // credencial e solicitar nova tentativa explícita (nova revisão de acesso).
+  if (run.phase === 'mapping') return run.status === 'awaiting_input';
   if (!allowedPhases.includes(run.phase)) return false;
   return run.status === 'draft' || ['awaiting_approval', 'awaiting_input'].includes(run.status);
+}
+/** Resolução privada da credencial do alvo; somente o backend acessa os valores. */
+export function resolveTargetCredential(record: { targetCredential?: TargetCredential; run: RunRecord }): TargetCredential | null {
+  return record.targetCredential && record.run.input?.credentialRef === record.targetCredential.ref
+    ? record.targetCredential : null;
 }
 
 export function publicTargetAccess(run: RunRecord, hasCredential: boolean): TargetAccessReview {

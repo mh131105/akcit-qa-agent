@@ -533,7 +533,7 @@ História de usuário, prioridade alta,
 Responsável: um desenvolvedor com atuação em backend e interface.
 Revisor: outro integrante, preferencialmente da frente B.
 Base: `develop`, contendo o merge `000969b`. Branch: `feat/target-access`.
-Estado: **Implementação concluída**; PR aberto para `develop`.
+Estado: **Integrada pelo PR #28** em `develop`.
 
 Como responsável pelos testes, quero informar o endereço, a conta de teste, o
 perfil de acesso e a preparação necessária da aplicação, para que o executor
@@ -590,6 +590,71 @@ e operação em [OPERACAO.md](OPERACAO.md#configurar-acesso-ao-alvo-t7-em-uma-ex
 **T8 permanece aberta (Refs #11):** T8.1 entrega exclusivamente a configuração e
 armazenamento seguro do acesso ao alvo. Mapeamento autônomo pelo navegador, execução
 visual dos casos, captura de evidências e gravação de vídeo continuam pendentes.
+
+### T8.2 · Mapear a aplicação com agente visual e validar os percursos observados
+
+História de usuário, prioridade alta,
+**recorte da [T8 · #11](https://github.com/mh131105/akcit-qa-agent/issues/11)**, com
+integração ao validador da [T10 · #14](https://github.com/mh131105/akcit-qa-agent/issues/14).
+Responsável: um desenvolvedor da frente de navegador/backend. Revisão: outro
+integrante para integração e uma pessoa da frente C para conferir a qualidade do mapa.
+Base: `develop`, contendo `73063ac`. Branch: `feat/validated-navigation-map`.
+
+Como responsável pelos testes, quero que o agente entre na aplicação e observe seus
+caminhos de navegação, depois da aprovação dos casos, para que os testes recebam
+percursos reais, sustentados por evidências e revisados por um validador independente.
+
+Implementação:
+- **`src/domain/navigation.ts`:** contrato e validação estrutural do mapa (telas,
+  transições, caminhos, pendências, limitações), com referências a observações e
+  ações reais; referências inventadas são recusadas.
+- **`src/application/map-application.ts`:** verificação específica das condições de
+  início (não usa `canDecideCases`), rotina de produção do executor e validação visual
+  em sessão independente, revisões, pareceres e transições de estado.
+- **`src/runtime/pi-visual.ts`:** sessões Pi com `customTools`, imagens e contagem de
+  todas as chamadas e ações; 120 s por chamada, orçamento acumulado por execução.
+- **`agents/test-executor/tools/browser.mjs`:** navegador real (Chromium/Xvfb/xdotool),
+  observar tela, mover/clicar, teclado/rolagem e preenchimento privado de credenciais;
+  `TARGET_ALLOWED_ORIGINS` antes de cada requisição; bloqueio de novas abas; captura
+  com credencial visível nunca enviada nem persistida.
+- **Skills:** `test-executor/map-application` (metodologia de exploração) e
+  `output-validator/validate-navigation` (critérios de avaliação visual independente).
+- **`src/application/prepare-plan.ts`:** continuidade para mapeamento reutilizando a
+  reserva, o cancelamento e o orçamento do coordenador existente; intenção `create_map`
+  persistida antes do `202`.
+- **`src/storage/runs.ts`:** observações, ações, mídia e limites do mapeamento;
+  recuperação após reinício preserva registros.
+- **`src/http/api.ts`:** continuidade com `expectedAccessRevision` e rota de mídia
+  autenticada `GET /api/runs/:id/evidence/:assetId`.
+- **`src/web/app.js`:** botão **Mapear aplicação**, painel do mapa (telas com
+  capturas, transições, caminhos, pareceres, pendências, limitações, ações),
+  estado `ready / mapping` exibido como *"Mapa validado — aguardando detalhamento dos
+  percursos"* e mídia por `blob:` com revogação.
+- **Estados:** `ready` introduzido como "etapa concluída, aguardando continuidade";
+  `completed` continua reservado ao relatório final validado.
+
+Verificações:
+- `npm run check` limpo; `npm run build` completa.
+- `npm test`: **176/176** (10 novos testes em `test/navigation.test.ts` cobrindo
+  CA-01 a CA-10: aprovações ausentes, concorrência, referências inventadas,
+  correções/pareceres, credencial inválida com correção, cancelamento, evidência
+  entre contas e transições).
+- `scripts/smoke-mapping.mjs` na imagem final: navegador, cursor, capturas e
+  destinos bloqueados reais, com respostas de modelo substituídas e identificadas
+  como simulação.
+- `scripts/smoke-web.mjs`: jornada do site até a consulta do mapa e das capturas.
+
+Critérios de aceitação: CA-01 a CA-12 do card, com destaque para o mapa aprovado
+terminando em `ready / mapping` sem nenhum teste apresentado como executado, e a
+correção de credencial da mesma aplicação com nova tentativa explícita.
+
+Evidências em [evidencias/t8.2](evidencias/t8.2/README.md). Contratos em
+[CONTRATOS.md](requisitos/CONTRATOS.md#mapeamento-visual-validado--t82) e operação em
+[OPERACAO.md](OPERACAO.md#mapear-e-validar-a-navegação-t82).
+
+**T8 e T10 permanecem abertas:** detalhamento dos percursos, execução com entradas
+válidas/inválidas, vídeos por tentativa, retomada completa das dúvidas visuais e
+relatório ainda precisam ser entregues.
 
 ## Como encerrar uma tarefa
 

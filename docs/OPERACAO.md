@@ -917,6 +917,64 @@ Para vincular o alvo controlado T7 a uma execução criada no sistema:
 - A URL inicial não aceita query string nem fragmento.
 - A validação no salvamento é estática de formato e origem; salvar não abre o navegador nem verifica se as credenciais funcionam no alvo. A autenticação automatizada no navegador é de responsabilidade da etapa seguinte de mapeamento e execução (T8).
 
+### Mapear e validar a navegação (T8.2)
+
+Após as duas aprovações humanas (plano e casos) e o acesso configurado, a página da
+execução oferece **Mapear aplicação**. O executor visual autentica pela interface e
+percorre as telas relevantes; o validador visual examina o mapa e as capturas em
+sessão independente; o mapa aprovado termina em `ready / mapping`.
+
+#### Variáveis
+
+| Variável | Papel | Valor do card |
+| --- | --- | --- |
+| `PI_EXECUTOR_PROVIDER` / `PI_EXECUTOR_MODEL` | Executor visual | `deepseek` / `deepseek-flash` |
+| `PI_EXECUTOR_THINKING_LEVEL` | Executor visual | `high` (padrão do perfil) |
+| `PI_VALIDATOR_VISUAL_PROVIDER` / `PI_VALIDATOR_VISUAL_MODEL` | Validador visual | `deepseek` / `deepseek-flash` |
+| `PI_VALIDATOR_VISUAL_THINKING_LEVEL` | Validador visual | `high` (padrão do perfil) |
+| `TARGET_ALLOWED_ORIGINS` | Destinos permitidos | origem exata do alvo (ex.: `http://127.0.0.1:4000`) |
+
+Cada perfil exige o par provedor/modelo; ausência ou indisponibilidade recusa o
+início com motivo (sem fallback silencioso). O validador textual continua em
+`PI_VALIDATOR_*` (Pro/high).
+
+#### Comandos
+
+```bash
+npm run smoke:mapping   # navegador/cursor/capturas/destinos reais com modelo substituído (imagem final)
+node scripts/demo-target.mjs   # alvo T7 em http://127.0.0.1:4000 (modo reference)
+npm test                 # inclui test/navigation.test.ts (contratos e transições)
+```
+
+#### Preparação do alvo e reprodução do ensaio real
+
+1. Suba o alvo T7 (`node scripts/demo-target.mjs`, modo `reference`, credenciais `demo`/`demo1234`).
+2. Configure `TARGET_ALLOWED_ORIGINS=http://127.0.0.1:4000` e os quatro pares de
+   perfil visual no `.env` do ambiente (local, dev ou produção).
+3. No site, crie uma execução, prepare e aprove o plano, gere e aprove os casos.
+4. Configure o acesso no painel (URL inicial `http://127.0.0.1:4000`, perfil, preparo,
+   autorização e credencial `demo`/`demo1234`).
+5. Clique em **Mapear aplicação**. Acompanhe o progresso: o executor explora e o
+   validador visual emite o parecer. Ao final, o estado é `ready / mapping` com o
+   texto *"Mapa validado — aguardando detalhamento dos percursos"*.
+6. Confira no painel: telas com capturas, transições, caminhos, parecer do validador,
+   pendências com casos afetados e limitações. As capturas são servidas por
+   `GET /api/runs/:id/evidence/:assetId`.
+7. Para o ensaio do validador, force uma transição sem suporte (ex.: remova a
+   captura de destino antes da validação) e registre o parecer.
+
+#### Limites
+
+- Três produções/revisões do mapa e duas tentativas técnicas de validação por revisão.
+- Cem ações de exploração por execução e 45 minutos ativos acumulados (compartilhados
+  com a preparação; sem reinício a cada correção).
+- 120 segundos por chamada de modelo; todas as chamadas e ações são registradas.
+- Piloto simples: uma única aba; novas abas e destinos fora de
+  `TARGET_ALLOWED_ORIGINS` são bloqueados com motivo legível.
+- Erro de credencial antes da autenticação: corrija a credencial no painel (nova
+  revisão de acesso) e use **Mapear aplicação (nova tentativa)**; histórico e tempo
+  consumido são preservados.
+
 ## Referências
 
 - [SDK do Pi](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md)

@@ -15,14 +15,14 @@ Consulte a matriz completa em [OPERACAO.md](../docs/OPERACAO.md#matriz-de-distri
 - `artifact-curator/`: [curadoria textual](artifact-curator/skills/curate-artifacts/SKILL.md) com requisitos, regras, exemplos recebidos, fontes e perguntas localizadas; aceita prosa, US/CA, requisitos funcionais e Gherkin textual sem formato obrigatório. Opera com `deepseek-flash` e raciocínio `low`.
 - `test-designer/`: [plano de testes](test-designer/skills/create-test-plan/SKILL.md) com originais, respostas e curadoria aprovada; e [casos lógicos](test-designer/skills/create-test-cases/SKILL.md) com dados concretos, expectativas, fontes e técnicas (PCE/AVL). Ambas as tarefas operam com `deepseek-v4-pro` e raciocínio `high`.
 - `output-validator/`: [validação independente](output-validator/skills/validate-output/SKILL.md) da curadoria, do plano e dos casos lógicos. Opera em perfil textual com `deepseek-v4-pro` e raciocínio `high`, em sessão isolada, conferindo rigor metodológico, fontes, critérios e regras.
+- `test-executor/` (T8.2): [mapeamento visual da aplicação](test-executor/skills/map-application/SKILL.md) com sessão Pi exclusiva do papel e ferramentas próprias ([browser.mjs](test-executor/tools/browser.mjs)): observar tela, mover/clicar, teclado/rolagem e preenchimento privado de credenciais. Opera com `deepseek-flash` / `high`. Sem shell, sem leitura de código, sem seletores DOM, sem chamadas à API do alvo: só visão, cursor e teclado.
+- `output-validator/` (perfil visual, T8.2): [validação do mapa de navegação](output-validator/skills/validate-navigation/SKILL.md) em sessão independente, recebendo as próprias imagens referenciadas. Opera com `deepseek-flash` / `high`; o perfil textual acima permanece em Pro/high.
 
 ### Agentes e etapas planejadas (futuras)
 - `test-designer/` (em `route_detail`): associará percursos observados no mapa aos casos aprovados, operando com `deepseek-v4-pro` / `high`, preservando integralmente os campos já validados e aprovados.
-- `test-executor/`: reconhecimento de telas, navegação, mouse, teclado e registro de evidências. Planejado para operar com `deepseek-flash` / `high` tanto no mapeamento quanto na execução, utilizando capacidade multimodal de imagens.
 - `report-writer/`: consolidação de resultados validados e referências a evidências em relatório textual, operando com `deepseek-flash` / `low`. Novas interpretações de comportamento não pertencem ao redator e devem retornar às etapas técnicas correspondentes.
-- `output-validator/` (perfil visual): revisão independente do mapa e dos resultados apoiados em capturas visuais, operando com `deepseek-flash` / `high`.
 
-> **Ressalva factual:** A execução existente comprova a integração técnica da preparação textual; ainda não comprova a qualidade do navegador, do relatório ou da validação visual, nem superioridade entre modelos.
+> **Ressalva factual:** A preparação textual e o mapeamento visual com validação independente estão implementados (T8.2); o ensaio com modelo real permanece restrito ao ambiente operado, e a qualidade da execução de testes e do relatório ainda não está comprovada.
 
 Cada saída passa pelas verificações estruturais do backend e pela revisão do
 validador antes de alimentar uma etapa dependente. O validador usa contexto próprio,
@@ -41,15 +41,20 @@ por sessão; especialistas não devem disputar o mesmo cursor.
 
 O backend seleciona uma única skill por tarefa em lista fechada: `artifact-curator`
 com `curate-artifacts`; `test-designer` com `create-test-plan` ou `create-test-cases`;
-`output-validator` com `validate-output`. Papel e tarefa incompatíveis são recusados;
+`output-validator` com `validate-output` (textual) ou `validate-navigation` (visual);
+`test-executor` com `map-application`. Papel e tarefa incompatíveis são recusados;
 caminhos não vêm do cliente. As duas tarefas do designer reutilizam o mesmo modelo.
-Cada produção/validação usa uma sessão Pi nova por
+Cada produção/validação textual usa uma sessão Pi nova por
 tentativa, modelo configurado sem fallback e nenhuma tool de terminal, escrita ou
-navegador. A saída JSON é conferida estruturalmente pelo backend e semanticamente
+navegador. O fluxo visual usa sessão própria com `customTools` do SDK: apenas as
+ferramentas de navegador listadas acima, imagens nas mensagens e contagem de todas
+as chamadas e ações. A saída JSON é conferida estruturalmente pelo backend e semanticamente
 pelo validador. O plano validado exige aprovação humana antes de **Gerar casos de
 teste**; aprovar não chama os modelos. T6.1 entrega os casos em `awaiting_approval/case_design`
 e T6.2 implementa a aprovação humana e a solicitação de alterações sobre o conjunto validado,
-mantendo a espera; mapeamento, execução e relatório continuam pendentes. O ajuste de 24/09
+mantendo a espera. T8.2 entrega o mapeamento validado: **Mapear aplicação** após as duas
+aprovações humanas e o acesso configurado; o mapa aprovado termina em `ready/mapping` e o
+detalhamento dos percursos, a execução e o relatório continuam pendentes. O ajuste de 24/09
 acrescenta respostas rastreáveis e retomada explícita da preparação: originais
 permanecem intactos, respostas viram fontes, revisões e aprovações antigas ficam
 históricas. Pergunta pode bloquear uma regra sem bloquear toda a história; novas
@@ -60,7 +65,7 @@ Gherkin é opcional e não substitui o contrato interno. Exemplo recebido não d
 regra geral; proposta só sustenta expectativa após decisão explícita. Não há parser
 completo de `.feature` ou executor Cucumber. Casos usam PCE/AVL apenas quando
 aplicáveis e com dados coerentes; um exemplo pontual não autoriza inventar intervalo.
-Mapeamento, execução e relatório aguardam as respectivas entregas.
+Execução de testes e relatório aguardam as respectivas entregas.
 A demonstração anterior permanece em [T4.1](../docs/evidencias/t4.1/README.md);
 a avaliação da versão atual está em
 [ajuste de entradas](../docs/evidencias/ajuste-entradas/README.md). A demonstração de

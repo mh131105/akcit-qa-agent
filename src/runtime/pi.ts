@@ -39,14 +39,14 @@ export class SpecialistError extends Error {
   ) { super(message); }
 }
 
-const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
+export const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 const permittedTasks: Record<PreparationRole, readonly PreparationTask[]> = {
   'artifact-curator': ['curate-artifacts'],
   'test-designer': ['create-test-plan', 'create-test-cases'],
   'output-validator': ['validate-output'],
 };
 
-function privateModelRuntime(authPath?: string, signal?: AbortSignal) {
+export function privateModelRuntime(authPath?: string, signal?: AbortSignal) {
   // O catálogo local não autoriza inferência; a chamada real ocorre em session.prompt.
   // OAuth exige caminho privado explícito; nunca procurar auth ou sessões pessoais.
   return ModelRuntime.create({
@@ -60,7 +60,7 @@ function privateModelRuntime(authPath?: string, signal?: AbortSignal) {
   });
 }
 
-async function checkedModel(runtime: ModelRuntime, selection: SpecialistModel, signal?: AbortSignal) {
+export async function checkedModel(runtime: ModelRuntime, selection: SpecialistModel, signal?: AbortSignal) {
   const model = runtime.getModel(selection.provider, selection.model);
   if (!model) throw new SpecialistError('MODEL_UNAVAILABLE', 'O modelo configurado não está disponível no catálogo do Pi. Confira provedor e modelo.');
   if (!await runtime.getAuth(model, signal ? { signal } : {})) {

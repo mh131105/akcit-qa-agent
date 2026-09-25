@@ -61,7 +61,7 @@ export async function listRuns(store: RunStore, query: URLSearchParams, context:
   const q = search.trim().toLowerCase();
   const status = query.get('status');
   if (status !== null && !['draft', 'running', 'awaiting_approval', 'awaiting_input',
-    'completed', 'interrupted', 'error', 'cancelled'].includes(status)) throw new RunInputError();
+    'ready', 'completed', 'interrupted', 'error', 'cancelled'].includes(status)) throw new RunInputError();
   const records = await store.listForOwner(context.userId);
   return records.map(record => record.run)
     .filter(run => (status === null || run.status === status) &&

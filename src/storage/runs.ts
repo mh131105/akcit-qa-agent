@@ -13,9 +13,9 @@ export type RunOutput = JsonObject & {
   answerRefs?: { questionId: string; revision: number; answerId?: string }[];
 };
 export type PreparationCall = {
-  id: string; role: 'artifact-curator' | 'test-designer' | 'output-validator';
+  id: string; role: 'artifact-curator' | 'test-designer' | 'output-validator' | 'test-executor';
   provider: string; model: string; thinkingLevel?: 'off' | 'low' | 'high';
-  phase: 'curation' | 'planning' | 'case_design'; attempt: number;
+  phase: 'curation' | 'planning' | 'case_design' | 'mapping' | 'mapping_validation'; attempt: number;
   outputRevision: number; startedAt: string; finishedAt?: string; durationMs?: number;
   status: 'running' | 'completed' | 'invalid' | 'error' | 'cancelled' | 'interrupted';
   budgetCycleId?: string; errorCode?: string; usage?: Record<string, number>; estimatedCost?: number;
@@ -29,11 +29,13 @@ export type Preparation = {
   activeRole: PreparationCall['role'] | null; activity: string | null;
   stopReason: { code: string; message: string } | null;
   limits: { maxRequirements: number; maxRevisions: number; maxValidatorAttempts: number;
-    timeoutMs: number; activeMs: number };
+    timeoutMs: number; activeMs: number; maxActions?: number };
   calls: PreparationCall[];
   // Tempo consumido em ciclos encerrados; espera por respostas não entra no limite.
   accumulatedActiveMs?: number;
   consumedAnswerIds?: string[];
+  // Ações de exploração consumidas pelo mapeamento; não reinicia a cada correção.
+  consumedActions?: number;
 };
 export type RunValidation = PlanApprovalState['validations'][number] & {
   id?: string; at?: string; attempt?: number; reason?: string;
@@ -50,12 +52,23 @@ export type RunRecord = JsonObject & {
   answerArtifacts?: JsonObject[];
   creation?: { requestHash: string };
   interruptions?: Interruption[];
+  observations?: ObservationRecord[];
+  mappingActions?: MappingActionRecord[];
 };
 export type WorkIntent = {
-  id: string; type: 'create_cases' | 'analyze_feedback';
+  id: string; type: 'create_cases' | 'analyze_feedback' | 'create_map';
   outputId: string; outputRevision: number; createdAt: string;
   status: 'pending' | 'completed' | 'interrupted' | 'cancelled'; interruption?: Interruption;
   processingId?: string; finishedAt?: string; reason?: { code: string; message: string };
+  accessRevision?: number;
+};
+/** Observação visual persistida; assetId é opaco e nunca expõe caminho local. */
+export type ObservationRecord = {
+  id: string; assetId: string; at: string; width: number; height: number;
+};
+export type MappingActionRecord = {
+  id: string; at: string; tool: 'observe_screen' | 'pointer' | 'keyboard_scroll' | 'fill_credential';
+  params: JsonObject; outcome: 'ok' | 'error'; observationId?: string; note?: string;
 };
 export type TargetCredential = { ref: string; username: string; password: string };
 export type StoredRun = { schemaVersion: 1; run: RunRecord; workIntents: WorkIntent[]; targetCredential?: TargetCredential };
@@ -107,21 +120,24 @@ const nonnegative = (value: unknown) => typeof value === 'number' && Number.isFi
 function validPreparation(value: unknown): boolean {
   if (!object(value) || !strings(value, ['id', 'budgetCycleId']) || !value.id || !value.budgetCycleId ||
     !utc(value.startedAt) || (value.finishedAt !== null && !utc(value.finishedAt)) ||
-    ![null, 'artifact-curator', 'test-designer', 'output-validator'].includes(value.activeRole as string | null) ||
+    ![null, 'artifact-curator', 'test-designer', 'output-validator', 'test-executor'].includes(value.activeRole as string | null) ||
     (value.activity !== null && typeof value.activity !== 'string') ||
     (value.stopReason !== null && (!object(value.stopReason) || !strings(value.stopReason, ['code', 'message']))) ||
     (value.accumulatedActiveMs !== undefined && !nonnegative(value.accumulatedActiveMs)) ||
     (value.consumedAnswerIds !== undefined && (!Array.isArray(value.consumedAnswerIds) ||
       !value.consumedAnswerIds.every(id => typeof id === 'string' && !!id) ||
       new Set(value.consumedAnswerIds).size !== value.consumedAnswerIds.length)) ||
+    (value.consumedActions !== undefined && (!Number.isSafeInteger(value.consumedActions) || (value.consumedActions as number) < 0)) ||
     !object(value.limits) || !['maxRequirements', 'maxRevisions', 'maxValidatorAttempts', 'timeoutMs', 'activeMs']
       .every(key => positive((value.limits as JsonObject)[key])) ||
+    ((value.limits as JsonObject).maxActions !== undefined && (!positive((value.limits as JsonObject).maxActions) ||
+      ((value.limits as JsonObject).maxActions as number) > 100)) ||
     Object.entries({ maxRequirements: 10, maxRevisions: 3, maxValidatorAttempts: 2, timeoutMs: 120000, activeMs: 2700000 })
       .some(([key, ceiling]) => ((value.limits as JsonObject)[key] as number) > ceiling) || !objects(value.calls)) return false;
   return new Set(value.calls.map(call => call.id)).size === value.calls.length && value.calls.every(call =>
     strings(call, ['id', 'provider', 'model']) && !!call.id && !!call.provider && !!call.model &&
-    ['artifact-curator', 'test-designer', 'output-validator'].includes(call.role as string) &&
-    ['curation', 'planning', 'case_design'].includes(call.phase as string) && positive(call.attempt) && positive(call.outputRevision) &&
+    ['artifact-curator', 'test-designer', 'output-validator', 'test-executor'].includes(call.role as string) &&
+    ['curation', 'planning', 'case_design', 'mapping', 'mapping_validation'].includes(call.phase as string) && positive(call.attempt) && positive(call.outputRevision) &&
     (call.thinkingLevel === undefined || ['off', 'low', 'high'].includes(call.thinkingLevel as string)) &&
     utc(call.startedAt) && (call.finishedAt === undefined || utc(call.finishedAt)) &&
     (call.durationMs === undefined || nonnegative(call.durationMs)) &&
@@ -208,14 +224,29 @@ function validate(record: unknown, runId: string): asserts record is StoredRun {
     !objects(record.workIntents) || !record.workIntents.every(work =>
       strings(work, ['id', 'outputId']) && !!work.id && !!work.outputId &&
       Number.isSafeInteger(work.outputRevision) && (work.outputRevision as number) > 0 && utc(work.createdAt) &&
-      ['create_cases', 'analyze_feedback'].includes(work.type as string) &&
+      ['create_cases', 'analyze_feedback', 'create_map'].includes(work.type as string) &&
+      (work.accessRevision === undefined || positive(work.accessRevision)) &&
       (work.processingId === undefined || (typeof work.processingId === 'string' && !!work.processingId)) &&
       (work.finishedAt === undefined || utc(work.finishedAt)) &&
       (work.reason === undefined || (object(work.reason) && strings(work.reason, ['code', 'message']) && !!work.reason.code && !!work.reason.message)) &&
       ((work.status === 'pending' && work.interruption === undefined && work.finishedAt === undefined && work.reason === undefined) ||
         (['completed', 'cancelled'].includes(work.status as string) && utc(work.finishedAt) && work.interruption === undefined) ||
         (work.status === 'interrupted' && (work.interruption === undefined ? utc(work.finishedAt) && work.reason !== undefined : interruption(work.interruption))))) ||
-    new Set(record.workIntents.map(work => work.id)).size !== record.workIntents.length) {
+    new Set(record.workIntents.map(work => work.id)).size !== record.workIntents.length ||
+    (run.observations !== undefined && (!objects(run.observations) ||
+      new Set(run.observations.map(item => item.id)).size !== run.observations.length ||
+      new Set(run.observations.map(item => item.assetId)).size !== run.observations.length ||
+      !run.observations.every(item => strings(item, ['id', 'assetId']) && !!item.id &&
+        /^[A-Za-z0-9][A-Za-z0-9-]{7,127}$/.test(item.assetId as string) && utc(item.at) &&
+        positive(item.width) && positive(item.height) && (item.width as number) <= 10000 && (item.height as number) <= 10000))) ||
+    (run.mappingActions !== undefined && (!objects(run.mappingActions) ||
+      new Set(run.mappingActions.map(item => item.id)).size !== run.mappingActions.length ||
+      !run.mappingActions.every(item => strings(item, ['id', 'at', 'tool']) && !!item.id && utc(item.at) &&
+        ['observe_screen', 'pointer', 'keyboard_scroll', 'fill_credential'].includes(item.tool as string) &&
+        ['ok', 'error'].includes(item.outcome as string) && object(item.params) &&
+        (item.observationId === undefined || (typeof item.observationId === 'string' &&
+          ((run.observations as JsonObject[] | undefined) ?? []).some(observation => observation.id === item.observationId))) &&
+        (item.note === undefined || typeof item.note === 'string'))))) {
     throw new StorageError('INVALID_RECORD');
   }
 }

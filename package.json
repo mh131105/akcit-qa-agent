@@ -16,6 +16,7 @@
     "smoke:web": "node scripts/smoke-web.mjs",
     "demo:target": "node scripts/demo-target.mjs",
     "smoke:target": "node scripts/smoke-target.mjs",
+    "smoke:mapping": "node scripts/smoke-mapping.mjs",
     "pi": "pi"
   },
   "dependencies": {

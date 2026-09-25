@@ -51,7 +51,28 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   const targetAllowedOrigins = parseTargetAllowedOrigins(env.TARGET_ALLOWED_ORIGINS);
   const preparationModels = {} as Record<PreparationRole, SpecialistModel>;
   let preparationConfigError: string | undefined;
+  const visualModels = { executor: {} as SpecialistModel, 'validator-visual': {} as SpecialistModel };
+  let visualConfigError: string | undefined;
   const globalThinking = env.PI_THINKING_LEVEL?.trim();
+  for (const [profile, prefix] of [
+    ['executor', 'PI_EXECUTOR'], ['validator-visual', 'PI_VALIDATOR_VISUAL'],
+  ] as const) {
+    const provider = env[prefix + '_PROVIDER']?.trim() ?? '';
+    const model = env[prefix + '_MODEL']?.trim() ?? '';
+    if (Boolean(provider) !== Boolean(model)) {
+      visualConfigError ??= prefix + '_PROVIDER e ' + prefix + '_MODEL devem ser configurados juntos.';
+    }
+    const profileThinking = env[prefix + '_THINKING_LEVEL']?.trim();
+    if (profileThinking && !VALID_THINKING_LEVELS.has(profileThinking)) {
+      visualConfigError ??= prefix + '_THINKING_LEVEL deve ser off, low ou high.';
+    }
+    visualModels[profile] = {
+      provider,
+      model,
+      ...(profileThinking && VALID_THINKING_LEVELS.has(profileThinking)
+        ? { thinkingLevel: profileThinking as ThinkingLevel } : {}),
+    };
+  }
   if (globalThinking && !VALID_THINKING_LEVELS.has(globalThinking)) {
     preparationConfigError ??= 'PI_THINKING_LEVEL deve ser off, low ou high.';
   }
@@ -89,6 +110,8 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     maxConcurrentBrowserSessions: 1,
     preparationModels,
     preparationConfigError,
+    visualModels,
+    visualConfigError,
     piAuthPath: env.PI_AUTH_PATH?.trim() ? resolve(env.PI_AUTH_PATH.trim()) : undefined,
   };
 }
@@ -97,6 +120,23 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
  * Resolve explicitamente thinkingLevel para cada especialista; na ausência,
  * aplica a compatibilidade: deepseek-v4-pro -> high, deepseek-flash -> low, demais -> off.
  */
+export type VisualProfile = 'executor' | 'validator-visual';
+export type ResolvedVisualModels = Record<VisualProfile, SpecialistModel & { thinkingLevel: ThinkingLevel }>;
+/** Perfis visuais do card T8.2: executor e validador visual usam Flash com raciocínio
+ * alto por padrão; o validador textual permanece configurado separadamente em Pro/high. */
+export function resolveVisualModels(config: ReturnType<typeof readConfig>): ResolvedVisualModels {
+  if (config.visualConfigError) throw new Error(config.visualConfigError);
+  const resolved = {} as ResolvedVisualModels;
+  for (const profile of ['executor', 'validator-visual'] as const) {
+    const model = config.visualModels[profile];
+    if (!model.provider || !model.model) {
+      throw new Error('Configure PI_EXECUTOR_PROVIDER/MODEL e PI_VALIDATOR_VISUAL_PROVIDER/MODEL para o mapeamento visual.');
+    }
+    resolved[profile] = { provider: model.provider, model: model.model, thinkingLevel: model.thinkingLevel ?? 'high' };
+  }
+  return resolved;
+}
+
 export function resolvePreparationModels(config: ReturnType<typeof readConfig>): Record<PreparationRole, SpecialistModel & { thinkingLevel: ThinkingLevel }> {
   if (config.preparationConfigError) throw new Error(config.preparationConfigError);
   const resolved = {} as Record<PreparationRole, SpecialistModel & { thinkingLevel: ThinkingLevel }>;

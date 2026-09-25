@@ -1,11 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import { resolvePreparationModels, type readConfig } from '../config.js';
+import { join } from 'node:path';
+import { resolvePreparationModels, type readConfig, type ResolvedVisualModels } from '../config.js';
 import { eligibleRequirements, InvalidPreparationOutput, parseCuration, parsePlan, parseTestCases, parseVerdict,
   type Artifact, type CurationPayload, type PlanPayload, type Verdict } from '../domain/preparation.js';
 import { applyPlanApprovalCommand } from '../domain/plan-approval.js';
+import { InvalidNavigationOutput } from '../domain/navigation.js';
+import { mappingEligibility, produceMapping, preflightVisual, MappingError,
+  type MappingRequest, type MappingServices } from './map-application.js';
 import { executeSpecialistTask, preflightSpecialists, SpecialistError,
   type SpecialistTask, type SpecialistResult, type PreparationRole } from '../runtime/pi.js';
-import { RunStore, StorageError, type RunRecord, type RunOutput, type Preparation, type PreparationCall, type PreparationAnswer } from '../storage/runs.js';
+import { RunStore, StorageError, type RunRecord, type RunOutput, type Preparation, type PreparationCall, type PreparationAnswer, type StoredRun } from '../storage/runs.js';
 
 export class PreparationError extends Error {
   constructor(readonly code: string, message: string, readonly status = 409) { super(message); }
@@ -13,13 +17,16 @@ export class PreparationError extends Error {
 export type PreparationOptions = {
   modelCall?: (task: SpecialistTask) => Promise<SpecialistResult>;
   modelPreflight?: typeof preflightSpecialists;
+  // Substituição explícita das sessões visuais em testes/smokes; nunca recebida pela API.
+  visualCall?: (task: import('../runtime/pi-visual.js').VisualTask) => Promise<import('../runtime/pi-visual.js').VisualResult>;
+  visualPreflight?: typeof import('./map-application.js').preflightVisual;
   // Injeção interna de relógio/limites para testes; nunca recebida pela API.
   now?: () => number;
   limits?: Partial<Preparation['limits']>;
 };
-const defaults: Preparation['limits'] = {
-  maxRequirements: 10, maxRevisions: 3, maxValidatorAttempts: 2, timeoutMs: 120_000, activeMs: 45 * 60_000,
-};
+const defaults = {
+  maxRequirements: 10, maxRevisions: 3, maxValidatorAttempts: 2, timeoutMs: 120_000, activeMs: 45 * 60_000, maxActions: 100,
+} satisfies Preparation['limits'];
 const stopped = () => new PreparationError('CANCELLED', 'A preparação foi cancelada.');
 const authorize = (run: RunRecord, userId: string) => {
   if (!userId || run.ownerId !== userId) throw new PreparationError('RUN_NOT_FOUND', 'Execução não encontrada.', 404);
@@ -42,7 +49,7 @@ function draft(run: RunRecord) {
   originals(run);
 }
 export type AnswerRequest = { outputId: string; outputRevision: number; questionId: string; text: string };
-export type ContinueRequest = { outputId: string; outputRevision: number };
+export type ContinueRequest = { outputId: string; outputRevision: number; expectedAccessRevision?: number };
 export function preparationAnswers(run: RunRecord): PreparationAnswer[] {
   // Registros anteriores à coleta de respostas continuam legíveis, sem publicar campos livres.
   return run.answerArtifacts ? run.answers.filter(answer => typeof answer.artifactId === 'string' &&
@@ -51,7 +58,7 @@ export function preparationAnswers(run: RunRecord): PreparationAnswer[] {
 export function pendingPreparationAnswers(run: RunRecord): PreparationAnswer[] {
   return preparationAnswers(run).filter(answer => !run.preparation?.consumedAnswerIds?.includes(answer.id));
 }
-function latestOutput(run: RunRecord, phase: string): RunOutput | undefined {
+export function latestOutput(run: RunRecord, phase: string): RunOutput | undefined {
   const versions = run.outputs.filter(output => output.phase === phase);
   if (new Set(versions.map(output => output.id)).size > 1 ||
     new Set(versions.map(output => output.revision)).size !== versions.length ||
@@ -105,7 +112,7 @@ export function canCreateCases(run: RunRecord): boolean {
   } catch { return false; }
 }
 type Active = { runId: string; id: string; controller: AbortController; done: Promise<void>;
-  cases?: ContinueRequest; workId?: string };
+  cases?: ContinueRequest; mapping?: MappingRequest; workId?: string };
 
 /** ponytail: um coordenador por aplicação/processo, sem fila de trabalhos;
  * múltiplos processos escritores exigiriam uma reserva externa compartilhada. */
@@ -114,15 +121,19 @@ export class PreparationCoordinator {
   private starts: Promise<unknown> = Promise.resolve();
   private readonly modelCall;
   private readonly preflight;
+  private readonly visualCall;
+  private readonly visualPreflight;
   private readonly now;
   private readonly limits;
   constructor(private readonly store: RunStore, private readonly config: ReturnType<typeof readConfig>, options: PreparationOptions = {}) {
     this.modelCall = options.modelCall ?? executeSpecialistTask;
     this.preflight = options.modelPreflight ?? preflightSpecialists;
+    this.visualCall = options.visualCall;
+    this.visualPreflight = options.visualPreflight ?? preflightVisual;
     this.now = options.now ?? Date.now;
     this.limits = { ...defaults, ...options.limits };
-    if (Object.entries(this.limits).some(([key, value]) => !Number.isSafeInteger(value) || value < 1 ||
-      value > defaults[key as keyof typeof defaults])) throw new Error('Limites de preparação inválidos.');
+    if (Object.entries(this.limits).some(([key, value]) => !Number.isSafeInteger(value) || (value as number) < 1 ||
+      (value as number) > (defaults[key as keyof typeof defaults] as number))) throw new Error('Limites de preparação inválidos.');
   }
   private time() { return new Date(this.now()).toISOString(); }
 
@@ -137,9 +148,69 @@ export class PreparationCoordinator {
     return result;
   }
   continue(runId: string, userId: string, request: ContinueRequest): Promise<{ accepted: boolean }> {
-    const result = this.starts.then(() => this.acceptCases(runId, userId, request));
+    const result = this.starts.then(() => request.expectedAccessRevision === undefined
+      ? this.acceptCases(runId, userId, request)
+      : this.acceptMapping(runId, userId, request as Required<ContinueRequest>));
     this.starts = result.catch(() => {});
     return result;
+  }
+  /** Continuidade dos casos aprovados: mapeamento visual, com a mesma reserva,
+   * o mesmo orçamento ativo e intenção persistida antes do 202. */
+  private async acceptMapping(runId: string, userId: string, request: Required<ContinueRequest>): Promise<{ accepted: boolean }> {
+    if (typeof request.outputId !== 'string' || !request.outputId || !Number.isSafeInteger(request.outputRevision) ||
+      request.outputRevision < 1 || !Number.isSafeInteger(request.expectedAccessRevision) || request.expectedAccessRevision < 1) {
+      throw new PreparationError('INVALID_INPUT', 'Informe a revisão exata dos casos aprovados e do acesso configurado.', 400);
+    }
+    const record = await this.store.read(runId);
+    authorize(record.run, userId);
+    // Intenção persistida identifica a repetição, inclusive após conclusão/cancelamento.
+    if (record.workIntents.some(work => work.type === 'create_map' && work.outputId === request.outputId &&
+      work.outputRevision === request.outputRevision && work.accessRevision === request.expectedAccessRevision && work.processingId)) {
+      return { accepted: false };
+    }
+    const eligible = (current: StoredRun) => {
+      const result = mappingEligibility(current, request, this.config, this.now());
+      if (!result.ok) throw new PreparationError(result.error.code, result.error.message, result.error.status);
+      return result.start;
+    };
+    eligible(record);
+    if (this.active) throw new PreparationError('RESOURCE_UNAVAILABLE', 'Ambiente ocupado. Os casos aprovados foram preservados; tente novamente após o término.');
+    const models = await this.visualPreflight(this.config);
+    if (this.active) throw new PreparationError('RESOURCE_UNAVAILABLE', 'Ambiente ocupado. Os casos aprovados foram preservados; tente novamente após o término.');
+    const active: Active = { runId, id: randomUUID(), workId: randomUUID(), mapping: { ...request },
+      controller: new AbortController(), done: Promise.resolve() };
+    this.active = active;
+    try {
+      await this.store.update(runId, record => {
+        const { run, workIntents } = record;
+        authorize(run, userId);
+        eligible(record);
+        const startedAt = this.time();
+        const previous = run.preparation!;
+        const limits = { ...previous.limits, maxActions: previous.limits.maxActions ?? this.limits.maxActions ?? defaults.maxActions };
+        run.status = 'running'; run.phase = 'mapping';
+        run.preparation = { ...previous, id: active.id, startedAt, finishedAt: null,
+          activeRole: 'test-executor', activity: 'mapping', stopReason: null, limits,
+          consumedActions: previous.consumedActions ?? 0 };
+        // O ciclo vigente registra os limites utilizados, incluindo o teto de ações.
+        const cycle = run.budgetCycles.find(cycle => cycle.id === previous.budgetCycleId);
+        if (cycle) cycle.limits = limits;
+        workIntents.push({ type: 'create_map', id: active.workId!, processingId: active.id,
+          outputId: request.outputId, outputRevision: request.outputRevision,
+          accessRevision: request.expectedAccessRevision, createdAt: startedAt, status: 'pending' });
+        return { save: true, value: undefined };
+      });
+      this.dispatch(active, models);
+      return { accepted: true };
+    } catch (error) {
+      try {
+        const saved = await this.store.read(runId);
+        if (saved.run.status === 'running' && saved.run.preparation?.id === active.id) {
+          await this.finish(active, 'interrupted', { code: 'START_FAILED', message: 'Não foi possível confirmar o início do mapeamento.' });
+        }
+      } finally { if (this.active === active) this.active = null; }
+      throw error;
+    }
   }
   private async acceptCases(runId: string, userId: string, request: ContinueRequest): Promise<{ accepted: boolean }> {
     if (typeof request.outputId !== 'string' || !request.outputId || !Number.isSafeInteger(request.outputRevision) || request.outputRevision < 1) {
@@ -202,7 +273,7 @@ export class PreparationCoordinator {
     }
     return models;
   }
-  private dispatch(active: Active, models: ReturnType<typeof resolvePreparationModels>) {
+  private dispatch(active: Active, models: ReturnType<typeof resolvePreparationModels> | ResolvedVisualModels) {
     active.done = new Promise<void>(resolve => setImmediate(resolve))
       .then(() => this.process(active, models))
       .finally(() => { if (this.active === active) this.active = null; });
@@ -343,6 +414,13 @@ export class PreparationCoordinator {
       return { save: true, value: change(run) };
     });
   }
+  /** Atualização serializada com acesso ao envelope completo (credencial/mídia). */
+  private updateRecord<T>(active: Active, change: (record: StoredRun) => T): Promise<T> {
+    return this.store.update(active.runId, record => {
+      this.check(record.run, active);
+      return { save: true, value: change(record) };
+    });
+  }
   private async finish(active: Active, status: string, reason: { code: string; message: string } | null) {
     await this.store.update(active.runId, ({ run, workIntents }) => {
       if (run.status !== 'running' || run.preparation?.id !== active.id) return { save: false, value: undefined };
@@ -354,7 +432,7 @@ export class PreparationCoordinator {
       run.preparation.stopReason = reason;
       const work = workIntents.find(work => work.id === active.workId && work.status === 'pending');
       if (work) {
-        work.status = status === 'awaiting_approval' ? 'completed' : status === 'cancelled' ? 'cancelled' : 'interrupted';
+        work.status = status === 'awaiting_approval' || status === 'ready' ? 'completed' : status === 'cancelled' ? 'cancelled' : 'interrupted';
         work.finishedAt = this.time();
         if (reason) work.reason = reason;
       }
@@ -430,13 +508,14 @@ export class PreparationCoordinator {
   }
   private failure(error: unknown): { code: string; message: string } {
     if (error instanceof StorageError) return { code: error.code, message: error.message };
-    if (error instanceof PreparationError || error instanceof SpecialistError || error instanceof InvalidPreparationOutput) {
+    if (error instanceof PreparationError || error instanceof SpecialistError || error instanceof InvalidPreparationOutput ||
+      error instanceof InvalidNavigationOutput || error instanceof MappingError) {
       return { code: error.code, message: error.message };
     }
     return { code: 'MODEL_ERROR', message: 'Falha técnica na preparação. Os registros confirmados foram preservados.' };
   }
 
-  private async process(active: Active, models: ReturnType<typeof resolvePreparationModels>) {
+  private async process(active: Active, models: ReturnType<typeof resolvePreparationModels> | ResolvedVisualModels) {
     let deadline: ReturnType<typeof setTimeout> | undefined;
     try {
       const initial = (await this.store.read(active.runId)).run;
@@ -444,6 +523,20 @@ export class PreparationCoordinator {
         'O orçamento de processamento ativo foi esgotado.')), Math.max(1,
         initial.preparation!.limits.activeMs - (initial.preparation!.accumulatedActiveMs ?? 0) - (this.now() - Date.parse(initial.preparation!.startedAt))));
       this.check(initial, active);
+      if (active.mapping) {
+        const services: MappingServices = {
+          read: () => this.store.read(active.runId),
+          update: change => this.updateRecord(active, change),
+          finish: (status, reason) => this.finish(active, status, reason),
+          failure: error => this.failure(error),
+          now: this.now, time: () => this.time(), signal: active.controller.signal,
+          config: this.config, models: models as ResolvedVisualModels,
+          mediaDir: join(this.config.dataDir, 'media', active.runId),
+          ...(this.visualCall ? { visualCall: this.visualCall } : {}),
+        };
+        await produceMapping(services, active.mapping);
+        return;
+      }
       const artifacts = [...originals(initial), ...(initial.answerArtifacts ?? []) as Artifact[]];
       const answers = preparationAnswers(initial).map(answer => ({ ...answer,
         question: (initial.outputs.find(output => output.id === answer.outputId && output.revision === answer.outputRevision)
@@ -451,15 +544,16 @@ export class PreparationCoordinator {
       }));
       const common = { artifacts, answers, objective: typeof initial.input.objective === 'string' ? initial.input.objective : '' };
       if (active.cases) {
+        const textualModels = models as ReturnType<typeof resolvePreparationModels>;
         const { curation, plan } = caseDependencies(initial, active.cases, false);
-        const cases = await this.produce(active, models, 'case_design', { ...common,
+        const cases = await this.produce(active, textualModels, 'case_design', { ...common,
           approvedCuration: curation, approvedPlan: plan,
           planApproval: initial.approvals.find(decision => decision.outputId === plan.id && decision.outputRevision === plan.revision),
         }, artifacts, curation, plan);
         if (cases) await this.finish(active, 'awaiting_approval', null);
         return;
       }
-      const curation = await this.produce(active, models, 'curation', common, artifacts);
+      const curation = await this.produce(active, models as ReturnType<typeof resolvePreparationModels>, 'curation', common, artifacts);
       if (!curation) return;
       const curated = curation.payload as CurationPayload;
       if (!eligibleRequirements(curated).length) {
@@ -467,11 +561,11 @@ export class PreparationCoordinator {
           message: 'Falta informação para planejar requisitos independentes. Responda às perguntas e retome a preparação.' });
         return;
       }
-      const plan = await this.produce(active, models, 'planning', { ...common, approvedCuration: curation }, artifacts, curation);
+      const plan = await this.produce(active, models as ReturnType<typeof resolvePreparationModels>, 'planning', { ...common, approvedCuration: curation }, artifacts, curation);
       if (plan) await this.finish(active, 'awaiting_approval', null);
     } catch (error) {
       const reason = this.failure(error);
-      await this.finish(active, ['ACTIVE_LIMIT', 'REVISION_LIMIT', 'VALIDATOR_LIMIT', 'INPUT_LIMIT', 'CASE_LIMIT', 'STALE_VERSION'].includes(reason.code)
+      await this.finish(active, ['ACTIVE_LIMIT', 'REVISION_LIMIT', 'VALIDATOR_LIMIT', 'INPUT_LIMIT', 'CASE_LIMIT', 'STALE_VERSION', 'IMAGE_LIMIT'].includes(reason.code)
         ? 'interrupted' : reason.code === 'CANCELLED' ? 'cancelled' : 'error', reason);
     } finally { clearTimeout(deadline); }
   }
