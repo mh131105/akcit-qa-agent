@@ -57,7 +57,8 @@ export type WorkIntent = {
   status: 'pending' | 'completed' | 'interrupted' | 'cancelled'; interruption?: Interruption;
   processingId?: string; finishedAt?: string; reason?: { code: string; message: string };
 };
-export type StoredRun = { schemaVersion: 1; run: RunRecord; workIntents: WorkIntent[] };
+export type TargetCredential = { ref: string; username: string; password: string };
+export type StoredRun = { schemaVersion: 1; run: RunRecord; workIntents: WorkIntent[]; targetCredential?: TargetCredential };
 export type StorageErrorCode =
   | 'INVALID_RUN_ID' | 'RUN_NOT_FOUND' | 'RUN_INACCESSIBLE'
   | 'RUN_EXISTS' | 'IDEMPOTENCY_CONFLICT' | 'INVALID_RECORD' | 'AMBIGUOUS_RECORD' | 'STORAGE_FAILURE';
@@ -148,6 +149,16 @@ function validate(record: unknown, runId: string): asserts record is StoredRun {
   if (run.id !== runId || !strings(run, ['id', 'ownerId', 'name', 'applicationName', 'createdAt', 'status', 'phase']) ||
     !(run.ownerId as string).trim() || !utc(run.createdAt) || !object(run.input) ||
     (run.input.credentialRef !== null && typeof run.input.credentialRef !== 'string') ||
+    (record.targetCredential !== undefined && (!object(record.targetCredential) ||
+      !strings(record.targetCredential, ['ref', 'username', 'password']) ||
+      !record.targetCredential.ref || !record.targetCredential.username ||
+      typeof record.targetCredential.password !== 'string' ||
+      record.targetCredential.ref !== run.input.credentialRef)) ||
+    (run.input.accessRevision !== undefined && (!Number.isSafeInteger(run.input.accessRevision) || (run.input.accessRevision as number) < 0)) ||
+    (run.input.authorizedTarget !== undefined && typeof run.input.authorizedTarget !== 'boolean') ||
+    (run.input.startUrl !== undefined && run.input.startUrl !== null && typeof run.input.startUrl !== 'string') ||
+    (run.input.accessProfile !== undefined && run.input.accessProfile !== null && typeof run.input.accessProfile !== 'string') ||
+    (run.input.dataPreparation !== undefined && run.input.dataPreparation !== null && typeof run.input.dataPreparation !== 'string') ||
     !object(run.validationPolicy) ||
     !['artifacts', 'questions', 'answers', 'budgetCycles'].every(key => objects(run[key])) ||
     !objects(run.outputs) || !run.outputs.every(output =>

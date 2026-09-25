@@ -178,12 +178,13 @@ pelo site está documentado em [T2.1](#jornada-pelo-navegador--t21).
 
 ## Acesso dos participantes do piloto
 
-Configure no ambiente da aplicação as duas variáveis documentadas em
+Configure no ambiente da aplicação as variáveis documentadas em
 [`.env.example`](../.env.example). Exemplo local com dados fictícios:
 
 ```dotenv
 APP_ORIGIN=http://127.0.0.1:3000
 PILOT_ALLOWED_EMAILS=ana@example.invalid,bruno@example.invalid
+TARGET_ALLOWED_ORIGINS=http://127.0.0.1:4000,https://alvo.exemplo.test
 ```
 
 `APP_ORIGIN` deve ser a origem exata aberta no navegador: protocolo, host e porta
@@ -195,6 +196,14 @@ controlado existente. Se o túnel usa outra porta local, configure essa origem;
 cliente para definir a origem confiável. Origem informada e inválida é recusada
 na configuração; sem origem, a autenticação responde `503 / AUTH_NOT_CONFIGURED`
 e o healthcheck permanece disponível.
+
+`TARGET_ALLOWED_ORIGINS` recebe uma lista de origens autorizadas separadas por vírgula
+para alvos de teste (ex.: `http://127.0.0.1:4000,https://alvo.exemplo.test`).
+Cada entrada deve ser uma origem exata (protocolo + hostname + porta opcional),
+sem caminho, barra final, query string ou fragmento. Apenas protocolos `http:` e `https:`
+são aceitos. Uma lista vazia ou não configurada não impede a preparação textual ou rascunhos,
+mas recusa a configuração de qualquer alvo na rota `PATCH /api/runs/:id` (`403 / TARGET_NOT_ALLOWED`).
+Alvos locais (como o alvo de demonstração T7) precisam estar explicitamente listados.
 
 `PILOT_ALLOWED_EMAILS` recebe e-mails separados por vírgulas. Espaços externos são
 removidos e letras convertidas para minúsculas, como no cadastro e no login. Lista
@@ -879,6 +888,34 @@ conhecido e reset. Verificações:
 - Defeito conhecido (qty=10) no modo `known-defect`.
 - Reset com lista vazia e sessão anterior inválida.
 - Acesso pelo Chromium da imagem do projeto.
+
+### Configurar acesso ao alvo T7 em uma execução (T8.1)
+
+Para vincular o alvo controlado T7 a uma execução criada no sistema:
+
+1. **Habilitar a origem no ambiente:** certifique-se de que `http://127.0.0.1:4000` está em `TARGET_ALLOWED_ORIGINS`.
+2. **Abrir a execução:** acesse `/execucoes/:id` pelo navegador.
+3. **Preencher o painel "Acesso à aplicação testada":**
+   - **URL inicial:** `http://127.0.0.1:4000`
+   - **Perfil de acesso:** `Operador de reservas`
+   - **Preparação necessária:** `Iniciar com a lista de reservas vazia.` (ou outra instrução de reset)
+   - **Usuário da conta de teste:** `demo` (conforme `DEMO_TARGET_USER`)
+   - **Senha da conta de teste:** `demo1234` (conforme `DEMO_TARGET_PASSWORD`)
+   - **Autorização:** marcar a caixa *"Confirmo que tenho autorização para testar esta aplicação"*.
+4. **Salvar acesso:** clique em *"Salvar acesso"*. O sistema responde com:
+   > Acesso configurado. O login ainda não foi verificado pelo navegador.
+
+#### Onde a credencial fica armazenada
+
+- As credenciais do alvo são salvas em `DATA_DIR/runs/<runId>.json` (ou `/data/runs/<runId>.json` no container), no campo privado `targetCredential` do envelope `StoredRun`, fora do objeto público `run`.
+- O objeto `run.input.credentialRef` armazena apenas um identificador opaco (`cred-<uuid>`).
+- O arquivo possui permissão `0600` em diretório `0700`. A senha é mantida em texto simples no arquivo privado para que o executor automatizado (T8) possa realizar o login no navegador; a projeção pública da API (`GET /api/runs/:id`), os logs e o storage do navegador nunca expõem a senha ou o usuário.
+
+#### Limitações do piloto
+
+- Aceita apenas autenticação direta por usuário e senha (sem suporte a OAuth, autenticação em duas etapas, importação de cookies ou provedores de identidade corporativos).
+- A URL inicial não aceita query string nem fragmento.
+- A validação no salvamento é estática de formato e origem; salvar não abre o navegador nem verifica se as credenciais funcionam no alvo. A autenticação automatizada no navegador é de responsabilidade da etapa seguinte de mapeamento e execução (T8).
 
 ## Referências
 

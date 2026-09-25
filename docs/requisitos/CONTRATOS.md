@@ -1513,6 +1513,79 @@ As aprovações e transições existentes permanecem estritamente preservadas. A
 
 > **Ressalva factual:** A execução existente comprova a integração técnica da preparação textual; ainda não comprova a qualidade do navegador, do relatório ou da validação visual, nem superioridade entre modelos.
 
+## Configuração do acesso privado ao alvo — T8.1
+
+Implementado em T8.1 para permitir que o usuário configure o acesso ao alvo da execução pelo site (`/execucoes/:id`) e pela rota `PATCH /api/runs/:id`. O acesso é pré-requisito para o futuro mapeamento pelo navegador (T8).
+
+### Contrato da rota `PATCH /api/runs/:id`
+
+Permite configurar ou atualizar exclusivamente os dados de acesso ao alvo de uma execução existente do proprietário autenticado.
+
+- **Método:** `PATCH`
+- **Cabeçalhos obrigatórios:** `Cookie` (sessão ativa), `Origin` (validado contra `APP_ORIGIN`), `X-Expected-User-Id` (deve corresponder ao proprietário da execução e à sessão), `Content-Type: application/json`.
+- **Corpo da requisição:**
+
+```json
+{
+  "expectedAccessRevision": 0,
+  "startUrl": "https://alvo.exemplo.test",
+  "accessProfile": "Operador de reservas",
+  "dataPreparation": "Iniciar com a lista de reservas vazia.",
+  "authorizedTarget": true,
+  "credential": {
+    "username": "usuario-teste",
+    "password": "senha-de-teste"
+  }
+}
+```
+
+### Regras de negócio e validações
+
+1. **Revisão e controle de concorrência:**
+   - A revisão de acesso inicial é `0`, inclusive para execuções antigas criadas antes de T8.1.
+   - Cada gravação confirmada com sucesso incrementa a revisão (`accessRevision: currentRevision + 1`).
+   - Se `expectedAccessRevision` for divergente da revisão atual salva, a requisição é recusada com `409 / STALE_VERSION` (*"A revisão da configuração de acesso mudou. Consulte a configuração atualizada antes de salvar novamente."*), sem alteração do registro.
+2. **Credencial de teste:**
+   - Obrigatória no primeiro cadastro de acesso (`body.credential`).
+   - Nas atualizações subsequentes (`accessRevision > 0`), a omissão de `credential` preserva a credencial já salva. Se fornecida, deve conter `username` (até 120 caracteres) e `password` (até 500 caracteres); objeto incompleto é recusado com `400 / INVALID_INPUT`.
+   - A senha é preservada literalmente (sem `trim`, sem aplicação das políticas de senha de conta do nosso produto).
+3. **Armazenamento confidencial (`targetCredential`):**
+   - A credencial é armazenada em campo privado `targetCredential` no envelope `StoredRun`, fora do objeto `run`, de seus artefatos e das saídas dos especialistas.
+   - `run.input.credentialRef` é uma referência opaca gerada pelo backend (`cred-<uuid>`).
+   - A gravação de `run.input`, `run.input.accessRevision` e `targetCredential` ocorre na mesma transação atômica em `RunStore.update`.
+   - O arquivo usa permissão `0600` em diretório `0700`. A senha não é hasheada porque precisará ser usada pelo navegador no login do alvo.
+4. **Restrição de origens (`TARGET_ALLOWED_ORIGINS`):**
+   - O endereço `startUrl` deve pertencer a uma das origens expressamente habilitadas pela equipe em `TARGET_ALLOWED_ORIGINS`.
+   - Aceita apenas protocolos `http:` e `https:`.
+   - Não aceita credenciais embutidas (`user:pass@host`), nem `query string` ou `fragmento`. Origem desconhecida retorna `403 / TARGET_NOT_ALLOWED`.
+5. **Imutabilidade do endereço após início da preparação:**
+   - Em estado `draft`, o endereço pode ser alterado livremente para qualquer origem autorizada.
+   - Após o início da preparação (`status !== 'draft'`), se `startUrl` ainda for nulo, pode ser preenchido pela primeira vez.
+   - Uma vez definido com a preparação iniciada, `startUrl` torna-se imutável (`409 / TARGET_IMMUTABLE`). Trocar de alvo exige criar nova execução.
+6. **Estados permitidos para edição:**
+   - Permitido em `draft` e em estados de espera humana (`awaiting_approval`, `awaiting_input`) nas fases `planning` e `case_design`.
+   - Bloqueado durante processamento ativo (`curation`, etc.), a partir de `mapping` ou em execuções encerradas (`completed`, `cancelled`, `interrupted`) com `409 / INVALID_STATE`.
+7. **Projeção pública (`targetAccess` no `GET` e `PATCH`):**
+   - Devolve exclusivamente:
+     ```json
+     {
+       "targetAccess": {
+         "revision": 1,
+         "startUrl": "https://alvo.exemplo.test",
+         "accessProfile": "Operador de reservas",
+         "dataPreparation": "Iniciar com a lista de reservas vazia.",
+         "authorizedTarget": true,
+         "hasCredential": true,
+         "canEdit": true
+       }
+     }
+     ```
+   - O cliente e a interface pública nunca recebem `username`, `password` ou `credentialRef`.
+8. **Diferenciação na interface:**
+   - Quando não configurado: *"Acesso pendente. Configure o endereço e a conta de teste antes do mapeamento."*
+   - Quando configurado: *"Acesso configurado. O login ainda não foi verificado pelo navegador."*
+   - Salvar o acesso não realiza chamadas de rede externas, não abre o navegador, não verifica login nem dispara modelos ou transição de etapas. A verificação do login pertence à etapa seguinte (T8).
+
 ## Mapeamento, dúvidas e execução
 
 Tela: `{id, name, recognition}`. Transição: `{id, from, action, to}`. Caminho:
@@ -1636,7 +1709,7 @@ internos nem segredos. Autenticação e cadastro seguem os RF do produto.
 | Operação | Responsabilidade |
 | --- | --- |
 | `POST /api/runs` | Criar rascunho com configuração e cópia dos artefatos |
-| `PATCH /api/runs/:id` | Editar rascunho ou completar acesso pendente da mesma aplicação antes do mapeamento; não substituir artefatos após início |
+| `PATCH /api/runs/:id` | Implementado em T8.1 para configurar ou atualizar o acesso privado ao alvo (`startUrl`, perfil, preparo, autorização e credencial); não altera artefatos, plano, casos ou estados |
 | `GET /api/runs` | Histórico do proprietário, com estado e data |
 | `GET /api/runs/:id` | Estado, fase, versões, questões, aprovações, pareceres e resultados; distinguir provisório, validado e desatualizado |
 | `POST /api/runs/:id/start` | Conferir entrada textual e iniciar curadoria/plano, se recurso disponível; acesso pode estar pendente |

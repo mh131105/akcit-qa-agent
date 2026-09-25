@@ -476,8 +476,8 @@ História de usuário, prioridade alta,
 Responsável: um desenvolvedor com atuação backend/interface.
 Revisão: outro integrante, preferencialmente da frente de navegador.
 Base: `develop`, merge `13e39c4`. Branch: `feat/controlled-reservations-target`.
-Estado: **Implementação concluída**; [PR #27](https://github.com/mh131105/akcit-qa-agent/pull/27)
-aberto, com revisão e merge pendentes.
+Estado: **Concluído e integrado**; [PR #27](https://github.com/mh131105/akcit-qa-agent/pull/27)
+integrado em `develop` no commit `000969b`.
 
 Como responsável pela demonstração, quero uma aplicação controlada com login,
 navegação, comportamento correto e um defeito conhecido, para verificar se o
@@ -525,6 +525,71 @@ contexto dos agentes. Operação em
 
 **T7 fornece o alvo real e reproduzível para T8 (mapeamento).** Não declara
 navegação autônoma nem eficácia do agente.
+
+### T8.1 · Configurar acesso privado ao alvo de uma execução
+
+História de usuário, prioridade alta,
+**recorte da [T8 · #11](https://github.com/mh131105/akcit-qa-agent/issues/11)**.
+Responsável: um desenvolvedor com atuação em backend e interface.
+Revisor: outro integrante, preferencialmente da frente B.
+Base: `develop`, contendo o merge `000969b`. Branch: `feat/target-access`.
+Estado: **Implementação concluída**; PR aberto para `develop`.
+
+Como responsável pelos testes, quero informar o endereço, a conta de teste, o
+perfil de acesso e a preparação necessária da aplicação, para que o executor
+tenha os dados necessários ao mapeamento após a aprovação dos casos,
+preservando a privacidade das credenciais.
+
+Implementação:
+- **`src/application/target-access.ts`:** validação de formato e origens autorizadas,
+  conferência de concorrência por `expectedAccessRevision`, armazenamento atômico e
+  projeção pública segura (`targetAccess`) sem expor credenciais.
+- **`src/storage/runs.ts`:** suporte ao campo confidencial `targetCredential` no
+  envelope `StoredRun` fora de `run`; validação estrutural da referência cruzada
+  `run.input.credentialRef` e compatibilidade total com execuções legadas (`revision: 0`).
+- **`src/config.ts` e `.env.example`:** leitura e validação estrita de `TARGET_ALLOWED_ORIGINS`
+  (apenas origens HTTP/HTTPS exatas, sem caminhos, query strings ou fragmentos).
+- **`src/http/api.ts`:** habilitação do método `PATCH` em `/api/runs/:id`, com
+  validação obrigatória de sessão ativa, `Origin`, `X-Expected-User-Id` e tradução
+  de erros em códigos padronizados do produto.
+- **`src/application/plan-approval.ts`:** inclusão da projeção segura `targetAccess`
+  no retorno de `GET /api/runs/:id`.
+- **`src/web/app.js` e `src/web/styles.css`:** painel "Acesso à aplicação testada"
+  em `/execucoes/:id`, exibindo resumo legível quando configurado, formulário expansível
+  com suporte a substituição explícita de credenciais, tratamento de erro/conflito
+  com consulta sob demanda e zero persistência de senhas no storage do navegador.
+
+Verificações:
+- `npm run check`: limpo.
+- `npm test`: **166/166 testes aprovados** (8 novos testes em `test/target-access.test.ts`
+  cobrindo CA-01 a CA-08, além de testes em `authenticated-api.test.ts` e `run-intake-api.test.ts`).
+- `npm run build`: compilação completa.
+- `docker run ... akcit-qa:ci node scripts/smoke-web.mjs`: percurso completo pelo Chromium
+  real no container com 35 verificações (erro de origem não permitida, rede, conflito de versão,
+  salvamento inicial, recarregamento, atualização sem reenviar senha e ausência de segredos no storage).
+- `docker run ... akcit-qa:ci node scripts/smoke-target.mjs`: 15 verificações do alvo T7 aprovadas.
+- `docker run ... akcit-qa:ci node scripts/smoke-runtime.mjs`: 7 verificações de runtime aprovadas.
+
+Critérios atendidos:
+- **CA-01:** proprietário configura o acesso pela página e encontra os dados após reload e reinício.
+- **CA-02:** configuração incompleta, URL inválida ou origem não autorizada são recusadas sem alteração parcial.
+- **CA-03:** isolamento total entre contas; exigência de sessão, `Origin` e `X-Expected-User-Id`.
+- **CA-04:** credencial confidencial não aparece em respostas, logs, artefatos ou storage do navegador.
+- **CA-05:** controle de revisão impede sobreposição concorrente; conflitos informam e exigem consulta atualizada.
+- **CA-06:** plano, casos, aprovações e estados são preservados; `startUrl` torna-se imutável após início da preparação.
+- **CA-07:** interface diferencia claramente "Acesso pendente" de "Acesso configurado. O login ainda não foi verificado pelo navegador".
+- **CA-08:** compatibilidade regressiva garantida com execuções legadas (revisão inicial 0).
+- **CA-09:** formulário navegável por teclado com foco visível e layout responsivo testado em 1366 px e 390 px.
+- **CA-10:** documentação, testes e evidências registradas em `docs/evidencias/t8.1/`.
+
+Evidências em [evidencias/t8.1](evidencias/t8.1/README.md). Captura em
+[evidencias/t8.1/acesso-configurado.png](evidencias/t8.1/acesso-configurado.png).
+Contratos em [CONTRATOS.md](requisitos/CONTRATOS.md#configuração-do-acesso-privado-ao-alvo--t81)
+e operação em [OPERACAO.md](OPERACAO.md#configurar-acesso-ao-alvo-t7-em-uma-execução-t81).
+
+**T8 permanece aberta (Refs #11):** T8.1 entrega exclusivamente a configuração e
+armazenamento seguro do acesso ao alvo. Mapeamento autônomo pelo navegador, execução
+visual dos casos, captura de evidências e gravação de vídeo continuam pendentes.
 
 ## Como encerrar uma tarefa
 

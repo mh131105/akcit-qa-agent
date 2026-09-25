@@ -60,6 +60,24 @@ function field(form, name, label, options = {}) {
   wrapper.append(labelNode, input, hint, error); form.append(wrapper);
   return { input, error };
 }
+function checkboxField(form, name, label, options = {}) {
+  const wrapper = el('div', null, 'field checkbox-field');
+  const labelNode = el('label');
+  const input = el('input');
+  input.type = 'checkbox';
+  input.id = name;
+  input.name = name;
+  input.required = !options.optional;
+  labelNode.append(input, document.createTextNode(' ' + label));
+  const hint = el('small', options.hint || '');
+  hint.id = `${name}-hint`;
+  const error = el('span', '', 'field-error');
+  error.id = `${name}-error`;
+  input.setAttribute('aria-describedby', `${hint.id} ${error.id}`);
+  wrapper.append(labelNode, hint, error);
+  form.append(wrapper);
+  return { input, error };
+}
 function invalid(fieldRef, text) {
   fieldRef.error.textContent = text; fieldRef.input.setAttribute('aria-invalid', String(!!text));
   return !!text;
@@ -95,6 +113,10 @@ function errorText(error) {
     ANSWER_CONFLICT: 'Esta pergunta já possui outra resposta. Consulte a resposta registrada.',
     QUESTION_NOT_FOUND: 'A pergunta não está disponível nesta revisão. Consulte o material atualizado.',
     ACTIVE_LIMIT: 'Esta execução atingiu o limite de processamento ativo. As respostas e os resultados salvos estão preservados.',
+    TARGET_NOT_ALLOWED: 'O endereço informado não pertence às origens autorizadas pela equipe do piloto.',
+    AUTHORIZED_TARGET_REQUIRED: 'Confirme a autorização para testar a aplicação.',
+    INVALID_URL: 'Endereço da aplicação inválido. Use HTTP ou HTTPS habilitado pela equipe, sem query string ou fragmento.',
+    TARGET_IMMUTABLE: 'O endereço da aplicação não pode ser alterado após o início da preparação. Trocar o alvo exige outra execução.',
   };
   return texts[error.code] || (error.status === 409 ? 'O registro não permite esta operação. Atualize a consulta e, se persistir, solicite ajuda à equipe.' : 'Não foi possível concluir a solicitação. Verifique a conexão e tente novamente.');
 }
@@ -358,6 +380,198 @@ function curationPanel(curation) {
   }
   return panel;
 }
+function targetAccessPanel(run, accountId) {
+  const access = run.targetAccess;
+  const panel = el('section', null, 'panel');
+  panel.id = 'target-access-panel';
+
+  const isConfigured = Boolean(access.hasCredential && access.startUrl);
+  panel.append(
+    el('p', access.revision > 0 ? `Acesso à aplicação testada · Revisão ${access.revision}` : 'Acesso à aplicação testada', 'eyebrow'),
+    el('h2', 'Acesso à aplicação testada'),
+    message(
+      isConfigured
+        ? 'Acesso configurado. O login ainda não foi verificado pelo navegador.'
+        : 'Acesso pendente. Configure o endereço e a conta de teste antes do mapeamento.'
+    )
+  );
+
+  if (isConfigured) {
+    const dl = el('dl', null, 'metadata');
+    for (const [title, value] of [
+      ['URL inicial', access.startUrl],
+      ['Perfil de acesso', access.accessProfile || 'Não informado'],
+      ['Preparação necessária', access.dataPreparation || 'Nenhuma'],
+      ['Credencial de teste', 'Credencial cadastrada'],
+      ['Autorização', access.authorizedTarget ? 'Confirmada pelo usuário' : 'Pendente'],
+    ]) {
+      const item = el('div');
+      item.append(el('dt', title), el('dd', value));
+      dl.append(item);
+    }
+    panel.append(dl);
+  }
+
+  if (!access.canEdit) {
+    panel.append(el('p', 'A configuração de acesso não pode ser alterada no estado atual da execução.', 'hint'));
+    return panel;
+  }
+
+  const editContainer = el('details', null, 'plan-section');
+  if (!isConfigured) editContainer.open = true;
+  editContainer.append(el('summary', isConfigured ? 'Alterar configuração de acesso' : 'Configurar acesso'));
+
+  const lead = el('p', 'Informe a conta de teste e o endereço da aplicação que será testada. Esta conta é diferente da conta usada para entrar no nosso produto.', 'hint');
+  const form = el('form');
+  form.noValidate = true;
+
+  const urlField = field(form, 'target-start-url', 'URL inicial', {
+    hint: run.status !== 'draft' && access.startUrl
+      ? 'Endereço fixado após o início da preparação (imutável nesta execução).'
+      : 'Protocolo HTTP ou HTTPS habilitado pela equipe, sem query string ou fragmento. Ex.: http://127.0.0.1:4000',
+  });
+  urlField.input.value = access.startUrl || '';
+  if (run.status !== 'draft' && access.startUrl) {
+    urlField.input.readOnly = true;
+  }
+
+  const profileField = field(form, 'target-access-profile', 'Perfil de acesso', {
+    hint: 'Ex.: operador de reservas, administrador, recepcionista.',
+  });
+  profileField.input.value = access.accessProfile || '';
+
+  const prepField = field(form, 'target-data-preparation', 'Preparação necessária', {
+    textarea: true,
+    hint: 'Instruções para o estado inicial da aplicação (ex.: iniciar com a lista de reservas vazia). Quando não houver preparo adicional, declare explicitamente.',
+  });
+  prepField.input.value = access.dataPreparation || '';
+
+  let replaceCredBox = null;
+  let usernameField = null;
+  let passwordField = null;
+
+  if (isConfigured) {
+    const credSection = el('div', null, 'plan-section');
+    credSection.append(el('p', 'Credencial cadastrada no registro seguro.', 'hint'));
+    replaceCredBox = checkboxField(credSection, 'target-replace-credential', 'Substituir usuário e senha da conta de teste', { optional: true });
+
+    const credInputs = el('div');
+    credInputs.hidden = true;
+    usernameField = field(credInputs, 'target-username', 'Usuário da conta de teste', {
+      optional: true,
+      autocomplete: 'off',
+      hint: 'Conta na aplicação testada (diferente da conta do nosso produto).',
+    });
+    passwordField = field(credInputs, 'target-password', 'Senha da conta de teste', {
+      optional: true,
+      type: 'password',
+      autocomplete: 'off',
+      hint: 'Senha da conta de teste. Preservada literalmente.',
+    });
+    credSection.append(credInputs);
+    form.append(credSection);
+
+    replaceCredBox.input.addEventListener('change', () => {
+      credInputs.hidden = !replaceCredBox.input.checked;
+      if (credInputs.hidden) {
+        usernameField.input.value = '';
+        passwordField.input.value = '';
+      }
+    });
+  } else {
+    usernameField = field(form, 'target-username', 'Usuário da conta de teste', {
+      autocomplete: 'off',
+      hint: 'Conta na aplicação testada (diferente da conta do nosso produto).',
+    });
+    passwordField = field(form, 'target-password', 'Senha da conta de teste', {
+      type: 'password',
+      autocomplete: 'off',
+      hint: 'Senha da conta de teste. Preservada literalmente.',
+    });
+  }
+
+  const authBox = checkboxField(form, 'target-authorized', 'Confirmo que tenho autorização para testar esta aplicação', {
+    hint: 'A autorização do responsável é obrigatória antes do mapeamento e execução.',
+  });
+  authBox.input.checked = Boolean(access.authorizedTarget);
+
+  const notice = message();
+  const submit = button('Salvar acesso');
+  submit.type = 'submit';
+  form.append(notice, submit);
+  editContainer.append(lead, form);
+  panel.append(editContainer);
+
+  let saving = false;
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (saving) return;
+
+    let hasError = false;
+    if (invalid(urlField, !urlField.input.value.trim() ? 'Informe o endereço da aplicação.' : '')) hasError = true;
+    if (invalid(profileField, !profileField.input.value.trim() ? 'Informe o perfil de acesso.' : '')) hasError = true;
+    if (invalid(prepField, !prepField.input.value.trim() ? 'Informe a preparação necessária ou declare ausência de preparo.' : '')) hasError = true;
+    if (invalid(authBox, !authBox.input.checked ? 'É necessário confirmar a autorização para testar a aplicação.' : '')) hasError = true;
+
+    const shouldSendCred = !isConfigured || (replaceCredBox && replaceCredBox.input.checked);
+    if (shouldSendCred) {
+      if (invalid(usernameField, !usernameField.input.value.trim() ? 'Informe o usuário da conta de teste.' : '')) hasError = true;
+      if (invalid(passwordField, !passwordField.input.value ? 'Informe a senha da conta de teste.' : '')) hasError = true;
+    }
+
+    if (hasError) return;
+
+    const payload = {
+      expectedAccessRevision: access.revision,
+      startUrl: urlField.input.value.trim(),
+      accessProfile: profileField.input.value.trim(),
+      dataPreparation: prepField.input.value.trim(),
+      authorizedTarget: true,
+      ...(shouldSendCred ? { credential: { username: usernameField.input.value.trim(), password: passwordField.input.value } } : {}),
+    };
+
+    if (bytes(JSON.stringify(payload)) > limit) {
+      tell(notice, 'O envio excede o limite de 16 KiB. Reduza os dados informados.', true);
+      return;
+    }
+
+    saving = true;
+    submit.disabled = true;
+    tell(notice, 'Salvando configuração de acesso…');
+
+    try {
+      await sameAccount(accountId);
+      if (user?.id !== accountId) return;
+
+      await api(`/runs/${encodeURIComponent(run.id)}`, {
+        accountId,
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+
+      // Limpa os campos secretos da memória e do DOM
+      if (passwordField) passwordField.input.value = '';
+      if (usernameField && shouldSendCred) usernameField.input.value = '';
+
+      await detailPage('Acesso salvo com sucesso. Acesso configurado. O login ainda não foi verificado pelo navegador.');
+      main.focus();
+    } catch (error) {
+      if (user?.id !== accountId) return;
+      if (passwordField) passwordField.input.value = '';
+      if (error.status === 409) {
+        tell(notice, `${errorText(error)} Consulte a configuração salva antes de tentar novamente; a credencial não será reenviada automaticamente.`, true);
+        form.append(button('Consultar registro atualizado', () => detailPage('', false), 'secondary'));
+      } else {
+        tell(notice, errorText(error), true);
+        saving = false;
+        submit.disabled = false;
+      }
+    }
+  });
+
+  return panel;
+}
+
 function casesPanel(run, accountId, pending) {
   const cases = run.cases;
   const panel = el('section', null, 'panel');
@@ -543,6 +757,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
     summary.append(message([roles[run.progress.activeRole] || run.progress.activeRole, activities[run.progress.activity] || run.progress.activity].filter(Boolean).join(' · ')));
   }
   if (run.stopReason) main.append(message(run.stopReason.message, ['error', 'interrupted'].includes(run.status)));
+  if (run.targetAccess) main.append(targetAccessPanel(run, accountId));
   if (run.cases) main.append(casesPanel(run, accountId, pending));
   if (run.curation) main.append(curationPanel(run.curation));
   if (run.questions?.length) main.append(questionPanel(run, accountId, pending));

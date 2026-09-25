@@ -13,6 +13,7 @@ import {
   type CaseApprovalState,
 } from '../domain/case-approval.js';
 import { RunStore, StorageError, type StorageErrorCode, type RunOutput, type WorkIntent, type PreparationAnswer, type RunRecord } from '../storage/runs.js';
+import { publicTargetAccess, type TargetAccessReview } from './target-access.js';
 
 export type PlanCommandRequest = Readonly<{
   type: 'approve_plan' | 'request_plan_changes' | 'continue' | 'approve_cases' | 'request_case_changes';
@@ -61,6 +62,7 @@ export type PlanReview = {
     validations: PlanApprovalState['validations'];
   } | null;
   approvals: PlanDecision[];
+  targetAccess: TargetAccessReview;
 };
 export type PlanReviewResult =
   | { ok: true; review: PlanReview }
@@ -178,7 +180,8 @@ export async function getPlanReview(
   context: PlanCommandContext,
 ): Promise<PlanReviewResult> {
   try {
-    const { run } = await store.read(runId);
+    const record = await store.read(runId);
+    const run = record.run;
     if (!authorized(run.ownerId, context)) {
       return { ok: false, error: { code: 'UNAUTHORIZED', message: 'Operação não autorizada para esta execução.' } };
     }
@@ -238,6 +241,7 @@ export async function getPlanReview(
           })),
       } : null,
       approvals: publicPlanDecisions(run.approvals),
+      targetAccess: publicTargetAccess(run, Boolean(record.targetCredential && record.run.input?.credentialRef === record.targetCredential.ref)),
     } };
   } catch (error) {
     const failure = error instanceof StorageError ? error : new StorageError('STORAGE_FAILURE');

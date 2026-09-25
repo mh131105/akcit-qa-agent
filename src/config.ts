@@ -21,6 +21,22 @@ function applicationOrigin(value: string | undefined): string | undefined {
   }
 }
 
+function parseTargetAllowedOrigins(value: string | undefined): string[] {
+  if (!value?.trim()) return [];
+  const entries = [...new Set(value.split(',').map(item => item.trim()).filter(Boolean))];
+  return entries.map(entry => {
+    try {
+      const url = new URL(entry);
+      if (url.origin !== entry || (url.protocol !== 'http:' && url.protocol !== 'https:')) {
+        throw new Error();
+      }
+      return url.origin;
+    } catch {
+      throw new Error('TARGET_ALLOWED_ORIGINS contém origem inválida.');
+    }
+  });
+}
+
 const VALID_THINKING_LEVELS = new Set<string>(['off', 'low', 'high']);
 
 export function readConfig(env: NodeJS.ProcessEnv = process.env) {
@@ -32,6 +48,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('PORT inválida.');
   const pilotAllowedEmails = [...new Set((env.PILOT_ALLOWED_EMAILS ?? '').split(',').map(normalizeEmail).filter(Boolean))];
   if (!pilotAllowedEmails.every(isValidEmail)) throw new Error('PILOT_ALLOWED_EMAILS contém e-mail inválido.');
+  const targetAllowedOrigins = parseTargetAllowedOrigins(env.TARGET_ALLOWED_ORIGINS);
   const preparationModels = {} as Record<PreparationRole, SpecialistModel>;
   let preparationConfigError: string | undefined;
   const globalThinking = env.PI_THINKING_LEVEL?.trim();
@@ -68,6 +85,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     revision: env.APP_REVISION ?? 'local',
     appOrigin: applicationOrigin(env.APP_ORIGIN),
     pilotAllowedEmails,
+    targetAllowedOrigins,
     maxConcurrentBrowserSessions: 1,
     preparationModels,
     preparationConfigError,
