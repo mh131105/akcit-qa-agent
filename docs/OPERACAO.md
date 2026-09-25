@@ -874,7 +874,8 @@ conhecido e reset. Verificações:
 - Login incorreto e acesso direto a página protegida.
 - Percurso completo: Login → Início → Reservas → Nova reserva → Confirmar → Lista.
 - Ausência de reserva após rejeição.
-- Preservação do comentário após recarregar a página.
+- Preservação do comentário após recarregar a página, sem duplicar a reserva
+  (POST redireciona com 303 para GET da lista).
 - Defeito conhecido (qty=10) no modo `known-defect`.
 - Reset com lista vazia e sessão anterior inválida.
 - Acesso pelo Chromium da imagem do projeto.

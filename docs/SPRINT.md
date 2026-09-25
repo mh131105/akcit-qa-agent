@@ -476,7 +476,8 @@ História de usuário, prioridade alta,
 Responsável: um desenvolvedor com atuação backend/interface.
 Revisão: outro integrante, preferencialmente da frente de navegador.
 Base: `develop`, merge `13e39c4`. Branch: `feat/controlled-reservations-target`.
-Estado: **Implementação concluída**; PR e revisão pendentes.
+Estado: **Implementação concluída**; [PR #27](https://github.com/mh131105/akcit-qa-agent/pull/27)
+aberto, com revisão e merge pendentes.
 
 Como responsável pela demonstração, quero uma aplicação controlada com login,
 navegação, comportamento correto e um defeito conhecido, para verificar se o
@@ -488,18 +489,22 @@ Implementação:
   sintética), sessão em memória, navegação, reservas com validação server-side.
   Modos `reference` e `known-defect` (rejeita qty 10). Sem dependências além do
   stdlib. Exporta `createDemoTarget()` para testes.
-- **`test/demo-target.test.ts`:** 13 testes cobrindo a matriz completa (1, 2,
-  9, 10, 0, 11, 1.5, vazio), comentários, XSS, reset e ambos os modos.
+- **`test/demo-target.test.ts`:** 14 testes cobrindo a matriz completa (1, 2,
+  9, 10, 0, 11, 1.5, vazio), comentários, XSS, reset, ambos os modos e
+  redirecionamento após POST sem duplicação ao recarregar.
 - **`scripts/smoke-target.mjs`:** jornada no Chromium com `playwright-core`,
   cobrindo login incorreto, acesso protegido, percurso completo, defeito
   conhecido, reset com sessão inválida e lista vazia.
 
 Verificações:
 - `npm run check`: limpo.
-- `npm test`: **157/157 testes** (144 anteriores preservados).
+- `npm test`: **158/158 testes** (144 anteriores preservados).
 - `npm run build`: compilação completa.
-- `npm run smoke:target`: jornada pelo navegador com 14 verificações.
-- CI: smoke executado na imagem `akcit-qa:ci` com as mesmas restrições.
+- `npm run smoke:target`: jornada pelo navegador com 15 verificações.
+- Validação local na imagem runtime com as restrições do CI: os três smokes
+  (runtime, web e alvo) passaram após corrigir o reenvio do POST ao recarregar.
+  Reprodução e resultados registrados em [evidencias/t7](evidencias/t7/README.md).
+  O resultado remoto vigente fica nos checks do PR.
 
 Critérios:
 - **CA-01:** aplicação inicia por `npm run demo:target` e o Chromium do container

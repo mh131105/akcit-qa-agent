@@ -3,13 +3,15 @@
 ## Commit
 
 Branch: `feat/controlled-reservations-target`
-Commit: _(preencher após commit)_
+Código validado: `7ef923c` (correção sobre `c333a6a`).
+PR: [#27](https://github.com/mh131105/akcit-qa-agent/pull/27).
 
 ## Ambiente
 
-- Node.js 24
-- Chromium: versão da imagem do projeto
-- Container: `akcit-qa:ci` com as restrições do CI
+- Node.js 24.21.0; Chromium 153.0.8010.52; Debian 12.
+- Imagem runtime construída localmente como `akcit-qa:pr27-fix`, com as
+  restrições do CI: 1 CPU, 2 GiB de memória, filesystem somente leitura,
+  capacidades removidas e diretórios temporários em tmpfs.
 
 ## Comandos de verificação
 
@@ -36,7 +38,31 @@ docker run --rm --cpus=1 --memory=2g --shm-size=512m \
 
 ## Resultados
 
-_(preencher com saída do smoke e capturas)_
+Validação local em 25/09/2026:
+
+- `npm run check`: aprovado.
+- `npm test`: 158 testes aprovados, incluindo 14 do alvo.
+- Build da imagem runtime (inclui `npm run build`): aprovado.
+- Na mesma imagem: smoke runtime com 7 verificações; smoke web com 33;
+  smoke do alvo com 15. Todos aprovados.
+- Testes de deploy: 6 aprovados (`python3 -m unittest discover -s deploy -p 'test_*.py'`).
+- Resultado do alvo: [target-result.json](target-result.json), duração de 4.315 ms.
+
+### Falha do CI e regressão
+
+O [CI original](https://github.com/mh131105/akcit-qa-agent/actions/runs/36093025234)
+falhou porque o smoke encontrou duas reservas quando esperava uma. A falha foi
+reproduzida localmente: o POST retornava a lista diretamente e recarregá-la
+reenviava o formulário, duplicando a reserva.
+
+O alvo agora responde ao POST com 303 para GET `/reservas`, tanto na criação
+quanto na rejeição. A mensagem é consumida uma única vez na sessão. O teste de
+regressão falhou antes da correção (200 em vez de 303) e passou depois, nos dois
+modos. O smoke confirma GET após recarregar e compara as mesmas linhas da lista,
+incluindo seus IDs, para detectar duplicações.
+
+Estes resultados são da execução local na imagem final. O resultado remoto da
+branch deve ser consultado nos checks do PR.
 
 ## Limitações
 
