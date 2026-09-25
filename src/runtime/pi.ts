@@ -6,11 +6,17 @@ import type { AgentRole } from '../agents/registry.js';
 
 export type PreparationRole = 'artifact-curator' | 'test-designer' | 'output-validator';
 export type PreparationTask = 'curate-artifacts' | 'create-test-plan' | 'create-test-cases' | 'validate-output';
-export interface SpecialistModel { provider: string; model: string }
+export type ThinkingLevel = 'off' | 'low' | 'high';
+export interface SpecialistModel {
+  provider: string;
+  model: string;
+  thinkingLevel?: ThinkingLevel;
+}
 export interface SpecialistTask {
   role: PreparationRole;
   task: PreparationTask;
   model: SpecialistModel;
+  thinkingLevel?: ThinkingLevel;
   authPath?: string;
   prompt: string;
   signal: AbortSignal;
@@ -19,6 +25,7 @@ export interface SpecialistTask {
 export interface SpecialistResult {
   payload: unknown;
   metadata: SpecialistModel & {
+    thinkingLevel: ThinkingLevel;
     durationMs: number;
     usage?: { input: number; output: number; cacheRead?: number; cacheWrite?: number; totalTokens?: number };
     estimatedCost?: number;
@@ -84,7 +91,10 @@ export async function executeSpecialistTask(task: SpecialistTask): Promise<Speci
   let session: Awaited<ReturnType<typeof createAgentSession>>['session'] | undefined;
   let aborting: Promise<void> | undefined;
   const abort = () => { aborting ??= session?.abort().catch(() => undefined); };
-  let metadata: SpecialistResult['metadata'] = { ...task.model, durationMs: 0 };
+  const thinkingLevel: ThinkingLevel = task.thinkingLevel ?? task.model.thinkingLevel ??
+    (task.model.provider === 'deepseek' && task.model.model === 'deepseek-v4-pro' ? 'high'
+      : task.model.provider === 'deepseek' && task.model.model === 'deepseek-flash' ? 'low' : 'off');
+  let metadata: SpecialistResult['metadata'] = { ...task.model, thinkingLevel, durationMs: 0 };
   try {
     signal.throwIfAborted();
     if (!Object.hasOwn(permittedTasks, task.role) || !permittedTasks[task.role].includes(task.task)) {
@@ -110,8 +120,7 @@ export async function executeSpecialistTask(task: SpecialistTask): Promise<Speci
     ({ session } = await createAgentSession({
       cwd: directory, agentDir: directory, modelRuntime, model, resourceLoader, settingsManager,
       sessionManager: SessionManager.inMemory(directory), noTools: 'all', tools: [],
-      thinkingLevel: task.model.provider === 'deepseek' && task.model.model === 'deepseek-v4-pro' ? 'high'
-        : task.model.provider === 'deepseek' && task.model.model === 'deepseek-flash' ? 'low' : 'off',
+      thinkingLevel,
     }));
     session.setAutoCompactionEnabled(false);
     session.setAutoRetryEnabled(false);

@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import type { PreparationRole, SpecialistModel } from './runtime/pi.js';
+import type { PreparationRole, SpecialistModel, ThinkingLevel } from './runtime/pi.js';
 
 export const normalizeEmail = (email: string): string => email.trim().toLowerCase();
 export const isValidEmail = (email: string): boolean =>
@@ -21,6 +21,8 @@ function applicationOrigin(value: string | undefined): string | undefined {
   }
 }
 
+const VALID_THINKING_LEVELS = new Set<string>(['off', 'low', 'high']);
+
 export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   const environment = env.APP_ENV ?? 'local';
   if (!['local', 'development', 'production'].includes(environment)) {
@@ -32,6 +34,10 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   if (!pilotAllowedEmails.every(isValidEmail)) throw new Error('PILOT_ALLOWED_EMAILS contém e-mail inválido.');
   const preparationModels = {} as Record<PreparationRole, SpecialistModel>;
   let preparationConfigError: string | undefined;
+  const globalThinking = env.PI_THINKING_LEVEL?.trim();
+  if (globalThinking && !VALID_THINKING_LEVELS.has(globalThinking)) {
+    preparationConfigError ??= 'PI_THINKING_LEVEL deve ser off, low ou high.';
+  }
   for (const [role, prefix] of [
     ['artifact-curator', 'PI_CURATOR'], ['test-designer', 'PI_PLANNER'], ['output-validator', 'PI_VALIDATOR'],
   ] as const) {
@@ -40,8 +46,18 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     if (Boolean(provider) !== Boolean(model)) {
       preparationConfigError ??= `${prefix}_PROVIDER e ${prefix}_MODEL devem ser configurados juntos.`;
     }
-    preparationModels[role] = provider || model ? { provider, model } : {
-      provider: env.PI_PROVIDER?.trim() ?? '', model: env.PI_MODEL?.trim() ?? '',
+    const roleThinking = env[`${prefix}_THINKING_LEVEL`]?.trim();
+    if (roleThinking && !VALID_THINKING_LEVELS.has(roleThinking)) {
+      preparationConfigError ??= `${prefix}_THINKING_LEVEL deve ser off, low ou high.`;
+    }
+    const rawThinking = roleThinking || globalThinking;
+    const thinkingLevel = (rawThinking && VALID_THINKING_LEVELS.has(rawThinking))
+      ? (rawThinking as ThinkingLevel)
+      : undefined;
+    preparationModels[role] = {
+      provider: provider || env.PI_PROVIDER?.trim() || '',
+      model: model || env.PI_MODEL?.trim() || '',
+      ...(thinkingLevel ? { thinkingLevel } : {}),
     };
   }
   return {
@@ -59,13 +75,25 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   };
 }
 
-/** Validado ao iniciar, para permitir salvar rascunhos antes da configuração do Pi. */
-export function resolvePreparationModels(config: ReturnType<typeof readConfig>) {
+/** Validado ao iniciar, para permitir salvar rascunhos antes da configuração do Pi.
+ * Resolve explicitamente thinkingLevel para cada especialista; na ausência,
+ * aplica a compatibilidade: deepseek-v4-pro -> high, deepseek-flash -> low, demais -> off.
+ */
+export function resolvePreparationModels(config: ReturnType<typeof readConfig>): Record<PreparationRole, SpecialistModel & { thinkingLevel: ThinkingLevel }> {
   if (config.preparationConfigError) throw new Error(config.preparationConfigError);
-  for (const [role, model] of Object.entries(config.preparationModels)) {
+  const resolved = {} as Record<PreparationRole, SpecialistModel & { thinkingLevel: ThinkingLevel }>;
+  for (const [role, model] of Object.entries(config.preparationModels) as [PreparationRole, SpecialistModel][]) {
     if (!model.provider || !model.model) {
       throw new Error(`Configure PI_PROVIDER e PI_MODEL, ou o par específico de ${role}, para preparar o plano.`);
     }
+    const defaultThinkingLevel: ThinkingLevel = model.provider === 'deepseek'
+      ? (model.model === 'deepseek-v4-pro' ? 'high' : model.model === 'deepseek-flash' ? 'low' : 'off')
+      : 'off';
+    resolved[role] = {
+      provider: model.provider,
+      model: model.model,
+      thinkingLevel: model.thinkingLevel ?? defaultThinkingLevel,
+    };
   }
-  return config.preparationModels;
+  return resolved;
 }

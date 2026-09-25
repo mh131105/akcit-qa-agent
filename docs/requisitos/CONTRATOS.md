@@ -1373,6 +1373,10 @@ Continuam três produções por saída/ciclo, duas tentativas técnicas de valid
 revisão, 120 segundos por chamada e **45 minutos ativos acumulados por execução**.
 A entrada em casos conserva o tempo anterior e o histórico de chamadas; espera
 humana não consome tempo ativo. `PreparationCall.phase` aceita `case_design`.
+`PreparationCall` registra o nível de raciocínio efetivamente aplicado (`thinkingLevel: 'off' | 'low' | 'high'`),
+junto de papel, fase, provedor e modelo. Chamadas novas persistem o nível aplicado (inclusive no runtime e em falhas onde a chamada iniciou);
+registros legados sem esse campo permanecem legíveis e válidos, sem preenchimento retroativo presumido. O raciocínio
+interno não é persistido nem publicado.
 `WorkIntent` recebe `processingId` e termina com `completed`, `interrupted` ou
 `cancelled`, horário e motivo quando pertinente. O leitor aceita esses novos registros
 e os antigos `pending`/`interrupted` com `interruption: {reason: service_restart, at}`;
@@ -1394,6 +1398,22 @@ Conteúdo aguardando parecer é provisório; interrupções mostram o motivo. N�
 botão de aprovação dos casos neste recorte. Conta, origem e renderização como texto
 mantêm os controles existentes. Testes simulados e demonstração real estão
 separados em [evidencias/t6.1](../evidencias/t6.1/README.md).
+
+### Contratos de etapas futuras e validação visual
+
+Estas regras ficam definidas no contrato agora e serão implementadas junto de cada etapa correspondente:
+
+- **Projetista em `route_detail`:** recebe o mapa estruturado e validado. Usa Pro (`deepseek-v4-pro` com raciocínio `high`) para associar percursos aos casos, preservando os campos já aprovados (IDs, escopo, pré-condições, preparação, dados, técnicas, expectativa e fontes).
+- **Executor:** usa Flash (`deepseek-flash` com raciocínio `high`) tanto no mapeamento quanto na execução. As ferramentas realizam cliques, capturas e gravações; o modelo decide as ações.
+- **Validador visual:** continua sendo o mesmo papel `output-validator`, com sessão independente e perfil Flash/high (`deepseek-flash`). Recebe fontes, saída sob revisão e evidências pertinentes (capturas de tela), não apenas a descrição do executor.
+- **Validador textual:** usa Pro/high (`deepseek-v4-pro`). Na revisão do relatório, confere fidelidade aos resultados e referências previamente validados.
+- **Conclusão que exige imagem:** deve obrigatoriamente passar pela validação visual. Um parecer textual não pode declarar que examinou uma imagem.
+- **Vídeos:** permanecem evidências para o usuário. Para análise automática pelo validador, utilizam-se capturas ou quadros identificados por instante, sem pressupor suporte nativo a arquivos de vídeo.
+
+A seleção do perfil (textual vs visual) é realizada pelo backend conforme a tarefa e a fase; essa escolha não é delegada ao agente e não há validação recursiva.
+As aprovações e transições existentes permanecem estritamente preservadas. As fases futuras continuam desabilitadas até suas entregas: a política documentada não significa que já existam implementação ou evidências de funcionamento.
+
+> **Ressalva factual:** A execução existente comprova a integração técnica da preparação textual; ainda não comprova a qualidade do navegador, do relatório ou da validação visual, nem superioridade entre modelos.
 
 ## Mapeamento, dúvidas e execução
 

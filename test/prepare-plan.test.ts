@@ -280,7 +280,7 @@ test('T4.1: metadados adicionais inválidos são recusados sem substituir regist
 
 test('T4.1: prazo ativo aborta chamada em andamento, preserva consumo de erro e não avança', async t => {
   let wasAborted = false;
-  const h = await setup(t, { limits: { activeMs: 40 }, modelCall: async task => {
+  const h = await setup(t, { limits: { activeMs: 150 }, modelCall: async task => {
     await new Promise<void>(resolve => {
       if (task.signal.aborted) return resolve();
       task.signal.addEventListener('abort', () => resolve(), { once: true });
@@ -314,4 +314,40 @@ test('T4.1: falha de armazenamento após salvar parecer não repete validação'
   assert.equal(run.status, 'error'); assert.equal(run.preparation!.stopReason!.code, 'STORAGE_FAILURE');
   assert.equal(run.validations.length, 1); assert.equal(h.calls.length, 2);
   assert.equal(run.outputs.length, 1);
+});
+
+test('T4.1: encaminhamento e persistência de thinkingLevel e compatibilidade com registros legados', async t => {
+  const env = {
+    PI_CURATOR_PROVIDER: 'deepseek', PI_CURATOR_MODEL: 'deepseek-flash', PI_CURATOR_THINKING_LEVEL: 'low',
+    PI_PLANNER_PROVIDER: 'deepseek', PI_PLANNER_MODEL: 'deepseek-v4-pro', PI_PLANNER_THINKING_LEVEL: 'high',
+    PI_VALIDATOR_PROVIDER: 'deepseek', PI_VALIDATOR_MODEL: 'deepseek-v4-pro', PI_VALIDATOR_THINKING_LEVEL: 'high',
+  };
+  const h = await setup(t, {}, env);
+  await h.coordinator.start(h.id, 'owner'); await h.coordinator.settled();
+  const run = await h.read();
+
+  // Encaminhamento: cada chamada recebeu o thinkingLevel configurado
+  assert.equal(h.calls[0]!.role, 'artifact-curator');
+  assert.equal(h.calls[0]!.model.thinkingLevel, 'low');
+  assert.equal(h.calls[1]!.role, 'output-validator');
+  assert.equal(h.calls[1]!.model.thinkingLevel, 'high');
+
+  // Persistência: as chamadas registradas salvam o thinkingLevel aplicado
+  assert.ok(run.preparation);
+  assert.equal(run.preparation.calls[0]!.thinkingLevel, 'low');
+  assert.equal(run.preparation.calls[1]!.thinkingLevel, 'high');
+
+  // Registros antigos sem thinkingLevel continuam legíveis sem preenchimento retroativo
+  const path = join(h.dir, 'runs', `${h.id}.json`);
+  const record = JSON.parse(await readFile(path, 'utf8'));
+  delete record.run.preparation.calls[0].thinkingLevel;
+  await writeFile(path, JSON.stringify(record));
+  const reloaded = (await h.store.read(h.id)).run;
+  assert.equal(reloaded.preparation!.calls[0]!.thinkingLevel, undefined);
+  assert.equal(reloaded.preparation!.calls[1]!.thinkingLevel, 'high');
+
+  // Nível inválido gravado é recusado pela validação estrutural
+  record.run.preparation.calls[0].thinkingLevel = 'invalid_level';
+  await writeFile(path, JSON.stringify(record));
+  await assert.rejects(h.store.read(h.id), { code: 'INVALID_RECORD' });
 });

@@ -411,6 +411,7 @@ export class PreparationCoordinator {
       if (failure) saved.errorCode = this.failure(failure).code;
       // Lista explícita: não salvar texto bruto, raciocínio ou metadados arbitrários do provedor.
       const metadata = result?.metadata ?? failedMetadata;
+      if (metadata?.thinkingLevel) saved.thinkingLevel = metadata.thinkingLevel;
       const usage = metadata?.usage;
       if (usage) {
         saved.usage = {};

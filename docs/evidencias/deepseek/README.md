@@ -28,3 +28,25 @@ Para reproduzir: configurar os pares e a chave conforme `docs/OPERACAO.md`, cria
 uma execução com o texto de `input[0].text`, preparar o plano, revisar/aprovar sua
 versão e acionar a geração dos casos. Usar armazenamento próprio para cada ensaio.
 Registrar versões, modelos, tempo, consumo e pareceres; não comitar credenciais.
+
+## Configuração explícita de raciocínio (thinkingLevel) e padronização da distribuição — 24/09/2026
+
+Registro da refatoração técnica que tornou o nível de raciocínio (`thinkingLevel`) explicitamente configurável no protótipo, integrando `off`, `low` e `high` ao runtime do Pi, à validação do ambiente (`src/config.ts`) e à persistência das chamadas (`src/storage/runs.ts` e `src/application/prepare-plan.ts`).
+
+### Comandos executados e verificação
+
+Executados localmente com Node.js 24:
+
+```sh
+npm run check
+npm test
+```
+
+Resultados:
+- `npm run check`: TypeScript verificado com zero erros.
+- `npm test`: **130 testes aprovados** (0 falhas), cobrindo configuração explícita, recusa imediata de níveis inválidos, suporte a Flash com níveis diferentes (`low`, `high`, `off`), nível aplicado à sessão Pi, encaminhamento na preparação, persistência em `PreparationCall`, leitura retrocompatível de registros legados sem campos presumidos e entrega de Pro/high para projetista e validador na geração de casos.
+- Todos os testes automatizados operam sem inferência paga, com mocks controlados e isolamento em diretórios temporários.
+
+O registro histórico de inferência real em [resultado.json](resultado.json) permanece integralmente preservado.
+
+> **Ressalva factual:** A execução existente comprova a integração técnica da preparação textual; ainda não comprova a qualidade do navegador, do relatório ou da validação visual, nem superioridade entre modelos.
