@@ -34,7 +34,7 @@ const PROFILES = {
 const env = { ...process.env, ...PROFILES };
 const humanDir = process.env.EVAL_HUMAN_DIR ? resolvePath(process.env.EVAL_HUMAN_DIR) : null;
 const evidenceDir = resolvePath(process.env.EVAL_EVIDENCE_DIR ?? join(tmpdir(), 'akcit-eval-mapping-real-' + Date.now()));
-function resolvePath(path) { return join(process.cwd(), path); }
+function resolvePath(path) { return path.startsWith('/') ? path : join(process.cwd(), path); }
 const TARGET_USER = process.env.DEMO_TARGET_USER ?? 'demo';
 const TARGET_PASSWORD = process.env.DEMO_TARGET_PASSWORD ?? 'demo1234';
 const MATERIAL = 'US-01: Criar reservas.\nCA-01: A quantidade de reserva aceita está entre 1 e 10.';
