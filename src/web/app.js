@@ -365,12 +365,13 @@ function casesPanel(run, accountId, pending) {
   const caseDecisions = run.approvals.filter(d => d.outputId === cases.id);
   const currentDecision = caseDecisions.find(d => d.outputRevision === cases.revision);
 
-  const statusText = currentDecision
+  const statusText = !cases.current
+    ? 'Casos desatualizados — as dependências desta revisão foram alteradas.'
+    : currentDecision
     ? (currentDecision.decision === 'approved' ? 'Casos aprovados. O mapeamento ainda não foi iniciado.' : 'Alterações solicitadas. Os casos aguardam revisão.')
-    : (cases.current && verdicts.length === 1 && verdicts[0].status === 'approved'
+    : (verdicts.length === 1 && verdicts[0].status === 'approved'
       ? 'Conjunto validado. Disponível para revisão humana.'
-      : cases.current ? 'Conteúdo provisório — a validação desta revisão ainda não foi aprovada.'
-      : 'Conteúdo provisório — as dependências desta revisão foram alteradas.');
+      : 'Conteúdo provisório — a validação desta revisão ainda não foi aprovada.');
 
   panel.append(el('p', `Casos de teste / Revisão ${cases.revision}`, 'eyebrow'), el('h2', 'Casos de teste'),
     el('p', 'Casos lógicos — percurso ainda não mapeado.', 'lead'),
@@ -396,7 +397,7 @@ function casesPanel(run, accountId, pending) {
   if (!caseDecisions.length) decisions.append(el('p', 'Nenhuma decisão registrada.', 'hint'));
   for (const decision of caseDecisions) {
     const item = el('div', null, 'decision');
-    item.append(el('p', `${decision.decision === 'approved' ? 'Casos aprovados' : 'Alterações solicitadas'} · Revisão ${decision.outputRevision}`), el('p', date(decision.at), 'hint'));
+    item.append(el('p', `${decision.decision === 'approved' ? 'Casos aprovados' : 'Alterações solicitadas'} · Revisão ${decision.outputRevision}${!cases.current || decision.outputRevision !== cases.revision ? ' · Conteúdo desatualizado' : ''}`), el('p', date(decision.at), 'hint'));
     if (decision.comment) item.append(el('p', decision.comment, 'text-content'));
     decisions.append(item);
   }
@@ -637,7 +638,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
     const waiting = run.status === 'awaiting_approval' && run.phase === 'planning';
     main.append(message(currentDecisions.length ? `A decisão desta revisão está registrada.${waiting ? ' A execução permanece em espera; a continuidade ainda não foi iniciada.' : ''}` : 'A revisão está disponível para consulta. Uma decisão exige a etapa de aprovação e um parecer aprovado do validador.'));
     if (restorePlanComment) main.append(preservedComment(pending));
-    main.append(button('Atualizar consulta', () => detailPage('', false, pending), 'secondary')); return;
+    main.append(button('Atualizar consulta', () => detailPage('', false, pendingComment(run, accountId, pending)), 'secondary')); return;
   }
   const review = el('section', null, 'panel'); review.append(el('h2', `Decidir sobre a revisão ${plan.revision}`), el('p', 'Aprovar registra sua decisão e mantém a execução em espera. O servidor confere a revisão e suas dependências antes de aceitar.'));
   const notice = message(); review.append(notice); const form = el('form'); form.noValidate = true;

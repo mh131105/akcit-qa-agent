@@ -630,15 +630,29 @@ async function preparationJourney(context, store, owner) {
   // CA-08: recuperação de falha de rede/resposta incerta preserva comentário
   const caseCommentText = 'Revisar o resultado esperado do caso CT-03.';
   await page.getByLabel('Comentário sobre os casos', { exact: true }).fill(caseCommentText);
-  let approveFails = true;
-  await page.route(`**/api/runs/${id}/approve`, async route => {
-    if (approveFails) { approveFails = false; return route.abort('connectionreset'); }
-    return route.continue();
+  let casePosts = 0;
+  const countCasePosts = request => {
+    if (request.method() === 'POST' && /\/(approve|request-changes)$/.test(new URL(request.url()).pathname)) casePosts++;
+  };
+  page.on('request', countCasePosts);
+  await page.route(`**/api/runs/${id}/request-changes`, async route => {
+    assert.equal(route.request().headers()['x-expected-user-id'], owner.id);
+    assert.deepEqual(route.request().postDataJSON(), { outputId: savedCases.id, outputRevision: 1, comment: caseCommentText });
+    await route.abort('connectionreset');
   });
-  await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true }).click();
+  await page.getByRole('button', { name: 'Solicitar alterações nos casos', exact: true }).click();
   await bodyIncludes('Não foi possível confirmar a decisão pela resposta.');
   assert.equal(await page.getByLabel('Comentário sobre os casos', { exact: true }).inputValue(), caseCommentText);
-  await page.unroute(`**/api/runs/${id}/approve`);
+  const editedComment = '  B: Revisar também os dados do CT-03.\n  ';
+  await page.getByLabel('Comentário sobre os casos', { exact: true }).fill(editedComment);
+  await page.getByRole('button', { name: 'Atualizar consulta', exact: true }).click();
+  await visible(page.getByLabel('Comentário sobre os casos', { exact: true }));
+  assert.equal(await page.getByLabel('Comentário sobre os casos', { exact: true }).inputValue(), editedComment,
+    'CA-01: atualizar a consulta preserva B, não restaura A.');
+  assert.equal(casePosts, 1, 'A consulta não reenvia nenhuma decisão.');
+  assert.deepEqual((await api(context, `/api/runs/${id}`, owner.id)).approvals, cases.approvals);
+  checked.push('BUG-T6.2-01 CA-01: falha antes da gravação → editar A para B → atualizar consulta conserva B literal, sem novo POST');
+  await page.unroute(`**/api/runs/${id}/request-changes`);
 
   // CA-01: Aprovação dos casos de teste pelo site
   await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true }).click();
@@ -658,11 +672,34 @@ async function preparationJourney(context, store, owner) {
   assert.equal(runAfterApproval.phase, 'case_design');
   assert.equal(runAfterApproval.canDecideCases, false);
   const storedRecordAfter = await store.read(id);
+  assert.equal(runAfterApproval.cases.current, true);
+  assert.equal(casePosts, 2, 'Somente a aprovação explícita envia o segundo POST.');
+  assert.equal(runAfterApproval.approvals.filter(a => a.outputId === savedCases.id).length, 1);
+  checked.push('BUG-T6.2-01 CA-04: casos aprovados e vigentes mantêm a confirmação após recarregar');
   assert.equal(storedRecordAfter.run.outputs.some(o => o.phase === 'mapping'), false);
   assert.deepEqual(storedRecordAfter.workIntents.filter(w => w.status === 'pending'), []);
 
+  // BUG-T6.2-01 CA-03: a aprovação histórica não oculta dependências alteradas.
+  await store.update(id, record => {
+    const curation = record.run.outputs.find(o => o.id === cases.curation.id && o.revision === cases.curation.revision);
+    record.run.outputs.push({ ...structuredClone(curation), revision: curation.revision + 1 });
+    return { save: true, value: null };
+  });
+  await page.getByRole('button', { name: 'Atualizar consulta', exact: true }).click();
+  await bodyIncludes('Casos desatualizados — as dependências desta revisão foram alteradas.');
+  await bodyIncludes('Casos aprovados · Revisão 1 · Conteúdo desatualizado');
+  assert.equal(await page.getByText('Casos aprovados. O mapeamento ainda não foi iniciado.', { exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Solicitar alterações nos casos', exact: true }).count(), 0);
+  const staleCases = await api(context, `/api/runs/${id}`, owner.id);
+  assert.equal(staleCases.cases.current, false); assert.equal(staleCases.canDecideCases, false);
+  assert.deepEqual(staleCases.approvals, runAfterApproval.approvals, 'A aprovação original permanece intacta.');
+  assert.equal(casePosts, 2);
+  await screenshot('web-cases-stale.png', 1366); await screenshot('web-cases-stale-mobile.png', 390);
+  checked.push('BUG-T6.2-01 CA-03: dependência sintética alterada → aviso de casos desatualizados, aprovação identificada no histórico e nenhuma nova decisão disponível');
+
   // CA-02 e CA-07: jornada de solicitação de alterações e separação dos históricos
-  const changesRun = structuredClone((await store.read(id)).run);
+  const changesRun = structuredClone(storedRecordAfter.run);
   changesRun.id = 'run-cases-changes';
   changesRun.name = 'Execução com alterações nos casos';
   changesRun.approvals = changesRun.approvals.filter(a => a.outputId !== savedCases.id);
@@ -670,10 +707,45 @@ async function preparationJourney(context, store, owner) {
 
   await page.goto('/execucoes/run-cases-changes');
   await bodyIncludes('Conjunto validado. Disponível para revisão humana');
+  assert.equal(await page.getByLabel('Comentário sobre os casos', { exact: true }).inputValue(), '', 'Outra execução não herda o comentário.');
+  let changesPosts = 0;
+  await page.route('**/api/runs/run-cases-changes/request-changes', async route => {
+    changesPosts++;
+    assert.equal(route.request().headers()['x-expected-user-id'], owner.id);
+    assert.deepEqual(route.request().postDataJSON(), { outputId: savedCases.id, outputRevision: changesPosts,
+      comment: changesPosts === 1 ? caseCommentText : 'Revisar o resultado esperado do caso CT-01.' });
+    if (changesPosts === 2) {
+      const response = await route.fetch();
+      assert.equal(response.status(), 200, 'CA-05: gravar antes de perder a resposta.');
+    }
+    await route.abort('connectionreset');
+  });
+  await page.getByLabel('Comentário sobre os casos', { exact: true }).fill(caseCommentText);
+  await page.getByRole('button', { name: 'Solicitar alterações nos casos', exact: true }).click();
+  await bodyIncludes('Não foi possível confirmar a decisão pela resposta.');
+  await page.getByLabel('Comentário sobre os casos', { exact: true }).fill(editedComment);
+  await store.update(changesRun.id, record => {
+    record.run.outputs.push({ ...structuredClone(savedCases), revision: 2 });
+    record.run.validations.push({ outputId: savedCases.id, outputRevision: 2, validator: 'output-validator', status: 'approved' });
+    return { save: true, value: null };
+  });
+  await page.getByRole('button', { name: 'Atualizar consulta', exact: true }).click();
+  await bodyIncludes('Casos de teste / Revisão 2');
+  const preservedCaseComment = page.getByLabel('Comentário preservado da revisão 1', { exact: true });
+  assert.equal(await preservedCaseComment.inputValue(), editedComment);
+  assert.equal(await preservedCaseComment.getAttribute('readonly'), '');
+  assert.equal(await page.getByLabel('Comentário sobre os casos', { exact: true }).inputValue(), '', 'CA-02: a revisão nova não recebe B.');
+  assert.equal(changesPosts, 1); assert.equal(casePosts, 3);
+  assert.deepEqual((await api(context, `/api/runs/${changesRun.id}`, owner.id)).approvals, cases.approvals);
+  await screenshot('web-cases-comment-recovery.png', 1366);
+  checked.push('BUG-T6.2-01 CA-02: revisão muda durante recuperação → B da revisão 1 fica somente para leitura/cópia e revisão 2 fica vazia');
+
   await page.getByLabel('Comentário sobre os casos', { exact: true }).fill('Revisar o resultado esperado do caso CT-01.');
   await page.getByRole('button', { name: 'Solicitar alterações nos casos', exact: true }).click();
   await bodyIncludes('Alterações solicitadas. Os casos aguardam revisão.');
   await bodyIncludes('Revisar o resultado esperado do caso CT-01.');
+  assert.equal(changesPosts, 2); assert.equal(casePosts, 4);
+  assert.equal(await preservedCaseComment.count(), 0, 'A decisão recuperada não deixa cópia de uma revisão anterior.');
   await screenshot('web-cases-changes.png', 1366); await screenshot('web-cases-changes-mobile.png', 390);
 
   // CA-07: verificar que as decisões não se misturam nos painéis
@@ -684,7 +756,16 @@ async function preparationJourney(context, store, owner) {
   assert.equal(changesRunPersisted.canDecideCases, false);
   const caseDecisionEntry = changesRunPersisted.approvals.find(a => a.outputId === savedCases.id);
   assert.equal(caseDecisionEntry.decision, 'changes_requested');
+  assert.equal(caseDecisionEntry.outputRevision, 2);
   assert.equal(caseDecisionEntry.comment, 'Revisar o resultado esperado do caso CT-01.');
+  assert.equal(changesRunPersisted.approvals.filter(a => a.outputId === savedCases.id).length, 1);
+  assert.equal(changesPosts, 2); assert.equal(casePosts, 4, 'CA-05: a recuperação e o reload não reenviam a decisão.');
+  assert.equal(await page.getByLabel('Comentário sobre os casos', { exact: true }).count(), 0);
+  assert.equal(await preservedCaseComment.count(), 0);
+  await page.unroute('**/api/runs/run-cases-changes/request-changes');
+  page.off('request', countCasePosts);
+  assert.equal(preparationCalls.length, 10, 'Recuperar comentários, consultar e decidir não iniciam inferência.');
+  checked.push('BUG-T6.2-01 CA-05: resposta perdida depois de gravar → consulta recupera uma única decisão da revisão 2, sem reenvio automático');
 
   checked.push('T6.2: aprovação e solicitação de alterações de casos pelo site → comentário obrigatório → persistência após recarregar → nenhum mapeamento iniciado → históricos de plano e casos separados');
   checked.push('T6.1: aprovação separada → gerar casos 202 → repetição 200 sem duplicação → geração → casos provisórios em validação → conjunto persistido para revisão humana');
@@ -1015,7 +1096,7 @@ try {
   assert.deepEqual(pageErrors, [], 'Nenhum erro JavaScript na preparação e aprovação do plano.');
   }
   await regressions(origin, store, owner, other);
-  result = { status: 'passed', scope: 'T2.1/T4.1/T6.1 — navegador, API, coordenador e persistência reais; chamada de modelo substituída, sem inferência paga', checked,
+  result = { status: 'passed', scope: 'T2.1/T4.1/T6.1/T6.2 — navegador, API, coordenador e persistência reais; chamada de modelo substituída, sem inferência paga', checked,
     node: process.versions.node, chromium: browser.version(), durationMs: Date.now() - started };
 } catch (error) {
   result = { status: 'failed', checked, error: error.message, pageUrl: page?.url(), durationMs: Date.now() - started };
