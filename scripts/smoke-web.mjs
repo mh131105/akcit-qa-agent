@@ -135,6 +135,7 @@ async function visualCall(task) {
     assert.ok(input.approvedCases, 'Executor recebe os casos aprovados.');
     assert.equal(input.access.startUrl, 'https://alvo.exemplo.test');
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+    await mkdir(task.browser.mediaDir, { recursive: true });
     const observations = [];
     for (const [index, name] of ['login', 'inicio', 'reservas'].entries()) {
       const observation = { id: 'obs-' + name, assetId: ('smoke-asset-' + (index + 1)).padEnd(21, '0'), at: new Date().toISOString(), width: 1366, height: 768 };
