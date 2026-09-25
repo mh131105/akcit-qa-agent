@@ -42,6 +42,31 @@ test('preflight não chama modelos, não aceita seleção inexistente ou credenc
   assert.equal(prompt.mock.callCount(), 0);
 });
 
+test('DeepSeek usa raciocínio baixo no Flash e alto no Pro, preservando os demais provedores', async t => {
+  t.mock.method(ModelRuntime.prototype, 'getAuth', async () => ({ auth: { apiKey: 'fake-never-sent' } }));
+  const observed: unknown[] = [];
+  t.mock.method(AgentSession.prototype, 'prompt', async function (this: AgentSession) {
+    observed.push({ model: this.model?.id, thinking: this.thinkingLevel });
+    assert.deepEqual(this.messages, []);
+    assert.deepEqual(this.getActiveToolNames(), []);
+    answer(this, '{"synthetic":true}');
+  });
+  for (const model of [
+    { provider: 'deepseek', model: 'deepseek-flash' },
+    { provider: 'deepseek', model: 'deepseek-v4-pro' },
+    selection,
+  ]) {
+    const result = await executeSpecialistTask({ ...task(), model });
+    assert.deepEqual(result.payload, { synthetic: true });
+    assert.doesNotMatch(JSON.stringify(result), /não persistir|fake-never-sent/);
+  }
+  assert.deepEqual(observed, [
+    { model: 'deepseek-flash', thinking: 'low' },
+    { model: 'deepseek-v4-pro', thinking: 'high' },
+    { model: selection.model, thinking: 'off' },
+  ]);
+});
+
 test('runtime usa sessão própria sem tools, histórico, retries ou compactação e devolve só JSON/metadados', async t => {
   t.mock.method(ModelRuntime.prototype, 'getAuth', async () => ({ auth: { apiKey: 'fake-never-sent' } }));
   const sessions: string[] = [];

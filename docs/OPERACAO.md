@@ -482,6 +482,52 @@ interna; não existe opção de simulação na API, no site ou no ambiente de pr
 O smoke de runtime continua criando sessão sem inferência. Os testes de runtime
 substituem execução/autenticação deliberadamente para não chamar provedores.
 
+### API oficial DeepSeek
+
+O catálogo do Pi 0.87.0 reconhece `deepseek/deepseek-flash` (V4.1 Flash,
+texto e imagem) e `deepseek/deepseek-v4-pro` (texto). O identificador antigo
+`deepseek-v4-flash` não consta no catálogo instalado. A API oficial está em
+`https://api.deepseek.com`; não é necessário instalar outro SDK ou configurar
+um provedor personalizado.
+
+Configuração privada de local e desenvolvimento:
+
+```dotenv
+DEEPSEEK_API_KEY=<chave privada do projeto>
+PI_PROVIDER=deepseek
+PI_MODEL=deepseek-v4-pro
+PI_AUTH_PATH=
+PI_CURATOR_PROVIDER=deepseek
+PI_CURATOR_MODEL=deepseek-flash
+PI_PLANNER_PROVIDER=deepseek
+PI_PLANNER_MODEL=deepseek-v4-pro
+PI_VALIDATOR_PROVIDER=deepseek
+PI_VALIDATOR_MODEL=deepseek-v4-pro
+```
+
+O runtime usa esforço `low` para `deepseek-flash` e `high` para
+`deepseek-v4-pro`. Os demais modelos mantêm o comportamento anterior (`off`).
+A seleção de modelo continua explícita por papel, sem fallback automático.
+Plano e casos usam a configuração do planejador; o validador mantém sessão
+independente. O raciocínio interno não é publicado nem persistido nos resultados.
+
+Localmente, incorpore esses valores no `.env` privado antes de reiniciar o
+processo, preservando porta, origem, participantes e diretório de dados. Na VPS,
+incorpore-os somente em `development/runtime.env` (modo `0600`) e recrie o
+container `akcit-qa-dev`, após conferir que não há execução ativa. Configurações
+pendentes não são carregadas automaticamente. A mudança não configura produção.
+Uma eventual reversão exige restaurar a configuração anterior e reiniciar o
+serviço; nunca exponha a chave em comandos, logs ou arquivos versionados.
+
+A escolha Flash/Pro é inicial e precisa de avaliação em mais entradas; uma
+execução bem-sucedida comprova integração, não qualidade geral. A verificação
+real com seis casos está em [evidências DeepSeek](evidencias/deepseek/README.md).
+O custo registrado pelo Pi é estimativa do catálogo, não conciliação da cobrança
+da DeepSeek, que pode depender de cache e horário.
+
+Referências: [modelos e preços](https://api-docs.deepseek.com/quick_start/pricing/)
+e [controle de raciocínio](https://api-docs.deepseek.com/guides/thinking_mode/).
+
 ### Demonstração com modelo real pelo site
 
 **Configuração da demonstração local:** em 24/09/2026, o responsável concluiu o
