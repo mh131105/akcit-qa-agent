@@ -30,6 +30,21 @@ será restrito aos participantes habilitados pela equipe; a liberação pública
 
 <!-- ponytail: um piloto com um proprietário por execução e um trabalho de agente por vez; colaboração e filas distribuídas só quando houver uso que justifique. -->
 
+### Mapa validado e estado `ready` · T8.2
+
+T8.2 implementa o RF-03 até o **mapa validado**: o executor observa a aplicação e o
+validador visual examina o mapa e suas capturas em sessão independente. O
+detalhamento dos percursos, a execução com entradas válidas/inválidas, os vídeos por
+tentativa e o relatório continuam nas próximas etapas.
+
+O estado `ready` é introduzido para "etapa concluída, aguardando continuidade".
+Um mapa aprovado termina em `ready / mapping`, exibido como *"Mapa validado —
+aguardando detalhamento dos percursos"*. `completed` permanece reservado ao
+relatório final validado; nenhum teste ou relatório é apresentado como executado
+nesta entrega.
+
+
+
 ### Decisão de entrada e curadoria · 24/09/2026
 
 Esta revisão substitui a exigência anterior de uma US formal com CA. O formato

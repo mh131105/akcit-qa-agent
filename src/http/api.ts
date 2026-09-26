@@ -1,9 +1,13 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { constants } from 'node:fs';
+import { open } from 'node:fs/promises';
+import { join } from 'node:path';
 import { AuthError, AuthService } from '../auth.js';
 import { executeApprovalCommand, executePlanCommand, getPlanReview, publicPlanDecisions } from '../application/plan-approval.js';
 import { configureTargetAccess } from '../application/target-access.js';
 import { createRun, listRuns, RunInputError } from '../application/runs.js';
 import { PreparationError, type PreparationCoordinator } from '../application/prepare-plan.js';
+import { MappingError } from '../application/map-application.js';
 import type { readConfig } from '../config.js';
 import { StorageError, type RunStore } from '../storage/runs.js';
 
@@ -67,9 +71,10 @@ export async function handleApi(
     const path = url.pathname;
     const collection = path === '/api/runs';
     const account = /^\/api\/auth\/(register|login|logout|me)$/.exec(path)?.[1];
+    const evidence = /^\/api\/runs\/([^/]+)\/evidence\/([^/]+)$/.exec(path);
     const run = /^\/api\/runs\/([^/]+)(?:\/(approve|request-changes|start|cancel|answer|resume|continue))?$/.exec(path);
-    if (!account && !run && !collection) throw new HttpError(404, 'NOT_FOUND', 'Rota não encontrada.');
-    const methods = collection ? ['GET', 'POST'] : run && !run[2] ? ['GET', 'PATCH'] : account === 'me' ? ['GET'] : ['POST'];
+    if (!account && !run && !evidence && !collection) throw new HttpError(404, 'NOT_FOUND', 'Rota não encontrada.');
+    const methods = collection ? ['GET', 'POST'] : evidence ? ['GET'] : run && !run[2] ? ['GET', 'PATCH'] : account === 'me' ? ['GET'] : ['POST'];
     if (!methods.includes(request.method!)) {
       response.setHeader('Allow', methods.join(', '));
       throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Método não permitido.');
@@ -112,6 +117,29 @@ export async function handleApi(
       response.writeHead(204).end();
       return;
     }
+    if (evidence) {
+      // Mídia autenticada: identificadores opacos, pertencimento à execução do
+      // proprietário e leitura sem seguir links; nunca expõe caminhos locais.
+      let runId: string;
+      let assetId: string;
+      try { runId = decodeURIComponent(evidence[1]!); assetId = decodeURIComponent(evidence[2]!); }
+      catch { throw invalid(); }
+      if (!/^[A-Za-z0-9][A-Za-z0-9-]{7,127}$/.test(assetId)) throw new HttpError(404, 'RUN_NOT_FOUND', 'Execução não encontrada.');
+      const record = await runs.read(runId);
+      if (record.run.ownerId !== session.userId) throw new HttpError(404, 'RUN_NOT_FOUND', 'Execução não encontrada.');
+      const observation = (record.run.observations ?? []).find(item => item.assetId === assetId);
+      if (!observation) throw new HttpError(404, 'RUN_NOT_FOUND', 'Evidência não encontrada nesta execução.');
+      const file = await open(join(config.dataDir, 'media', runId, assetId + '.png'), constants.O_RDONLY | constants.O_NOFOLLOW);
+      try {
+        const stat = await file.stat();
+        if (!stat.isFile()) throw new HttpError(404, 'RUN_NOT_FOUND', 'Evidência não encontrada nesta execução.');
+        const content = await file.readFile();
+        response.writeHead(200, { 'Content-Type': 'image/png', 'Content-Length': content.length,
+          'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+        response.end(content);
+      } finally { await file.close(); }
+      return;
+    }
     if (collection) {
       if (method === 'GET') {
         if (Number(request.headers['content-length'] ?? 0) > 0 || request.headers['transfer-encoding'] !== undefined) throw invalid();
@@ -127,7 +155,7 @@ export async function handleApi(
     let runId: string;
     try { runId = decodeURIComponent(run![1]!); } catch { throw invalid(); }
     if (method === 'GET') {
-      const result = await getPlanReview(runs, runId, { userId: session.userId });
+      const result = await getPlanReview(runs, runId, { userId: session.userId }, config);
       if (!result.ok) serviceError(result.error);
       json(response, 200, result.review);
       return;
@@ -146,7 +174,7 @@ export async function handleApi(
         ? (await preparation.start(runId, session.userId)).accepted
         : run![2] === 'resume' ? (await preparation.resume(runId, session.userId)).accepted
         : (await preparation.cancel(runId, session.userId), false);
-      const result = await getPlanReview(runs, runId, { userId: session.userId });
+      const result = await getPlanReview(runs, runId, { userId: session.userId }, config);
       if (!result.ok) serviceError(result.error);
       json(response, accepted ? 202 : 200, result.review);
       return;
@@ -158,18 +186,21 @@ export async function handleApi(
         outputId: string(body, 'outputId', 1, 128), outputRevision: body.outputRevision as number,
         questionId: string(body, 'questionId', 1, 128), text: string(body, 'text', 1, 4000, false),
       });
-      const result = await getPlanReview(runs, runId, { userId: session.userId });
+      const result = await getPlanReview(runs, runId, { userId: session.userId }, config);
       if (!result.ok) serviceError(result.error);
       json(response, 200, result.review);
       return;
     }
     if (run![2] === 'continue') {
-      fields(body, ['outputId', 'outputRevision']);
-      if (url.search || !Number.isSafeInteger(body.outputRevision) || (body.outputRevision as number) < 1) throw invalid();
+      const mapping = body.expectedAccessRevision !== undefined;
+      fields(body, mapping ? ['outputId', 'outputRevision', 'expectedAccessRevision'] : ['outputId', 'outputRevision']);
+      if (url.search || !Number.isSafeInteger(body.outputRevision) || (body.outputRevision as number) < 1 ||
+        (mapping && (!Number.isSafeInteger(body.expectedAccessRevision) || (body.expectedAccessRevision as number) < 1))) throw invalid();
       const { accepted } = await preparation.continue(runId, session.userId, {
         outputId: string(body, 'outputId', 1, 128), outputRevision: body.outputRevision as number,
+        ...(mapping ? { expectedAccessRevision: body.expectedAccessRevision as number } : {}),
       });
-      const result = await getPlanReview(runs, runId, { userId: session.userId });
+      const result = await getPlanReview(runs, runId, { userId: session.userId }, config);
       if (!result.ok) serviceError(result.error);
       json(response, accepted ? 202 : 200, result.review);
       return;
@@ -190,7 +221,7 @@ export async function handleApi(
     json(response, 200, { status: result.status, phase: result.phase, approvals: publicPlanDecisions(result.approvals) });
   } catch (error) {
     // Não devolve mensagens de exceções de IO, caminhos, cookies ou conteúdo privado.
-    const failure = error instanceof HttpError || error instanceof AuthError || error instanceof PreparationError ? error
+    const failure = error instanceof HttpError || error instanceof AuthError || error instanceof PreparationError || error instanceof MappingError ? error
       : error instanceof StorageError && ['RUN_NOT_FOUND', 'INVALID_RUN_ID'].includes(error.code)
         ? new HttpError(error.code === 'RUN_NOT_FOUND' ? 404 : 400, error.code, error.message)
       : error instanceof RunInputError ? new HttpError(400, error.code, error.message)

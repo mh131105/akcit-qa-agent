@@ -14,6 +14,9 @@ import {
 } from '../domain/case-approval.js';
 import { RunStore, StorageError, type StorageErrorCode, type RunOutput, type WorkIntent, type PreparationAnswer, type RunRecord } from '../storage/runs.js';
 import { publicTargetAccess, type TargetAccessReview } from './target-access.js';
+import { publicNavigation } from '../domain/navigation.js';
+import { canMap } from './map-application.js';
+import type { readConfig } from '../config.js';
 
 export type PlanCommandRequest = Readonly<{
   type: 'approve_plan' | 'request_plan_changes' | 'continue' | 'approve_cases' | 'request_case_changes';
@@ -63,6 +66,17 @@ export type PlanReview = {
   } | null;
   approvals: PlanDecision[];
   targetAccess: TargetAccessReview;
+  canMap: boolean;
+  mapping: {
+    id: string; revision: number; current: boolean;
+    dependsOn: RunOutput['dependsOn'];
+    payload: ReturnType<typeof publicNavigation>;
+    validations: (PlanApprovalState['validations'][number] & { reason: string;
+      findings: { code: string; message: string; location: string | null }[] })[];
+  } | null;
+  observations: { id: string; assetId: string; at: string; width: number; height: number }[];
+  mappingActions: { id: string; at: string; tool: string; params: Record<string, unknown>;
+    outcome: string; observationId: string | null; note: string | null }[];
 };
 export type PlanReviewResult =
   | { ok: true; review: PlanReview }
@@ -178,6 +192,7 @@ export async function getPlanReview(
   store: RunStore,
   runId: string,
   context: PlanCommandContext,
+  config: Pick<ReturnType<typeof readConfig>, 'targetAllowedOrigins'> = { targetAllowedOrigins: [] },
 ): Promise<PlanReviewResult> {
   try {
     const record = await store.read(runId);
@@ -188,7 +203,17 @@ export async function getPlanReview(
     const plan = current(run.outputs, 'planning');
     const curation = current(run.outputs, 'curation');
     const cases = current(run.outputs, 'case_design');
+    const mapping = current(run.outputs, 'mapping');
     let currentCases = false;
+    let currentMapping = false;
+    if (mapping && cases && plan) {
+      try {
+        const dependencies = caseDependencies(run, { outputId: plan.id, outputRevision: plan.revision }, false);
+        currentMapping = mapping.dependsOn.length === 3 &&
+          [dependencies.curation, dependencies.plan, cases].every(output =>
+            mapping.dependsOn.some(ref => ref.outputId === output.id && ref.revision === output.revision));
+      } catch { /* O histórico continua consultável, sem autorizar avanço. */ }
+    }
     if (cases && plan) {
       try {
         const dependencies = caseDependencies(run, { outputId: plan.id, outputRevision: plan.revision }, false);
@@ -213,7 +238,21 @@ export async function getPlanReview(
       stopReason: run.preparation?.stopReason ? { code: run.preparation.stopReason.code, message: run.preparation.stopReason.message }
         : run.status === 'interrupted' && run.interruptions?.length ? { code: 'SERVICE_RESTART', message: 'O serviço reiniciou. O trabalho foi interrompido.' }
         : run.status === 'cancelled' ? { code: 'CANCELLED', message: 'Execução cancelada pelo usuário.' } : null,
-      canResume: canResumePreparation(run), canCreateCases: canCreateCases(run), canDecideCases: canDecideCases(run), answers,
+      canResume: canResumePreparation(run), canCreateCases: canCreateCases(run), canDecideCases: canDecideCases(run),
+      canMap: canMap(record, { targetAllowedOrigins: config.targetAllowedOrigins }),
+      mapping: mapping ? { id: mapping.id, revision: mapping.revision, current: currentMapping,
+        dependsOn: mapping.dependsOn.map(ref => ({ outputId: ref.outputId, revision: ref.revision })),
+        payload: publicNavigation(mapping.payload),
+        validations: run.validations.filter(item => item.outputId === mapping.id && item.outputRevision === mapping.revision)
+          .map(item => ({ outputId: item.outputId, outputRevision: item.outputRevision,
+            validator: item.validator, status: item.status, reason: item.reason ?? '',
+            findings: (item.findings ?? []).map(finding => ({ code: finding.code, message: finding.message, location: finding.location })) })),
+      } : null,
+      observations: (run.observations ?? []).map(observation => ({ id: observation.id, assetId: observation.assetId,
+        at: observation.at, width: observation.width, height: observation.height })),
+      mappingActions: (run.mappingActions ?? []).map(action => ({ id: action.id, at: action.at, tool: action.tool,
+        params: action.params, outcome: action.outcome, observationId: action.observationId ?? null, note: action.note ?? null })),
+      answers,
       cases: cases ? { id: cases.id, revision: cases.revision, current: currentCases,
         dependsOn: cases.dependsOn.map(ref => ({ outputId: ref.outputId, revision: ref.revision })),
         answerRefs: (cases.answerRefs ?? []).map(ref => ({ questionId: ref.questionId, revision: ref.revision,

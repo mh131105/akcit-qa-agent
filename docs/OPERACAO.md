@@ -917,6 +917,103 @@ Para vincular o alvo controlado T7 a uma execução criada no sistema:
 - A URL inicial não aceita query string nem fragmento.
 - A validação no salvamento é estática de formato e origem; salvar não abre o navegador nem verifica se as credenciais funcionam no alvo. A autenticação automatizada no navegador é de responsabilidade da etapa seguinte de mapeamento e execução (T8).
 
+### Mapear e validar a navegação (T8.2)
+
+Após as duas aprovações humanas (plano e casos) e o acesso configurado, a página da
+execução oferece **Mapear aplicação**. O executor visual autentica pela interface e
+percorre as telas relevantes; o validador visual examina o mapa e as capturas em
+sessão independente; o mapa aprovado termina em `ready / mapping`.
+
+#### Variáveis
+
+| Variável | Papel | Valor do card |
+| --- | --- | --- |
+| `PI_EXECUTOR_PROVIDER` / `PI_EXECUTOR_MODEL` | Executor visual | `deepseek` / `deepseek-flash` |
+| `PI_EXECUTOR_THINKING_LEVEL` | Executor visual | `high` (padrão do perfil) |
+| `PI_VALIDATOR_VISUAL_PROVIDER` / `PI_VALIDATOR_VISUAL_MODEL` | Validador visual | `deepseek` / `deepseek-flash` |
+| `PI_VALIDATOR_VISUAL_THINKING_LEVEL` | Validador visual | `high` (padrão do perfil) |
+| `TARGET_ALLOWED_ORIGINS` | Destinos permitidos | origem exata do alvo (ex.: `http://127.0.0.1:4000`) |
+
+Cada perfil exige o par provedor/modelo; ausência ou indisponibilidade recusa o
+início com motivo (sem fallback silencioso). O validador textual continua em
+`PI_VALIDATOR_*` (Pro/high).
+
+#### Comandos
+
+```bash
+npm run smoke:mapping   # navegador/cursor/capturas/destinos reais com modelo substituído (imagem final)
+node scripts/demo-target.mjs   # alvo T7 em http://127.0.0.1:4000 (modo reference)
+npm test                 # inclui test/navigation.test.ts (contratos e transições)
+```
+
+#### Preparação do alvo e reprodução do ensaio real
+
+1. Suba o alvo T7 (`node scripts/demo-target.mjs`, modo `reference`, credenciais `demo`/`demo1234`).
+2. Configure `TARGET_ALLOWED_ORIGINS=http://127.0.0.1:4000` e os pares de
+   perfil visual no `.env` do ambiente (local, dev ou produção).
+3. No site, crie uma execução, prepare e aprove o plano, gere e aprove os casos.
+4. Configure o acesso no painel (URL inicial `http://127.0.0.1:4000`, perfil, preparo,
+   autorização e credencial `demo`/`demo1234`).
+5. Clique em **Mapear aplicação**. Acompanhe o progresso: o executor explora e o
+   validador visual emite o parecer. Ao final, o estado é `ready / mapping` com o
+   texto *"Mapa validado — aguardando detalhamento dos percursos"*.
+6. Confira no painel: telas com capturas, transições, caminhos, parecer do validador,
+   pendências com casos afetados e limitações. As capturas são servidas por
+   `GET /api/runs/:id/evidence/:assetId` (sessão + `X-Expected-User-Id` do
+   proprietário; outra conta recebe 404).
+7. Para o ensaio do validador, force uma transição sem suporte (ex.: remova a
+   captura de destino antes da validação) e registre o parecer.
+
+#### Ensaio real automatizado (T8.2-R1)
+
+`npm run eval:mapping:real` executa o roteiro `scripts/eval-mapping-real.mjs`
+**na imagem final**, com a composição normal do aplicativo (nenhuma substituição
+de `modelCall`, `visualCall`, preflight, navegador ou pareceres), armazenamento
+isolado e credenciais privadas do ambiente:
+
+```bash
+docker build --target runtime -t akcit-qa:ci .
+mkdir -p artifacts/ensaio-real artifacts/human
+docker run --rm --cpus=2 --memory=4g --shm-size=512m   --cap-drop=ALL --security-opt=no-new-privileges   --tmpfs /tmp:rw,size=1g,mode=1777   --tmpfs /home/node:rw,size=128m,uid=1000,gid=1000,mode=0700   --tmpfs /data:rw,size=256m,uid=1000,gid=1000,mode=0700   -v "$PWD/.data/pi:/data/pi:ro"   -v "$PWD/artifacts/ensaio-real:/evidence"   -v "$PWD/artifacts/human:/human"   -e PI_CODING_AGENT_DIR=/data/pi   -e DEEPSEEK_API_KEY="$DEEPSEEK_API_KEY"   -e DATA_DIR=/data/eval -e EVAL_EVIDENCE_DIR=/evidence -e EVAL_HUMAN_DIR=/human   -e APP_REVISION="$(git rev-parse HEAD)"   akcit-qa:ci node scripts/eval-mapping-real.mjs --run
+```
+
+O roteiro força os perfis documentados (curador `deepseek-flash/low`; projetista
+e validador textual `deepseek-v4-pro/high`; executor e validador visual
+`deepseek-flash/high`), sem fallback silencioso, e executa:
+
+1. **Jornada completa pela interface com revisão humana:** o roteiro imprime o
+   plano e os casos em `artifacts/human/awaiting-*.json` e aguarda a decisão do
+   operador em `artifacts/human/decision-*.json` (`{"decision": "approved"}` ou
+   `"changes_requested"`). Sem decisão registrada, a jornada falha com motivo.
+2. **Jornada completa com aprovações automatizadas** (registrada como tal no relatório).
+3. **Credencial inválida e correção** pelo fluxo suportado.
+4. **Controles positivo e negativo do validador** a partir do mapa real.
+
+As evidências (registros sanitizados, capturas, pareceres, chamadas, consumo e
+`report.json`) ficam em `artifacts/ensaio-real/`; o relato humano fica em
+[docs/evidencias/t8.2/ensaio-real.md](evidencias/t8.2/ensaio-real.md). O gabarito
+não entra no contexto dos agentes; ele serve apenas à avaliação externa.
+
+#### Limites
+
+- Três produções/revisões do mapa e duas tentativas técnicas de validação por revisão.
+- Cem ações de exploração por execução (**capturas não consomem ações**; a
+  observação final segura continua disponível com os cliques esgotados) e
+  45 minutos ativos acumulados (compartilhados com a preparação; sem reinício a
+  cada correção e sem contar espera humana).
+- 120 segundos por chamada de modelo; todas as chamadas são registradas com
+  início e término — erro, timeout, cancelamento e saída inválida preservam o
+  histórico. Falhas técnicas e de navegador conservam a causa identificável; o
+  esgotamento de revisões é reservado a saídas de modelo fora do contrato.
+- Piloto simples: uma única aba; novas abas e destinos fora de
+  `TARGET_ALLOWED_ORIGINS` são bloqueados com motivo legível.
+- Erro de credencial antes da autenticação: corrija a credencial no painel (nova
+  revisão de acesso) e use **Mapear aplicação (nova tentativa)**; histórico e tempo
+  consumido são preservados.
+- O validador recebe o manifesto ordenado das imagens; referências de trabalhos
+  anteriores, ações com erro e aprovação contraditória de autenticação não
+  liberam `ready`.
+
 ## Referências
 
 - [SDK do Pi](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md)

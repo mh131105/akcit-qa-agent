@@ -4,11 +4,11 @@ const main = document.querySelector('#main');
 const account = document.querySelector('#account');
 const storagePrefix = 'akcit.intake.v1:';
 const limit = 16 * 1024;
-const statuses = { draft: 'Rascunho', running: 'Em andamento', awaiting_approval: 'Aguardando aprovação', awaiting_input: 'Aguardando informações', completed: 'Concluída', interrupted: 'Interrompida', error: 'Erro', cancelled: 'Cancelada' };
+const statuses = { draft: 'Rascunho', running: 'Em andamento', awaiting_approval: 'Aguardando aprovação', awaiting_input: 'Aguardando informações', ready: 'Mapa validado', completed: 'Concluída', interrupted: 'Interrompida', error: 'Erro', cancelled: 'Cancelada' };
 const phases = { intake: 'Recebimento do material', curation: 'Curadoria', planning: 'Planejamento', case_design: 'Criação dos casos', mapping: 'Mapeamento', route_detail: 'Detalhamento dos percursos', execution: 'Execução dos testes', report: 'Relatório' };
 const validations = { approved: 'Aprovado pelo validador', changes_requested: 'Validador solicitou alterações', blocked: 'Validação bloqueada', error: 'Erro de validação' };
-const roles = { 'artifact-curator': 'Curador', 'test-designer': 'Designer de testes', 'output-validator': 'Validador independente' };
-const activities = { curating: 'Organizando requisitos e fontes', planning: 'Elaborando o plano de testes', validating_curation: 'Revisando a curadoria', validating_planning: 'Revisando o plano de testes', case_design: 'Gerando casos de teste', validating_case_design: 'Validando os casos de teste' };
+const roles = { 'artifact-curator': 'Curador', 'test-designer': 'Designer de testes', 'output-validator': 'Validador independente', 'test-executor': 'Executor de testes' };
+const activities = { curating: 'Organizando requisitos e fontes', planning: 'Elaborando o plano de testes', validating_curation: 'Revisando a curadoria', validating_planning: 'Revisando o plano de testes', case_design: 'Gerando casos de teste', validating_case_design: 'Validando os casos de teste', mapping: 'Mapeando a aplicação', validating_mapping: 'Validando o mapa de navegação' };
 let user = null;
 let rememberForm = null;
 let sessionTimer;
@@ -16,7 +16,21 @@ let checkingSession = null;
 let signedOut = false;
 let detailTimer;
 let detailSequence = 0;
+let evidenceRunId = null;
 const answerDrafts = new Map();
+// URLs blob: das capturas; revogadas ao sair da execução para não reter dados privados.
+const evidenceUrls = new Set();
+function revokeEvidence() { for (const url of evidenceUrls) URL.revokeObjectURL(url); evidenceUrls.clear(); }
+async function evidenceUrl(runId, assetId, accountId) {
+  const response = await fetch(`/api/runs/${encodeURIComponent(runId)}/evidence/${encodeURIComponent(assetId)}`, {
+    credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(20000),
+    headers: { 'X-Expected-User-Id': accountId },
+  });
+  if (!response.ok) throw new Error('Evidência indisponível.');
+  const url = URL.createObjectURL(await response.blob());
+  evidenceUrls.add(url);
+  return url;
+}
 
 // Dados da API entram somente como texto. Nenhum conteúdo recebido vira HTML.
 function el(tag, text, className) {
@@ -113,6 +127,12 @@ function errorText(error) {
     ANSWER_CONFLICT: 'Esta pergunta já possui outra resposta. Consulte a resposta registrada.',
     QUESTION_NOT_FOUND: 'A pergunta não está disponível nesta revisão. Consulte o material atualizado.',
     ACTIVE_LIMIT: 'Esta execução atingiu o limite de processamento ativo. As respostas e os resultados salvos estão preservados.',
+    ACCESS_NOT_CONFIGURED: 'Configure o endereço, a autorização e a credencial de teste antes do mapeamento.',
+    DECISION_MISSING: 'Aprove a revisão vigente antes de continuar.',
+    MAPPING_BLOCKED: 'O mapeamento foi interrompido por um impedimento. Consulte as pendências e limitações do mapa.',
+    CREDENTIAL_REJECTED: 'O login da aplicação testada não foi confirmado. Corrija a credencial de teste e solicite uma nova tentativa.',
+    VALIDATOR_LIMIT: 'O limite de tentativas técnicas do validador foi esgotado sem parecer válido.',
+    REVISION_LIMIT: 'O limite de revisões desta etapa foi esgotado. Os registros salvos estão preservados.',
     TARGET_NOT_ALLOWED: 'O endereço informado não pertence às origens autorizadas pela equipe do piloto.',
     AUTHORIZED_TARGET_REQUIRED: 'Confirme a autorização para testar a aplicação.',
     INVALID_URL: 'Endereço da aplicação inválido. Use HTTP ou HTTPS habilitado pela equipe, sem query string ou fragmento.',
@@ -136,6 +156,7 @@ async function api(path, { accountId, ...options } = {}) {
 function expire() {
   if (signedOut) return;
   if (rememberForm) rememberForm();
+  revokeEvidence(); evidenceRunId = null;
   user = null; rememberForm = null; answerDrafts.clear(); clearInterval(sessionTimer); clearTimeout(detailTimer); detailSequence++;
   main.replaceChildren(); account.replaceChildren(); main.hidden = false;
   location.replace(`/acesso?expired=1&next=${encodeURIComponent(internal(location.pathname + location.search))}`);
@@ -582,13 +603,17 @@ function casesPanel(run, accountId, pending) {
   const statusText = !cases.current
     ? 'Casos desatualizados — as dependências desta revisão foram alteradas.'
     : currentDecision
-    ? (currentDecision.decision === 'approved' ? 'Casos aprovados. O mapeamento ainda não foi iniciado.' : 'Alterações solicitadas. Os casos aguardam revisão.')
+    ? (currentDecision.decision === 'approved'
+      ? (run.canMap ? 'Casos aprovados. Pronto para mapear a aplicação.'
+        : run.targetAccess?.revision > 0 ? 'Casos aprovados. O mapeamento ainda não foi iniciado.'
+        : 'Casos aprovados. Configure o acesso à aplicação antes do mapeamento.')
+      : 'Alterações solicitadas. Os casos aguardam revisão.')
     : (verdicts.length === 1 && verdicts[0].status === 'approved'
       ? 'Conjunto validado. Disponível para revisão humana.'
       : 'Conteúdo provisório — a validação desta revisão ainda não foi aprovada.');
 
   panel.append(el('p', `Casos de teste / Revisão ${cases.revision}`, 'eyebrow'), el('h2', 'Casos de teste'),
-    el('p', 'Casos lógicos — percurso ainda não mapeado.', 'lead'),
+    el('p', run.mapping ? 'Casos aprovados — percurso observado no mapa de navegação.' : 'Casos lógicos — percurso ainda não mapeado.', 'lead'),
     message(statusText));
   for (const item of cases.payload.testCases) {
     const detail = el('details', null, 'plan-section'); detail.append(el('summary', `${item.id} · ${item.ruleIds.join(', ')}`));
@@ -616,6 +641,23 @@ function casesPanel(run, accountId, pending) {
     decisions.append(item);
   }
   panel.append(decisions);
+
+  if (currentDecision?.decision === 'approved' && run.canMap) {
+    const map = el('section', null, 'plan-section');
+    map.append(el('h3', 'Mapear aplicação'),
+      el('p', 'O agente entrará na aplicação, autenticará pela interface e percorrerá as telas relevantes. O mapa observado será examinado pelo validador visual em sessão independente.'));
+    const notice = message(); map.append(notice);
+    const start = button('Mapear aplicação', async () => {
+      start.disabled = true; tell(notice, 'Solicitando o mapeamento da aplicação…');
+      try {
+        await sameAccount(accountId); if (user?.id !== accountId) return;
+        await api(`/runs/${encodeURIComponent(run.id)}/continue`, { accountId, method: 'POST',
+          body: JSON.stringify({ outputId: cases.id, outputRevision: cases.revision, expectedAccessRevision: run.targetAccess.revision }) });
+        await detailPage('Mapeamento aceito. Acompanhe a exploração e a validação visual abaixo.');
+      } catch (error) { if (user?.id === accountId) await detailPage(errorText(error), true); }
+    });
+    map.append(start); panel.append(map);
+  }
 
   const restoreCaseComment = pending && run.cases?.id === pending.outputId && run.cases.revision === pending.outputRevision &&
     !run.approvals.some(decision => decision.outputId === pending.outputId && decision.outputRevision === pending.outputRevision);
@@ -673,6 +715,110 @@ function casesPanel(run, accountId, pending) {
     panel.append(preservedComment(pending));
   }
 
+  return panel;
+}
+function captureFigure(run, observation, accountId) {
+  const figure = el('figure', null, 'evidence-shot');
+  const img = el('img');
+  img.alt = 'Captura da tela observada'; img.loading = 'lazy';
+  if (observation.width && observation.height) { img.width = observation.width; img.height = observation.height; }
+  const caption = el('figcaption', `${observation.at} · ${observation.width}×${observation.height}`);
+  figure.append(img, caption);
+  evidenceUrl(run.id, observation.assetId, accountId).then(url => { img.src = url; })
+    .catch(() => { img.alt = 'Captura indisponível'; caption.textContent = 'Captura indisponível para esta observação.'; });
+  return figure;
+}
+function mappingPanel(run, accountId) {
+  const mapping = run.mapping;
+  const panel = el('section', null, 'panel');
+  const last = mapping.validations.at(-1);
+  let statusText = 'Mapa em elaboração — aguardando parecer do validador visual.';
+  if (run.status === 'ready') statusText = 'Mapa validado — aguardando detalhamento dos percursos.';
+  else if (last?.status === 'changes_requested') statusText = 'Validador solicitou alterações; o executor prepara uma nova revisão.';
+  else if (last?.status === 'blocked') statusText = 'Validação bloqueada.';
+  else if (last?.status === 'error') statusText = 'Falha técnica na validação visual desta revisão.';
+  panel.append(el('p', `Mapa de navegação / Revisão ${mapping.revision}`, 'eyebrow'), el('h2', 'Mapa de navegação'),
+    message(statusText));
+  const auth = mapping.payload.authentication;
+  panel.append(el('p', auth.status === 'authenticated'
+    ? `Acesso autenticado observado (observação ${auth.observationId}).`
+    : 'Acesso autenticado ainda não observado.', 'hint'));
+
+  const screens = el('details', null, 'plan-section'); screens.open = true;
+  screens.append(el('summary', `Telas observadas (${mapping.payload.map.screens.length})`));
+  if (!mapping.payload.map.screens.length) screens.append(el('p', 'Nenhuma tela registrada.', 'hint'));
+  for (const screen of mapping.payload.map.screens) {
+    const item = el('div', null, 'plan-section');
+    item.append(el('h3', screen.id), el('p', screen.name, 'text-content'), el('p', screen.recognition, 'text-content'));
+    const captures = el('div', null, 'evidence-grid');
+    for (const observationId of screen.observationIds) {
+      const observation = run.observations.find(value => value.id === observationId);
+      if (observation) captures.append(captureFigure(run, observation, accountId));
+      else captures.append(el('p', `Observação ${observationId} indisponível.`, 'hint'));
+    }
+    item.append(captures); screens.append(item);
+  }
+  panel.append(screens);
+
+  const transitions = el('details', null, 'plan-section');
+  transitions.append(el('summary', `Transições (${mapping.payload.map.transitions.length})`));
+  if (!mapping.payload.map.transitions.length) transitions.append(el('p', 'Nenhuma transição registrada.', 'hint'));
+  for (const transition of mapping.payload.map.transitions) {
+    transitions.append(el('p', `${transition.id}: ${transition.from} → ${transition.to} · ação ${transition.actionId}`, 'text-content'),
+      el('p', `Observações: ${transition.observationIds.join(', ')}`, 'hint'));
+  }
+  panel.append(transitions);
+
+  const paths = el('details', null, 'plan-section');
+  paths.append(el('summary', `Caminhos (${mapping.payload.map.paths.length})`));
+  if (!mapping.payload.map.paths.length) paths.append(el('p', 'Nenhum caminho registrado.', 'hint'));
+  for (const path of mapping.payload.map.paths) {
+    paths.append(el('p', `${path.id}: ${path.startScreenId}${path.transitionIds.length ? ' → ' + path.transitionIds.join(' → ') : ''}`, 'text-content'));
+  }
+  panel.append(paths);
+
+  const pendings = el('details', null, 'plan-section');
+  pendings.append(el('summary', `Pendências (${mapping.payload.pending.length})`));
+  if (!mapping.payload.pending.length) pendings.append(el('p', 'Nenhuma pendência registrada.', 'hint'));
+  for (const item of mapping.payload.pending) {
+    pendings.append(el('p', `${item.id} — ${item.description}`, 'text-content'),
+      el('p', `Casos afetados: ${item.affectedCaseIds.join(', ') || 'nenhum'}`, 'hint'));
+  }
+  panel.append(pendings);
+
+  if (mapping.payload.limitations.length) panel.append(planSection('Limitações do mapa', mapping.payload.limitations));
+  panel.append(planSection('Situação da validação', mapping.validations,
+    value => `${validations[value.status] || value.status} · Revisão ${value.outputRevision} · ${value.validator}${value.reason ? ' — ' + value.reason : ''}`));
+  for (const verdict of mapping.validations) {
+    if (verdict.findings?.length) panel.append(planSection('Achados da validação', verdict.findings,
+      value => `${value.location || 'geral'} — ${value.message}`));
+  }
+
+  if (run.mappingActions.length) {
+    const actions = el('details', null, 'plan-section');
+    actions.append(el('summary', `Ações registradas (${run.mappingActions.length})`));
+    for (const action of run.mappingActions) {
+      actions.append(el('p', `${action.tool} · ${date(action.at)}${action.observationId ? ' · observação ' + action.observationId : ''}${action.note ? ' — ' + action.note : ''}`, 'hint'));
+    }
+    panel.append(actions);
+  }
+
+  if (run.canMap && run.status === 'awaiting_input' && run.cases) {
+    const retrySection = el('section', null, 'plan-section');
+    retrySection.append(el('h3', 'Nova tentativa de mapeamento'),
+      el('p', 'Corrija a credencial de teste acima e solicite explicitamente uma nova tentativa. O histórico e o tempo consumido são preservados.'));
+    const notice = message(); retrySection.append(notice);
+    const retry = button('Mapear aplicação (nova tentativa)', async () => {
+      retry.disabled = true; tell(notice, 'Solicitando nova tentativa de mapeamento…');
+      try {
+        await sameAccount(accountId); if (user?.id !== accountId) return;
+        await api(`/runs/${encodeURIComponent(run.id)}/continue`, { accountId, method: 'POST',
+          body: JSON.stringify({ outputId: run.cases.id, outputRevision: run.cases.revision, expectedAccessRevision: run.targetAccess.revision }) });
+        await detailPage('Nova tentativa aceita. Acompanhe o mapeamento abaixo.');
+      } catch (error) { if (user?.id === accountId) await detailPage(errorText(error), true); }
+    });
+    retrySection.append(retry); panel.append(retrySection);
+  }
   return panel;
 }
 function pendingComment(run, accountId, pending) {
@@ -741,6 +887,9 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   main.replaceChildren(); main.append(message('Carregando execução…')); main.setAttribute('aria-busy', 'true');
   const id = location.pathname.split('/')[2]; let run;
   if (pending && (pending.accountId !== accountId || pending.runId !== id)) pending = null;
+  // Capturas da execução anterior são revogadas ao trocar de execução.
+  if (evidenceRunId && evidenceRunId !== id) revokeEvidence();
+  evidenceRunId = id;
   try { run = await api(`/runs/${encodeURIComponent(id)}`, { accountId }); if (user?.id !== accountId || sequence !== detailSequence) return; }
   catch (error) {
     if (user && sequence === detailSequence) { main.replaceChildren(link('← Minhas execuções', '/execucoes', 'back-link'), message([noticeText, errorText(error)].filter(Boolean).join(' '), true));
@@ -759,6 +908,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   if (run.stopReason) main.append(message(run.stopReason.message, ['error', 'interrupted'].includes(run.status)));
   if (run.targetAccess) main.append(targetAccessPanel(run, accountId));
   if (run.cases) main.append(casesPanel(run, accountId, pending));
+  if (run.mapping) main.append(mappingPanel(run, accountId));
   if (run.curation) main.append(curationPanel(run.curation));
   if (run.questions?.length) main.append(questionPanel(run, accountId, pending));
   for (const [key, draft] of answerDrafts) {
@@ -900,7 +1050,7 @@ async function boot() {
   }
 }
 // Limpa o snapshot privado antes de entrar no cache de navegação do navegador.
-addEventListener('pagehide', () => { if (rememberForm) rememberForm(); clearTimeout(detailTimer); detailSequence++; main.replaceChildren(); account.replaceChildren(); });
+addEventListener('pagehide', () => { if (rememberForm) rememberForm(); revokeEvidence(); clearTimeout(detailTimer); detailSequence++; main.replaceChildren(); account.replaceChildren(); });
 addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
 document.addEventListener('visibilitychange', () => {
   if (!user) return;

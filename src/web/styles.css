@@ -446,6 +446,28 @@ blockquote {
 .decision p {
   margin-bottom:6px;
 }
+.evidence-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));
+  gap:16px;
+  margin-top:14px;
+}
+.evidence-shot {
+  margin:0;
+}
+.evidence-shot img {
+  width:100%;
+  height:auto;
+  border:1px solid var(--line);
+  border-radius:6px;
+  background:#f7f7f3;
+}
+.evidence-shot figcaption {
+  font-size:12px;
+  color:#6b6b62;
+  margin-top:6px;
+  overflow-wrap:anywhere;
+}
 .auth-layout {
   display:grid;
   grid-template-columns:1fr minmax(300px,460px);

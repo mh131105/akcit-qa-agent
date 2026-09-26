@@ -14,15 +14,16 @@ const webFiles = new Map([
   ['/web/app.js', { url: new URL('../src/web/app.js', import.meta.url), type: 'text/javascript; charset=utf-8' }],
 ]);
 const indexFile = new URL('../src/web/index.html', import.meta.url);
-const contentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
+// blob: apenas para exibir capturas buscadas com a autenticação existente; URLs revogadas ao sair.
+const contentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' blob:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 
-export async function createApp(config: ReturnType<typeof readConfig>, options: Pick<PreparationOptions, 'modelCall' | 'modelPreflight'> & { now?: () => number } = {}) {
+export async function createApp(config: ReturnType<typeof readConfig>, options: Pick<PreparationOptions, 'modelCall' | 'modelPreflight' | 'visualCall' | 'visualPreflight'> & { now?: () => number } = {}) {
   const runs = new RunStore(config.dataDir);
   await runs.initialize();
   await runs.recoverInterrupted();
   const auth = new AuthService(config, options.now);
   const preparation = new PreparationCoordinator(runs, config, options);
-  return createServer(async (request, response) => {
+  const server = createServer(async (request, response) => {
     try {
       response.setHeader('Cache-Control', 'no-store');
       response.setHeader('X-Content-Type-Options', 'nosniff');
@@ -65,4 +66,6 @@ export async function createApp(config: ReturnType<typeof readConfig>, options: 
       response.end('{"error":{"code":"STORAGE_FAILURE","message":"Não foi possível concluir a operação."}}');
     }
   });
+  // Encerramento controlado: espera o trabalho ativo terminar (sessão/navegador) antes de sair.
+  return Object.assign(server, { shutdown: async () => { await preparation.settled(); } });
 }

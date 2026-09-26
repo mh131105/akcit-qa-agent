@@ -118,6 +118,61 @@ function waiting(id, ownerId, label) {
   };
 }
 
+// Sessões visuais substituídas explicitamente (SIMULAÇÃO identificada no resultado).
+const visualModels = {
+  executor: { provider: 'deepseek', model: 'deepseek-flash', thinkingLevel: 'high' },
+  'validator-visual': { provider: 'deepseek', model: 'deepseek-flash', thinkingLevel: 'high' },
+};
+let visualCalls = 0;
+async function visualCall(task) {
+  visualCalls++;
+  assert.ok(['test-executor', 'output-validator'].includes(task.role));
+  const input = JSON.parse(task.prompt);
+  const metadata = { provider: 'deepseek', model: 'deepseek-flash', thinkingLevel: 'high', durationMs: 1 };
+  const calls = [{ at: new Date().toISOString(), durationMs: 1 }];
+  if (task.role === 'test-executor') {
+    assert.equal(input.task, 'map-application');
+    assert.ok(input.approvedCases, 'Executor recebe os casos aprovados.');
+    assert.equal(input.access.startUrl, 'https://alvo.exemplo.test');
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+    await mkdir(task.browser.mediaDir, { recursive: true });
+    const observations = [];
+    for (const [index, name] of ['login', 'inicio', 'reservas'].entries()) {
+      const observation = { id: 'obs-' + name, assetId: ('smoke-asset-' + (index + 1)).padEnd(21, '0'), at: new Date().toISOString(), width: 1366, height: 768 };
+      await writeFile(join(task.browser.mediaDir, observation.assetId + '.png'), png);
+      await task.browser.onObservation(observation);
+      observations.push(observation);
+    }
+    const actions = [];
+    for (const [index, name] of ['clicar-entrar', 'abrir-reservas'].entries()) {
+      const action = { id: 'smoke-act-' + name, at: new Date().toISOString(), tool: 'pointer', params: { action: 'click', x: 10 + index, y: 20 + index }, outcome: 'ok' };
+      await task.browser.onAction(action);
+      actions.push(action);
+    }
+    const caseId = input.approvedCases.payload.testCases[0].id;
+    const payload = {
+      authentication: { status: 'authenticated', observationId: observations[1].id },
+      map: {
+        screens: [
+          { id: 'tela-login', name: 'Login', recognition: 'Formulário de usuário e senha.', observationIds: [observations[0].id] },
+          { id: 'tela-inicio', name: 'Início', recognition: 'Menu principal após autenticar.', observationIds: [observations[1].id] },
+          { id: 'tela-reservas', name: 'Reservas', recognition: 'Lista de reservas.', observationIds: [observations[2].id] },
+        ],
+        transitions: [
+          { id: 'entrar', from: 'tela-login', actionId: actions[0].id, to: 'tela-inicio', observationIds: [observations[1].id] },
+          { id: 'abrir-reservas', from: 'tela-inicio', actionId: actions[1].id, to: 'tela-reservas', observationIds: [observations[2].id] },
+        ],
+        paths: [{ id: 'percurso-reservas', startScreenId: 'tela-login', transitionIds: ['entrar', 'abrir-reservas'] }],
+      },
+      pending: [{ id: 'pend-01', description: 'Caminho de nova reserva não percorrido nesta etapa.', affectedCaseIds: [caseId] }],
+      limitations: ['Exploração limitada às telas principais; sem criar reservas.'],
+    };
+    return { payload, metadata, calls };
+  }
+  assert.equal(input.task, 'validation');
+  assert.ok(Array.isArray(task.images) && task.images.length === 3, 'Validador recebe as próprias imagens referenciadas.');
+  return { payload: { status: 'approved', reason: 'Mapa sustentado pelas imagens (simulado).', findings: [] }, metadata, calls };
+}
 async function visible(locator) { await locator.first().waitFor({ state: 'visible' }); }
 async function bodyIncludes(value) { await visible(page.getByText(value, { exact: false })); }
 async function history() {
@@ -656,12 +711,12 @@ async function preparationJourney(context, store, owner) {
 
   // CA-01: Aprovação dos casos de teste pelo site
   await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true }).click();
-  await bodyIncludes('Casos aprovados. O mapeamento ainda não foi iniciado.');
+  await bodyIncludes('Casos aprovados. Configure o acesso à aplicação antes do mapeamento.');
   await screenshot('web-cases-approved.png', 1366); await screenshot('web-cases-approved-mobile.png', 390);
 
   // CA-05: persistência após recarregar página
   await page.reload();
-  await bodyIncludes('Casos aprovados. O mapeamento ainda não foi iniciado.');
+  await bodyIncludes('Casos aprovados. Configure o acesso à aplicação antes do mapeamento.');
   assert.equal(await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true }).count(), 0);
   assert.equal(await page.getByRole('button', { name: 'Solicitar alterações nos casos', exact: true }).count(), 0);
   await screenshot('web-cases-persisted.png', 1366);
@@ -790,13 +845,16 @@ async function preparationJourney(context, store, owner) {
   assert.equal(preparationCalls.length, callsBefore + 1);
   assert.equal(await page.getByRole('button', { name: 'Preparar plano', exact: true }).count(), 0);
   checked.push('T4.1: cancelar pelo site conserva identidade e estado cancelado, aborta a chamada e impede planejamento posterior');
+  // Snapshot com casos aprovados e dependências vigentes (antes da adulteração
+  // sintética do BUG-T6.2-01): sustenta a jornada de mapeamento a seguir.
+  return { approvedRecord: storedRecordAfter, savedCases };
 }
 
 try {
   if (artifactDir) await mkdir(artifactDir, { recursive: true });
   const config = readConfig({ DATA_DIR: root, PILOT_ALLOWED_EMAILS: accounts.map(account => account.email).join(','),
     PI_PROVIDER: 'test-only', PI_MODEL: 'scripted', TARGET_ALLOWED_ORIGINS: 'https://alvo.exemplo.test' });
-  server = await createApp(config, { now: () => clock, modelCall, modelPreflight: async () => {} });
+  server = await createApp(config, { now: () => clock, modelCall, modelPreflight: async () => {}, visualCall, visualPreflight: async () => visualModels });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const origin = `http://127.0.0.1:${server.address().port}`;
@@ -946,6 +1004,7 @@ try {
   assert.equal(storedAfterUpdate.targetCredential?.username, 'operador-reserva');
   assert.equal(storedAfterUpdate.targetCredential?.password, 'senha-secreta-alvo-123!');
   checked.push('T8.1: configurar acesso → validação/origem não autorizada → resposta perdida sem reenvio automático → conflito de revisão → salvamento 200 → recarregamento com resumo sem senha → atualização sem reenviar senha incrementa revisão');
+
 
   await page.goto('/execucoes/nova');
   await fillRun(pendingName, pendingText);
@@ -1186,8 +1245,77 @@ try {
   assert.ok(!secretStorage.includes('akcit_session'));
   assert.deepEqual(pageErrors, [], 'Nenhum erro JavaScript na jornada.');
   checked.push('desktop 1366px e celular 390px sem transbordamento; nenhum token ou senha no storage');
-  await preparationJourney(context, store, owner);
+  const journey = await preparationJourney(context, store, owner);
   assert.deepEqual(pageErrors, [], 'Nenhum erro JavaScript na preparação e aprovação do plano.');
+
+  // T8.2: mapear aplicação pelo site, com sessões visuais substituídas explicitamente.
+  const mappingId = 'run-mapping-smoke';
+  const mappingRun = structuredClone(journey.approvedRecord.run);
+  mappingRun.id = mappingId;
+  mappingRun.name = 'Mapeamento visual simulado';
+  await store.create(mappingRun);
+  await store.update(mappingId, record => {
+    record.targetCredential = { ref: 'cred-smoke', username: 'operador-reserva', password: 'senha-secreta-alvo-123!' };
+    record.run.input = { ...record.run.input, credentialRef: 'cred-smoke', startUrl: 'https://alvo.exemplo.test', accessProfile: 'Operador de reservas', dataPreparation: 'Lista vazia.', authorizedTarget: true, accessRevision: 1 };
+    return { save: true, value: null };
+  });
+  await page.goto('/execucoes/run-mapping-smoke');
+  await bodyIncludes('Casos aprovados. Pronto para mapear a aplicação.');
+  const mappingPost = page.waitForResponse(response => response.url().endsWith('/api/runs/run-mapping-smoke/continue'));
+  await page.getByRole('button', { name: 'Mapear aplicação', exact: true }).click();
+  const acceptedMapping = await mappingPost;
+  assert.equal(acceptedMapping.status(), 202);
+  assert.deepEqual(acceptedMapping.request().postDataJSON(), { outputId: journey.savedCases.id, outputRevision: 1, expectedAccessRevision: 1 });
+  await bodyIncludes('Mapa validado — aguardando detalhamento dos percursos.');
+  await bodyIncludes('Mapa de navegação / Revisão 1');
+  await bodyIncludes('Telas observadas (3)');
+  await bodyIncludes('Transições (2)');
+  await bodyIncludes('Caminhos (1)');
+  await bodyIncludes('Pendências (1)');
+  await bodyIncludes('Ações registradas (2)');
+  await bodyIncludes('Acesso autenticado observado');
+  await bodyIncludes('Limitações do mapa');
+  // A captura chega por blob com a autenticação existente (rolar até a imagem:
+  // ela usa carregamento preguiçoso e fora da viewport nunca completa).
+  await page.waitForFunction(() => {
+    const image = document.querySelector('img[alt="Captura da tela observada"]');
+    image?.scrollIntoView();
+    return image && image.complete && image.naturalWidth > 0 && image.src.startsWith('blob:');
+  }, null, { timeout: 30_000 });
+  const mapping = await api(context, '/api/runs/run-mapping-smoke', owner.id);
+  assert.equal(mapping.status, 'ready'); assert.equal(mapping.phase, 'mapping');
+  assert.equal(mapping.canMap, false); assert.equal(mapping.mapping.revision, 1);
+  assert.equal(mapping.mapping.validations[0].status, 'approved');
+  assert.equal(mapping.observations.length, 3); assert.equal(mapping.mappingActions.length, 2);
+  assert.ok(!JSON.stringify(mapping.mapping.payload).includes('senha-secreta-alvo-123!'), 'projeção sem a senha do alvo');
+  assert.ok(!(await page.locator('body').innerText()).includes('senha-secreta-alvo-123!'));
+  assert.ok(!(await page.locator('body').innerText()).includes('caseId'), 'sem contrato de execução no mapa');
+  // Outra conta não acessa a evidência do proprietário (sessão própria → 404).
+  const foreignContext = await browser.newContext({ baseURL: origin });
+  const foreignPage = await foreignContext.newPage();
+  await foreignPage.goto('/acesso');
+  await foreignPage.getByLabel('E-mail', { exact: true }).fill(accounts[1].email);
+  await foreignPage.getByLabel('Senha', { exact: true }).fill(accounts[1].password);
+  const foreignLogin = foreignPage.waitForResponse(response => response.url().endsWith('/api/auth/login'));
+  await foreignPage.getByRole('button', { name: 'Entrar na conta', exact: true }).click();
+  assert.equal((await foreignLogin).status(), 200);
+  const foreignEvidence = await foreignContext.request.get(`/api/runs/run-mapping-smoke/evidence/${mapping.observations[0].assetId}`, { headers: { 'X-Expected-User-Id': other.id } });
+  assert.equal(foreignEvidence.status(), 404, 'evidência isolada de outras contas');
+  await foreignContext.close();
+  // Persistência após recarregar, incluindo nova busca das capturas.
+  await page.reload();
+  await bodyIncludes('Mapa validado — aguardando detalhamento dos percursos.');
+  await page.waitForFunction(() => {
+    const image = document.querySelector('img[alt="Captura da tela observada"]');
+    image?.scrollIntoView();
+    return image && image.complete && image.naturalWidth > 0;
+  }, null, { timeout: 30_000 });
+  await screenshot('web-map.png', 1366); await screenshot('web-map-mobile.png', 390);
+  // ready no filtro de histórico.
+  const readyHistory = await api(context, '/api/runs?status=ready', owner.id);
+  assert.ok(readyHistory.items.some(item => item.id === mappingId), 'ready/mapping no filtro de histórico');
+  assert.equal(visualCalls, 2, 'uma produção e uma validação visual');
+  checked.push('T8.2: mapear aplicação pelo site com sessões visuais substituídas → 202 → mapa validado em ready/mapping → telas, transições, caminhos, pendências, limitações, ações e capturas por blob → evidência isolada entre contas → persistência após recarregar');
   }
   await regressions(origin, store, owner, other);
   result = { status: 'passed', scope: 'T2.1/T4.1/T6.1/T6.2/T8.1 — navegador, API, coordenador e persistência reais; chamada de modelo substituída, sem inferência paga', checked,

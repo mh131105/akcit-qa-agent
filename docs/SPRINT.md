@@ -533,7 +533,7 @@ História de usuário, prioridade alta,
 Responsável: um desenvolvedor com atuação em backend e interface.
 Revisor: outro integrante, preferencialmente da frente B.
 Base: `develop`, contendo o merge `000969b`. Branch: `feat/target-access`.
-Estado: **Implementação concluída**; PR aberto para `develop`.
+Estado: **Integrada pelo PR #28** em `develop`.
 
 Como responsável pelos testes, quero informar o endereço, a conta de teste, o
 perfil de acesso e a preparação necessária da aplicação, para que o executor
@@ -590,6 +590,130 @@ e operação em [OPERACAO.md](OPERACAO.md#configurar-acesso-ao-alvo-t7-em-uma-ex
 **T8 permanece aberta (Refs #11):** T8.1 entrega exclusivamente a configuração e
 armazenamento seguro do acesso ao alvo. Mapeamento autônomo pelo navegador, execução
 visual dos casos, captura de evidências e gravação de vídeo continuam pendentes.
+
+### T8.2 · Mapear a aplicação com agente visual e validar os percursos observados
+
+História de usuário, prioridade alta,
+**recorte da [T8 · #11](https://github.com/mh131105/akcit-qa-agent/issues/11)**, com
+integração ao validador da [T10 · #14](https://github.com/mh131105/akcit-qa-agent/issues/14).
+Responsável: um desenvolvedor da frente de navegador/backend. Revisão: outro
+integrante para integração e uma pessoa da frente C para conferir a qualidade do mapa.
+Base: `develop`, contendo `73063ac`. Branch: `feat/validated-navigation-map`.
+
+Como responsável pelos testes, quero que o agente entre na aplicação e observe seus
+caminhos de navegação, depois da aprovação dos casos, para que os testes recebam
+percursos reais, sustentados por evidências e revisados por um validador independente.
+
+Implementação:
+- **`src/domain/navigation.ts`:** contrato e validação estrutural do mapa (telas,
+  transições, caminhos, pendências, limitações), com referências a observações e
+  ações reais; referências inventadas são recusadas.
+- **`src/application/map-application.ts`:** verificação específica das condições de
+  início (não usa `canDecideCases`), rotina de produção do executor e validação visual
+  em sessão independente, revisões, pareceres e transições de estado.
+- **`src/runtime/pi-visual.ts`:** sessões Pi com `customTools`, imagens e contagem de
+  todas as chamadas e ações; 120 s por chamada, orçamento acumulado por execução.
+- **`agents/test-executor/tools/browser.mjs`:** navegador real (Chromium/Xvfb/xdotool),
+  observar tela, mover/clicar, teclado/rolagem e preenchimento privado de credenciais;
+  `TARGET_ALLOWED_ORIGINS` antes de cada requisição; bloqueio de novas abas; captura
+  com credencial visível nunca enviada nem persistida.
+- **Skills:** `test-executor/map-application` (metodologia de exploração) e
+  `output-validator/validate-navigation` (critérios de avaliação visual independente).
+- **`src/application/prepare-plan.ts`:** continuidade para mapeamento reutilizando a
+  reserva, o cancelamento e o orçamento do coordenador existente; intenção `create_map`
+  persistida antes do `202`.
+- **`src/storage/runs.ts`:** observações, ações, mídia e limites do mapeamento;
+  recuperação após reinício preserva registros.
+- **`src/http/api.ts`:** continuidade com `expectedAccessRevision` e rota de mídia
+  autenticada `GET /api/runs/:id/evidence/:assetId`.
+- **`src/web/app.js`:** botão **Mapear aplicação**, painel do mapa (telas com
+  capturas, transições, caminhos, pareceres, pendências, limitações, ações),
+  estado `ready / mapping` exibido como *"Mapa validado — aguardando detalhamento dos
+  percursos"* e mídia por `blob:` com revogação.
+- **Estados:** `ready` introduzido como "etapa concluída, aguardando continuidade";
+  `completed` continua reservado ao relatório final validado.
+
+Verificações:
+- `npm run check` limpo; `npm run build` completa.
+- `npm test`: **176/176** (10 novos testes em `test/navigation.test.ts` cobrindo
+  CA-01 a CA-10: aprovações ausentes, concorrência, referências inventadas,
+  correções/pareceres, credencial inválida com correção, cancelamento, evidência
+  entre contas e transições).
+- `scripts/smoke-mapping.mjs` na imagem final: navegador, cursor, capturas e
+  destinos bloqueados reais, com respostas de modelo substituídas e identificadas
+  como simulação.
+- `scripts/smoke-web.mjs`: jornada do site até a consulta do mapa e das capturas.
+
+Critérios de aceitação: CA-01 a CA-12 do card, com destaque para o mapa aprovado
+terminando em `ready / mapping` sem nenhum teste apresentado como executado, e a
+correção de credencial da mesma aplicação com nova tentativa explícita.
+
+Evidências em [evidencias/t8.2](evidencias/t8.2/README.md). Contratos em
+[CONTRATOS.md](requisitos/CONTRATOS.md#mapeamento-visual-validado--t82) e operação em
+[OPERACAO.md](OPERACAO.md#mapear-e-validar-a-navegação-t82).
+
+**T8 e T10 permanecem abertas:** detalhamento dos percursos, execução com entradas
+válidas/inválidas, vídeos por tentativa, retomada completa das dúvidas visuais e
+relatório ainda precisam ser entregues.
+
+### T8.2-R1 · Corrigir e validar o fluxo até o mapa de navegação
+
+Card de correção de bugs e revisão de integração, bloqueando o merge do PR #29.
+Branch aproveitada: `feat/validated-navigation-map` (SHA revisado `14ca870`, sem
+commits posteriores em `origin`; candidato corrigido registrado em
+[ensaio-real.md](evidencias/t8.2/ensaio-real.md)).
+
+Correções (defeito → reprodução → correção → teste de regressão em
+[revisao-pr29.md](evidencias/t8.2/revisao-pr29.md)):
+
+- **Build/smoke:** `COPY agents ./agents` antes da compilação (TS2307);
+  `smoke-mapping.mjs` registra conta pela API e envia `Cookie` +
+  `X-Expected-User-Id` em todas as chamadas (recusas sem sessão preservadas),
+  associa a transição de login ao clique em **Entrar** e percorre até
+  **Reservas → Nova reserva** sem confirmar; `smoke-web.mjs` tinha a jornada T8.2
+  em escopo inexistente (nunca executável) — bloco movido para depois da
+  preparação, snapshot devolvido e evidência estrangeira conferida com sessão
+  própria (404).
+- **Navegador:** aba principal antes do bloqueio de popups; limpeza em falha de
+  inicialização; imagem e cursor na mesma geometria real do display (x11grab +
+  `getdisplaygeometry`, sem deslocamento fixo); `fill_credential` exige foco em
+  campo compatível (`FOCUS_MISMATCH` sem digitar); captura bloqueada quando a
+  verificação de privacidade falha ou a credencial está visível (nada salvo nem
+  enviado); capturas não consomem ações e a observação final segura permanece.
+- **Orçamento/cancelamento/chamadas:** período encerrado não é somado duas vezes
+  (compatibilidade legada; espera humana fora da soma); cancelamento atravessa
+  navegador e ferramentas e a reserva só é liberada após a limpeza; início e
+  término de cada inferência persistidos em `PreparationCall` (histórico
+  preservado em erro, timeout, cancelamento e saída inválida); falhas técnicas
+  e de navegador conservam a causa, sem virar esgotamento de revisões.
+- **Validador:** executor e validador recebem curadoria, plano e casos vigentes;
+  manifesto ordenado das imagens (`imageIndex`/`observationId`/`assetId`/dimensões)
+  na ordem dos anexos, com as ações das transições; ações com erro não sustentam
+  transições; evidências anteriores à correção do acesso não comprovam a nova
+  autenticação (`mappingPreparationId`); `not_authenticated` + `approved` é
+  validação inválida (`CONTRADICTORY_APPROVAL`) dentro das tentativas; o caminho
+  de credencial recusada (`blocked`/`AUTHENTICATION_MISSING` → `awaiting_input` →
+  correção → nova tentativa) permanece.
+
+Verificações: `npm run check` limpo; `npm test` **196/196** (regressões de
+orçamento, cancelamento, falha de inferência, validação, recarga, reinício,
+isolamento e tolerância de formato do modelo; novo `test/pi-visual.test.ts`);
+imagem final construída do código versionado com os quatro smokes `passed` na
+imagem (`smoke-mapping` com 18 verificações de integração real). Ensaio com LLM
+real concluído em [ensaio-real.md](evidencias/t8.2/ensaio-real.md): duas
+jornadas completas em `ready / mapping` (uma pela interface, com o plano e os
+casos revisados por um avaliador independente via arquivos de decisão; outra
+com aprovações automatizadas, registradas como tal), credencial inválida
+bloqueada por `AUTHENTICATION_MISSING` e corrigida pelo fluxo suportado
+(histórico e tempo acumulado preservados) e controles positivo/negativo do
+validador com a inconsistência localizada. O ensaio encontrou e motivou uma
+correção real (JSON do executor em cercas de código); o cenário afetado e uma
+execução completa foram repetidos no candidato corrigido.
+
+**Pendências verdadeiras:** detalhamento dos percursos (`route_detail`), execução
+dos testes com entradas válidas/inválidas, vídeos por tentativa, retomada
+completa por esclarecimentos de navegação e relatório final validado. Revisão
+independente de outro integrante antes do merge em `develop`.
 
 ## Como encerrar uma tarefa
 

@@ -1,11 +1,15 @@
 # Validador de saídas
 
 Papel decidido pela equipe: `output-validator`. T4.1 implementou a
-[skill de validação](skills/validate-output/SKILL.md) para curadoria e plano, e
-T6.1 acrescentou a validação de casos lógicos, todas em sessões independentes. Não há tools habilitadas neste recorte.
+[skill de validação](skills/validate-output/SKILL.md) para curadoria e plano,
+T6.1 acrescentou a validação de casos lógicos e T8.2 acrescentou a
+[validação visual do mapa de navegação](skills/validate-navigation/SKILL.md),
+todas em sessões independentes. O perfil visual recebe as imagens referenciadas
+como anexos; não há ferramentas de navegador e o validador nunca controla o cursor
+nem modifica o mapa.
 
-O validador já revisa curadoria, plano e casos lógicos. A revisão do mapa de navegação,
-detalhamento dos percursos, resultados de execução e relatório textual final permanecem pendentes (etapas futuras).
+O validador já revisa curadoria, plano, casos lógicos e o mapa de navegação. O detalhamento
+dos percursos, os resultados de execução e o relatório textual final permanecem pendentes (etapas futuras).
 O orquestrador solicita a revisão e encaminha o resultado; a decisão de qualidade
 pertence exclusivamente ao validador.
 
@@ -20,12 +24,12 @@ A seleção do perfil é realizada pelo backend de acordo com a tarefa e a fase.
   - Aplicado na validação de curadoria, plano de testes, casos lógicos e, nas etapas futuras, na conferência do detalhamento de percursos (`route_detail`) e na fidelidade do relatório textual.
   - Como `deepseek-v4-pro` aceita exclusivamente texto, este perfil não processa imagens. Um parecer textual nunca pode declarar que examinou evidência visual.
 - **Perfil Visual (`deepseek-flash`, raciocínio `high`):**
-  - Destinado às etapas futuras que dependam de evidências visuais: validação do mapa de navegação estruturado e conferência de resultados que exijam inspeção de capturas de tela.
+  - Implementado em T8.2 para a validação do mapa de navegação estruturado; nas etapas futuras também conferirá resultados que exijam inspeção de capturas de tela.
   - Continua sendo o mesmo papel `output-validator`, em sessão isolada. Recebe fontes, saída sob revisão e evidências pertinentes (imagens/capturas), não apenas o resumo do executor.
   - Toda conclusão que exigir verificação de imagem deve passar pela validação visual.
   - Vídeos permanecem como evidências para o usuário; a validação automática utiliza capturas ou quadros identificados por instante, sem pressupor suporte nativo a streaming de vídeo.
 
-> **Ressalva factual:** A execução existente comprova a integração técnica da preparação textual; ainda não comprova a qualidade do navegador, do relatório ou da validação visual, nem superioridade entre modelos.
+> **Ressalva factual:** A preparação textual e a validação visual do mapa estão implementadas; a qualidade da validação de resultados de execução e do relatório ainda não está comprovada.
 
 ## Contexto e acesso
 
