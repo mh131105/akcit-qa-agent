@@ -33,6 +33,16 @@ let target;
 let app;
 let fixtureServer;
 
+// DOM pronto não implica que o compositor já pintou no display do Xvfb.
+// O roteiro aguarda a página controlada; a evidência continua vindo da tool
+// real (ffmpeg/x11grab), com o mesmo critério mínimo de tamanho.
+async function waitForPaint(page) {
+  await page.bringToFront();
+  await page.waitForFunction(() => performance.getEntriesByType('paint').some(entry => entry.name === 'first-contentful-paint'),
+    null, { timeout: 10_000 });
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+}
+
 /** Ponto central de um elemento na geometria do display (imagem capturada = display),
  * medido sem deslocamento fixo: coordenadas da viewport mais a posição real da janela. */
 async function screenPoint(page, selector) {
@@ -98,6 +108,7 @@ try {
         return result;
       };
       // 1. Observa a tela de login (sem segredo visível ainda).
+      await waitForPaint(browserSession.page);
       const loginShot = await runTool('observe_screen', {});
       assert.ok(loginShot.details.observationId, 'observação de login persistida');
       checked.push('observacao-login');
@@ -126,6 +137,7 @@ try {
       //    fica associada ao clique em Entrar (não ao preenchimento do usuário).
       const submitClick = await runTool('pointer', { action: 'click', x: submit.x, y: submit.y });
       await browserSession.page.waitForURL(url => new URL(url).pathname === '/', { timeout: 10000 });
+      await waitForPaint(browserSession.page);
       const homeShot = await runTool('observe_screen', {});
       assert.ok(homeShot.details.observationId, 'observação da área autenticada persistida');
       checked.push('observacao-area-autenticada');
@@ -133,10 +145,12 @@ try {
       const reservasLink = await screenPoint(browserSession.page, 'nav a[href="/reservas"]');
       const reservasClick = await runTool('pointer', { action: 'click', x: reservasLink.x, y: reservasLink.y });
       await browserSession.page.waitForURL(url => new URL(url).pathname === '/reservas', { timeout: 10000 });
+      await waitForPaint(browserSession.page);
       const reservasShot = await runTool('observe_screen', {});
       const novaLink = await screenPoint(browserSession.page, 'a[href="/reservas/nova"]');
       const novaClick = await runTool('pointer', { action: 'click', x: novaLink.x, y: novaLink.y });
       await browserSession.page.waitForURL(url => new URL(url).pathname === '/reservas/nova', { timeout: 10000 });
+      await waitForPaint(browserSession.page);
       const novaShot = await runTool('observe_screen', {});
       assert.equal(target.reservations.length, 0, 'nenhuma reserva criada durante o mapeamento');
       checked.push('percurso-reservas-nova-reserva-sem-confirmar');
@@ -312,6 +326,10 @@ try {
   assert.equal(evidence.status, 200);
   assert.equal(evidence.headers.get('content-type'), 'image/png');
   const capture = Buffer.from(await evidence.arrayBuffer());
+  if (artifactDir) {
+    await mkdir(artifactDir, { recursive: true });
+    await writeFile(join(artifactDir, 'login-display.png'), capture);
+  }
   assert.ok(capture.length > 10000, 'captura real do display com ' + capture.length + ' bytes');
   const foreignEvidence = await fetch(base + '/api/runs/' + runId + '/evidence/' + review.observations[0].assetId, { headers: headers(undefined, ownerId) });
   assert.equal(foreignEvidence.status, 401, 'evidência sem sessão recusada');

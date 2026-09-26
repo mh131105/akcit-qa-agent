@@ -83,6 +83,15 @@ simulada (contagem 8 antes da nona chamada). O commit `f684558` sincroniza as pa
 do modelo com a entrada efetiva na simulação, incluindo validação e cancelamento.
 As contagens exatas e a verificação de ausência de duplicação foram preservadas.
 
+No [primeiro CI completo](https://github.com/mh131105/akcit-qa-agent/actions/runs/36259531154),
+227 testes, infraestrutura, build e smokes de runtime/web/alvo passaram. O smoke
+de mapeamento encontrou captura inicial de 5650 bytes, abaixo dos 10000 exigidos.
+O roteiro passa a aguardar a pintura da página controlada no display e exporta a
+captura inicial mesmo em falha para diagnóstico. Continua usando a tool real,
+ffmpeg/x11grab, com a mesma exigência de tamanho e os mesmos cliques/capturas.
+Não houve alteração do navegador do produto. O resultado do candidato corrigido
+é registrado nos checks do PR.
+
 ### Capturas e comando local
 
 Conteúdo e respostas de modelo sintéticos, sem documentos privados. O navegador,
