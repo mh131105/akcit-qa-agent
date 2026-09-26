@@ -5,6 +5,19 @@ Data: 26/09/2026. [PR #30 para develop](https://github.com/mh131105/akcit-qa-age
 validar as associações e apresentar percursos/pendências. Execução dos testes e
 relatório permanecem pendentes nas issues #9, #11 e #14.
 
+## Revisão posterior com LLM real
+
+A revisão, a jornada real pela interface e os controles complementares do
+validador estão registrados em [revisao-ensaio-real.md](revisao-ensaio-real.md).
+Matheus aprovou plano, sete casos, percursos e o desenho dos controles. A jornada
+atingiu `ready / route_detail`; o validador aprovou o caminho completo e recusou
+a associação inadequada, localizando o caso. A suíte final local passou com
+229 testes. Os checks do PR indicam o CI da revisão vigente.
+
+As seções abaixo preservam as verificações e pendências da entrega original;
+o relatório acima registra sua avaliação posterior, inclusive a limitação do
+primeiro roteiro e a conclusão dos controles em execução separada.
+
 ## Base e isolamento
 
 A árvore inicial estava limpa, incluindo `compose.yml`. O commit `1d3e87c`
@@ -16,7 +29,7 @@ O ensaio real agora usa `mkdtemp`, ignora o `DATA_DIR` da instância para os dad
 do teste e só remove seu próprio diretório. O teste automatizado mantém um arquivo
 sentinela em um `DATA_DIR` sintético e confirma sua preservação.
 
-## Verificações do candidato
+## Verificações do candidato original
 
 Os resultados abaixo distinguem implementação, testes com modelos substituídos e
 ensaio com inferência real. A aprovação deste card depende também do ensaio e da
@@ -32,7 +45,7 @@ revisão humana, que não são substituídos por testes determinísticos.
 | Smoke web local | Aprovado com navegador Chromium baseado em Brave, modelos explicitamente simulados; capturas finais abaixo |
 | Smokes na imagem candidata | [CI 36260383016 aprovado](https://github.com/mh131105/akcit-qa-agent/actions/runs/36260383016): runtime, web, alvo e mapeamento na mesma imagem; 228 testes da aplicação e seis de infraestrutura aprovados |
 | `npm run eval:routes:real -- --run` | Tentativa recusada antes da inferência: `EVAL_HUMAN_DIR` não configurado |
-| Inferência real / revisão humana | Pendente; não há aprovação humana, controle negativo real ou qualidade semântica comprovada nesta entrega ainda |
+| Inferência real / revisão humana | Concluída na revisão posterior: jornada até `ready / route_detail`, três decisões humanas e controles pareados reais aprovados; ver [relatório](revisao-ensaio-real.md) |
 | Commit da implementação | `090f42f8847a9f56002c55dfbfe65a569bcb2371`; candidato validado em `4bc2c0b6abcb9e762ebd3e1c3645cd5d4ea3bd0c` |
 | Checkout testado pelo CI | Merge temporário do PR `fa90b469de348c90c382cdd92a0c29f2af6773de` contra `develop` em `58a6311`; isso não integra o PR à branch de destino |
 | Imagem testada pelo CI | `akcit-qa:ci`, ID `sha256:9e5e747dc8ee5a31ee33bc4fa2ebe8cd803c3ad458e166f04af7727ecf755223`; imagem local ao runner, sem publicação ou promoção para produção |
@@ -120,7 +133,7 @@ CHROMIUM_PATH=/opt/brave.com/brave/brave SMOKE_ARTIFACT_DIR=artifacts/t6.3-web n
 - [Celular, 390 px](20-percursos-mobile.png)
 - [Resultado completo do smoke](web-result.json)
 
-## Ensaio e avaliação humana pendentes
+## Procedimento do ensaio e da avaliação humana
 
 Procedimento completo em [OPERACAO.md](../../OPERACAO.md#detalhar-percursos-dos-casos--t63).
 Execute na imagem candidata com credenciais privadas, `EVAL_HUMAN_DIR`,
@@ -135,8 +148,11 @@ O controle negativo usa um caminho existente no mapa, mas inadequado para o caso
 selecionado pelo revisor com justificativa externa. A cópia passa pelo parser e
 é enviada somente ao validador; não altera a execução persistida. Registrar
 parecer, localização do achado, duração/consumo disponível e resultado efetivo.
-Uma aprovação incorreta falha o ensaio. Sem caminho inadequado existente ou
-revisão humana, registrar o cenário como incompleto.
+Uma aprovação incorreta falha o ensaio. Sem revisão humana, registrar o cenário
+como incompleto. Quando o mapa real possui apenas o caminho adequado, o revisor
+pode autorizar um prefixo de transições observadas em fixture separada. O roteiro
+atual registra essa origem e executa controles positivo e negativo pareados,
+conforme OPERACAO.md; o registro da jornada original não é modificado.
 
 Capturas do smoke são sintéticas quanto ao conteúdo/modelo; capturas do ensaio
 real e decisões permanecem fora do Git até revisão de privacidade. Não há vídeo

@@ -1068,16 +1068,44 @@ Esse diretório privado não deve ser publicado.
 3. Outro integrante confere `awaiting-routes-<runId>.json` contra casos/mapa e
    grava `decision-routes-<runId>.json`, com os mesmos campos e
    `negativeControl: {caseId, pathId, reason}`. Selecione um caminho que **já existe
-   no mapa**, mas é inadequado para o caso. A justificativa humana fica fora do
-   contexto do validador. Sem alternativa inadequada demonstrável, o controle fica
-   incompleto; não invente um caminho para fazê-lo passar.
-4. O controle negativo usa uma cópia estruturalmente válida, separada da jornada
-   normal e sem alterar a execução persistida. O validador precisa recusar e
-   localizar a associação. Aprovação incorreta ou revisão ausente falha o ensaio.
+   no mapa**, mas é inadequado para um caso que já tenha percurso associado. A justificativa humana fica fora do
+   contexto do validador. Se só houver um caminho completo, uma pessoa pode autorizar
+   `observedPrefix: {sourcePathId, transitionCount}` nessa seleção. O roteiro cria
+   uma fixture separada, copiando o mapa e acrescentando um novo `pathId` com as
+   primeiras transições já observadas. Exige ao menos uma transição e um prefixo
+   menor que o caminho completo; não inventa tela, transição ou ação. A decisão deve
+   identificar `runId`, `outputId` e `outputRevision` dos percursos revisados.
+4. Os controles usam o mesmo mapa de avaliação, sem alterar a execução persistida.
+   Primeiro, uma sessão independente deve aprovar as associações originais;
+   depois, outra sessão deve recusar e localizar a única associação trocada.
+   A origem derivada da fixture, a justificativa e o gabarito ficam nas evidências,
+   fora do prompt. Aprovação incorreta ou revisão ausente falha o ensaio.
 
 `--skip-journey-a` não é aceito no ensaio de percursos. `eval:mapping:real` conserva
 seu escopo original e passa a usar o mesmo isolamento seguro. Os smokes continuam
 com modelos simulados explicitamente e não demonstram a qualidade semântica real.
+
+### Reexecutar somente os controles sobre uma jornada exportada
+
+Quando a jornada e a revisão humana já ocorreram, não repita inferências e
+aprovações para complementar seus controles. Use o `record.json` exportado e a
+decisão humana que identifica exatamente a saída/revisão aprovada:
+
+```sh
+EVAL_EVIDENCE_DIR=/diretorio/privado/controles-complementares \
+npm run eval:routes:real -- --run \
+  --route-controls-from /diretorio/privado/jornada-percursos/record.json \
+  --route-decision-from /diretorio/privado/decision-routes.json
+```
+
+Configure os perfis/credenciais e `APP_REVISION`/`EVAL_IMAGE` como no ensaio normal;
+`EVAL_SOURCE_REVISION` pode identificar o commit da jornada original. Este modo
+não abre o navegador, não cria aprovações e não modifica a execução original.
+O relatório declara `mode: standalone-route-controls`, `journeyReplayed: false`,
+execução e saída de origem, decisões, fixture e resultados reais. Use outro
+`EVAL_EVIDENCE_DIR`: preserve o relatório original, inclusive controles anteriores
+incompletos ou com falha. Um controle complementar aprovado não reclassifica
+retroativamente a jornada anterior como aprovada.
 
 ## Referências
 

@@ -16,10 +16,11 @@ import { createApp } from '../dist/app.js';
 import { readConfig, resolvePreparationModels, resolveVisualModels } from '../dist/config.js';
 import { RunStore } from '../dist/storage/runs.js';
 import { executeVisualTask } from '../dist/runtime/pi-visual.js';
-import { createEvaluationDirectory, finishEvaluationDirectory } from './eval-data.mjs';
+import { createEvaluationDirectory, finishEvaluationDirectory, mappingWithObservedPrefix } from './eval-data.mjs';
 import { executeSpecialistTask } from '../dist/runtime/pi.js';
 import { buildRouteDetail } from '../dist/domain/route-detail.js';
 import { parseVerdict } from '../dist/domain/preparation.js';
+import { parseNavigation } from '../dist/domain/navigation.js';
 import { createDemoTarget } from './demo-target.mjs';
 
 assert.equal(Number(process.versions.node.split('.')[0]), 24, 'Execute com Node.js 24.');
@@ -36,7 +37,17 @@ const PROFILES = {
 };
 const env = { ...process.env, ...PROFILES };
 const withRouteDetail = process.argv.includes('--with-route-detail');
-if (withRouteDetail) {
+function argumentValue(flag) {
+  const index = process.argv.indexOf(flag);
+  if (index < 0) return null;
+  const value = process.argv[index + 1];
+  assert.ok(value && !value.startsWith('--'), `${flag} exige um caminho de arquivo.`);
+  return resolvePath(value);
+}
+const routeControlsFrom = argumentValue('--route-controls-from');
+const routeDecisionFrom = argumentValue('--route-decision-from');
+assert.equal(!!routeControlsFrom, !!routeDecisionFrom, 'Informe o registro exportado e sua decisão humana juntos.');
+if (withRouteDetail && !routeControlsFrom) {
   assert.ok(process.env.EVAL_HUMAN_DIR, 'EVAL_HUMAN_DIR é obrigatório: plano, casos e associações exigem revisão humana real.');
   assert.ok(!process.argv.includes('--skip-journey-a'), 'O ensaio T6.3 exige a jornada humana completa; --skip-journey-a não se aplica.');
 }
@@ -312,6 +323,31 @@ let approvedRunId = null;
  * automatizadas e registradas como tal. `--skip-journey-a` repete apenas os
  * demais cenários (para re-execução sem refazer a jornada da interface). */
 async function main() {
+  if (routeControlsFrom) {
+    report.mode = 'standalone-route-controls';
+    report.journeyReplayed = false;
+    try {
+      const record = JSON.parse(await readFile(routeControlsFrom, 'utf8'));
+      const decision = JSON.parse(await readFile(routeDecisionFrom, 'utf8'));
+      const run = record.run;
+      const detail = run.outputs.filter(output => output.phase === 'route_detail').at(-1);
+      assert.equal(run.status, 'ready'); assert.equal(run.phase, 'route_detail');
+      assert.equal(decision.human, true); assert.equal(decision.decision, 'approved');
+      assert.equal(decision.runId, run.id, 'A decisão deve pertencer à execução exportada.');
+      assert.ok(typeof decision.reviewer === 'string' && decision.reviewer.trim());
+      assert.notEqual(decision.reviewer.trim(), report.implementer);
+      assert.equal(decision.outputId, detail?.id, 'A decisão deve aprovar a saída exportada.');
+      assert.equal(decision.outputRevision, detail?.revision, 'A decisão deve aprovar a revisão exportada.');
+      report.sourceRunId = run.id; report.sourceRecord = routeControlsFrom;
+      report.sourceRevision = process.env.EVAL_SOURCE_REVISION ?? null;
+      report.humanRoutes = decision;
+      await routeValidatorControl(run, decision.negativeControl);
+    } catch (error) {
+      if (!report.failures.length) report.failures.push({ scenario: report.mode, error: error.message });
+      process.exitCode = 1;
+    } finally { await json(join(evidenceDir, 'report.json'), report); }
+    return;
+  }
   const skipJourneyA = process.argv.includes('--skip-journey-a');
   const browser = await chromium.launch({
     executablePath: process.env.CHROMIUM_PATH ?? '/usr/bin/chromium', headless: true,
@@ -556,33 +592,47 @@ async function routeJourney(page, runId, cookie, userId, scenario) {
 
 /** Experimento controlado separado: associação adulterada nunca entra no RunStore. */
 async function routeValidatorControl(run, selection) {
-  const scenario = { name: 'T6.3-controle-negativo-associacao', controlledExperiment: true, error: null };
+  const scenario = { name: 'T6.3-controles-associacao', controlledExperiment: true, controls: [], error: null };
   try {
     const latest = phase => run.outputs.filter(output => output.phase === phase).at(-1);
-    const cases = latest('case_design'), mapping = latest('mapping'), detail = latest('route_detail');
+    const cases = latest('case_design'), originalMapping = latest('mapping'), detail = latest('route_detail');
     assert.ok(selection?.caseId && selection?.pathId && selection?.reason, 'O revisor deve indicar um caminho existente e inadequado; sem essa seleção o controle fica incompleto.');
+    const mapping = mappingWithObservedPrefix(originalMapping, selection);
+    const navigation = parseNavigation({ authentication: mapping.payload.authentication, map: mapping.payload.map,
+      pending: mapping.payload.pending, limitations: mapping.payload.limitations }, {
+      caseIds: cases.payload.testCases.map(item => item.id), observations: run.observations.map(item => item.id),
+      actions: run.mappingActions.filter(item => item.outcome === 'ok').map(item => item.id),
+    });
+    scenario.fixture = selection.observedPrefix ? { kind: 'derived-observed-prefix', sourceMappingId: originalMapping.id,
+      sourceMappingRevision: originalMapping.revision, ...selection.observedPrefix, pathId: selection.pathId } : { kind: 'original-map' };
     const current = detail.payload.testCases.find(item => item.id === selection.caseId);
-    assert.ok(current && current.pathId !== selection.pathId, 'A associação do controle deve diferir da original.');
-    assert.ok(mapping.payload.map.paths.some(path => path.id === selection.pathId), 'O controle exige um caminho existente no mapa real.');
-    const routes = detail.payload.testCases.map(item => ({ caseId: item.id,
-      pathId: item.id === selection.caseId ? selection.pathId : item.pathId,
-      reason: item.id === selection.caseId ? null : detail.payload.pending.find(pending => pending.caseId === item.id)?.reason ?? null }));
-    const payload = buildRouteDetail({ routes }, cases.payload, mapping.payload, { outputId: cases.id, revision: cases.revision });
-    const output = { ...detail, payload }; // contrato válido antes da inferência
+    assert.ok(current && current.pathId !== null && current.pathId !== selection.pathId,
+      'Selecione um caso já roteado e um caminho diferente: somente pathId deve mudar entre os controles.');
+    assert.ok(navigation.map.paths.some(path => path.id === selection.pathId), 'O controle exige caminho presente no mapa da avaliação.');
     const decision = run.approvals.find(item => item.outputId === cases.id && item.outputRevision === cases.revision);
-    const input = { task: 'validation', artifacts: [...run.artifacts, ...(run.answerArtifacts ?? [])], answers: run.answers,
-      approvedCuration: latest('curation'), approvedPlan: latest('planning'), approvedCases: cases,
-      caseApproval: decision, approvedMapping: mapping, pending: mapping.payload.pending,
-      output, previousOutput: null, previousVerdicts: [] };
-    const result = await executeSpecialistTask({ role: 'output-validator', task: 'validate-output',
-      model: resolvedText['output-validator'], ...(config.piAuthPath ? { authPath: config.piAuthPath } : {}),
-      prompt: JSON.stringify(input), signal: new AbortController().signal, timeoutMs: 120000 });
-    const verdict = parseVerdict(result.payload);
-    scenario.selection = selection; scenario.verdict = verdict; scenario.metadata = result.metadata;
-    await json(join(evidenceDir, 'controle-negativo-percursos.json'), { controlledExperiment: true, input, verdict, metadata: result.metadata, selection });
-    assert.ok(['changes_requested', 'blocked'].includes(verdict.status), 'O validador aprovou incorretamente a associação inadequada.');
-    const index = payload.testCases.findIndex(item => item.id === selection.caseId);
-    assert.ok(verdict.findings.some(item => item.location?.includes(selection.caseId) || item.location?.includes(`testCases[${index}]`) || item.location?.includes(`testCases/${index}`)), 'O parecer precisa localizar a associação inadequada.');
+    for (const control of ['positivo', 'negativo']) {
+      const routes = detail.payload.testCases.map(item => ({ caseId: item.id,
+        pathId: control === 'negativo' && item.id === selection.caseId ? selection.pathId : item.pathId,
+        reason: control === 'negativo' && item.id === selection.caseId ? null : detail.payload.pending.find(pending => pending.caseId === item.id)?.reason ?? null }));
+      const payload = buildRouteDetail({ routes }, cases.payload, navigation, { outputId: cases.id, revision: cases.revision });
+      const input = { task: 'validation', artifacts: [...run.artifacts, ...(run.answerArtifacts ?? [])], answers: run.answers,
+        approvedCuration: latest('curation'), approvedPlan: latest('planning'), approvedCases: cases,
+        caseApproval: decision, approvedMapping: mapping, pending: mapping.payload.pending,
+        output: { ...detail, payload }, previousOutput: null, previousVerdicts: [] };
+      const result = await executeSpecialistTask({ role: 'output-validator', task: 'validate-output',
+        model: resolvedText['output-validator'], ...(config.piAuthPath ? { authPath: config.piAuthPath } : {}),
+        prompt: JSON.stringify(input), signal: new AbortController().signal, timeoutMs: 120000 });
+      const verdict = parseVerdict(result.payload);
+      scenario.controls.push({ control, verdict, metadata: result.metadata });
+      await json(join(evidenceDir, `controle-${control}-percursos.json`), { controlledExperiment: true,
+        fixture: scenario.fixture, input, verdict, metadata: result.metadata, selection });
+      if (control === 'positivo') assert.equal(verdict.status, 'approved', 'O validador deve aprovar as associações originais no mesmo mapa da avaliação.');
+      else {
+        assert.ok(['changes_requested', 'blocked'].includes(verdict.status), 'O validador aprovou incorretamente a associação inadequada.');
+        const index = payload.testCases.findIndex(item => item.id === selection.caseId);
+        assert.ok(verdict.findings.some(item => item.location?.includes(selection.caseId) || item.location?.includes(`testCases[${index}]`) || item.location?.includes(`testCases/${index}`)), 'O parecer precisa localizar a associação inadequada.');
+      }
+    }
   } catch (error) {
     scenario.error = error.message;
     report.failures.push({ scenario: scenario.name, error: scenario.error });

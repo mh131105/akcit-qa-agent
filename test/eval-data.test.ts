@@ -3,7 +3,7 @@ import test from 'node:test';
 import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createEvaluationDirectory, finishEvaluationDirectory } from '../scripts/eval-data.mjs';
+import { createEvaluationDirectory, finishEvaluationDirectory, mappingWithObservedPrefix } from '../scripts/eval-data.mjs';
 
 test('ensaio cria diretórios exclusivos sem tocar o DATA_DIR da instância', async t => {
   const instance = await mkdtemp(join(tmpdir(), 'akcit-instance-test-'));
@@ -30,4 +30,17 @@ test('ensaio preserva saídas privadas em falha e limpa somente após sucesso', 
   assert.equal((await stat(directory)).mode & 0o777, 0o700);
   await finishEvaluationDirectory(directory, true);
   await assert.rejects(stat(directory), { code: 'ENOENT' });
+});
+
+test('controle deriva somente prefixo observado e conserva o mapa original', () => {
+  const mapping = { id: 'mapa', payload: { map: { paths: [{ id: 'completo', startScreenId: 'inicio', transitionIds: ['abrir-lista', 'abrir-formulario'] }] } } };
+  const before = structuredClone(mapping);
+  const selection = { pathId: 'prefixo', observedPrefix: { sourcePathId: 'completo', transitionCount: 1 } };
+  const fixture = mappingWithObservedPrefix(mapping, selection);
+  assert.deepEqual(fixture.payload.map.paths.at(-1), { id: 'prefixo', startScreenId: 'inicio', transitionIds: ['abrir-lista'] });
+  assert.deepEqual(mapping, before);
+  for (const transitionCount of [0, 2, 3, 1.5]) assert.throws(() => mappingWithObservedPrefix(mapping,
+    { ...selection, observedPrefix: { ...selection.observedPrefix, transitionCount } }));
+  assert.throws(() => mappingWithObservedPrefix(mapping, { ...selection, pathId: 'completo' }));
+  assert.throws(() => mappingWithObservedPrefix(mapping, { ...selection, observedPrefix: { sourcePathId: 'inexistente', transitionCount: 1 } }));
 });
