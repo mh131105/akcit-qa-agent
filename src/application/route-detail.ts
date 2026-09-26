@@ -5,7 +5,7 @@ import { validDecision } from '../domain/plan-approval.js';
 import { validateRouteDetail } from '../domain/route-detail.js';
 import type { RunOutput, RunRecord } from '../storage/runs.js';
 import type { readConfig } from '../config.js';
-import { caseDependencies, latestOutput, PreparationError } from './prepare-plan.js';
+import { caseDependencies, answersCurrent, latestOutput, PreparationError } from './prepare-plan.js';
 
 type Config = Pick<ReturnType<typeof readConfig>, 'targetAllowedOrigins'>;
 export type RouteDetailRequest = { outputId: string; outputRevision: number };
@@ -33,8 +33,8 @@ export function routeDependencies(run: RunRecord, request: RouteDetailRequest, c
   const hasDependencies = (output: RunOutput, required: RunOutput[]) => output.dependsOn.length === required.length &&
     required.every(item => output.dependsOn.some(ref => ref.outputId === item.id && ref.revision === item.revision));
   if (!hasDependencies(cases, [dependencies.curation, plan]) || !hasDependencies(mapping, [dependencies.curation, plan, cases]) ||
-    !isDeepStrictEqual(cases.answerRefs ?? [], plan.answerRefs ?? []) ||
-    !isDeepStrictEqual(mapping.answerRefs ?? [], cases.answerRefs ?? [])) return stale();
+    !answersCurrent(run, cases) ||
+    !answersCurrent(run, mapping)) return stale();
   const accessRevision = run.input.accessRevision;
   if (!Number.isSafeInteger(accessRevision) || (accessRevision as number) < 1 || mapping.payload.accessRevision !== accessRevision ||
     run.input.authorizedTarget !== true || typeof run.input.credentialRef !== 'string') return stale('O acesso mudou desde o mapa validado.');
@@ -84,7 +84,7 @@ export function currentRouteDetail(run: RunRecord, output: RunOutput, config: Co
     const current = routeDependencies(run, { outputId: mapping.id, outputRevision: mapping.revision }, config);
     if (output.accessRevision !== current.accessRevision || output.dependsOn.length !== 4 ||
       ![current.curation, current.plan, current.cases, mapping].every(item => output.dependsOn.some(ref => ref.outputId === item.id && ref.revision === item.revision)) ||
-      !isDeepStrictEqual(output.answerRefs ?? [], current.cases.answerRefs ?? [])) return false;
+      !isDeepStrictEqual(output.answerRefs ?? [], mapping.answerRefs ?? [])) return false;
     validateRouteDetail(output.payload, current.logicalCases, current.navigation, { outputId: current.cases.id, revision: current.cases.revision });
     return true;
   } catch { return false; }

@@ -8,9 +8,8 @@ todas em sessões independentes. O perfil visual recebe as imagens referenciadas
 como anexos; não há ferramentas de navegador e o validador nunca controla o cursor
 nem modifica o mapa.
 
-O validador já revisa curadoria, plano, casos lógicos e o mapa de navegação. T6.3 acrescenta o detalhamento
-dos percursos em sessão textual independente; resultados de execução e relatório
-final permanecem pendentes.
+O validador revisa curadoria, plano, casos, mapa e detalhamento. T9.1 acrescenta
+análise de alterações, resultados de execução e fidelidade do relatório.
 O orquestrador solicita a revisão e encaminha o resultado; a decisão de qualidade
 pertence exclusivamente ao validador.
 
@@ -22,15 +21,15 @@ substitui essas decisões; todas permanecem vinculadas à versão exata da saíd
 A seleção do perfil é realizada pelo backend de acordo com a tarefa e a fase. Não delegue essa escolha ao modelo nem crie validação recursiva.
 
 - **Perfil Textual (`deepseek-v4-pro`, raciocínio `high`):**
-  - Aplicado na validação de curadoria, plano de testes, casos lógicos e detalhamento de percursos (`route_detail`, T6.3); a fidelidade do relatório textual permanece futura.
+  - Aplicado na validação de curadoria, plano, casos, percursos, análise de alterações e fidelidade do relatório às conclusões validadas.
   - Como `deepseek-v4-pro` aceita exclusivamente texto, este perfil não processa imagens. Um parecer textual nunca pode declarar que examinou evidência visual.
 - **Perfil Visual (`deepseek-flash`, raciocínio `high`):**
-  - Implementado em T8.2 para a validação do mapa de navegação estruturado; nas etapas futuras também conferirá resultados que exijam inspeção de capturas de tela.
+  - Aplicado ao mapa e a cada resultado de execução, com capturas efetivas da tentativa e expectativa aprovada.
   - Continua sendo o mesmo papel `output-validator`, em sessão isolada. Recebe fontes, saída sob revisão e evidências pertinentes (imagens/capturas), não apenas o resumo do executor.
   - Toda conclusão que exigir verificação de imagem deve passar pela validação visual.
   - Pela decisão de 26/09/2026, vídeos são evolução futura; o protótipo exige capturas por caso/tentativa; a validação automática utiliza capturas ou quadros identificados por instante, sem pressupor suporte nativo a streaming de vídeo.
 
-> **Ressalva factual:** A preparação textual e a validação visual do mapa estão implementadas; a qualidade da validação de resultados de execução e do relatório ainda não está comprovada.
+> A qualidade com modelos reais exige os controles positivos/negativos R5 e a conferência independente em [fechamento da sprint](../../docs/evidencias/fechamento-sprint/README.md). Testes com modelos substituídos não comprovam essa qualidade.
 
 ## Contexto e acesso
 

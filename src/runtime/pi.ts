@@ -5,7 +5,8 @@ import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager
 import type { AgentRole } from '../agents/registry.js';
 
 export type PreparationRole = 'artifact-curator' | 'test-designer' | 'output-validator';
-export type PreparationTask = 'curate-artifacts' | 'create-test-plan' | 'create-test-cases' | 'detail-test-routes' | 'validate-output';
+export type TextualRole = PreparationRole | 'report-writer';
+export type PreparationTask = 'curate-artifacts' | 'create-test-plan' | 'create-test-cases' | 'detail-test-routes' | 'validate-output' | 'analyze-feedback' | 'write-report';
 export type ThinkingLevel = 'off' | 'low' | 'high';
 export interface SpecialistModel {
   provider: string;
@@ -13,7 +14,7 @@ export interface SpecialistModel {
   thinkingLevel?: ThinkingLevel;
 }
 export interface SpecialistTask {
-  role: PreparationRole;
+  role: TextualRole;
   task: PreparationTask;
   model: SpecialistModel;
   thinkingLevel?: ThinkingLevel;
@@ -33,16 +34,17 @@ export interface SpecialistResult {
 }
 export class SpecialistError extends Error {
   constructor(
-    readonly code: 'MODEL_UNAVAILABLE' | 'CREDENTIAL_UNAVAILABLE' | 'MODEL_ERROR' | 'INVALID_OUTPUT' | 'INVALID_TASK' | 'TIMEOUT' | 'CANCELLED',
+    readonly code: 'MODEL_UNAVAILABLE' | 'CREDENTIAL_UNAVAILABLE' | 'MODEL_ERROR' | 'INVALID_OUTPUT' | 'INVALID_TASK' | 'CONTEXT_LIMIT' | 'TIMEOUT' | 'CANCELLED',
     message: string,
     readonly metadata?: SpecialistResult['metadata'],
   ) { super(message); }
 }
 
 export const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
-const permittedTasks: Record<PreparationRole, readonly PreparationTask[]> = {
+const permittedTasks: Record<TextualRole, readonly PreparationTask[]> = {
   'artifact-curator': ['curate-artifacts'],
-  'test-designer': ['create-test-plan', 'create-test-cases', 'detail-test-routes'],
+  'test-designer': ['create-test-plan', 'create-test-cases', 'detail-test-routes', 'analyze-feedback'],
+  'report-writer': ['write-report'],
   'output-validator': ['validate-output'],
 };
 
@@ -72,10 +74,15 @@ export async function checkedModel(runtime: ModelRuntime, selection: SpecialistM
 }
 
 /** Inspeciona catálogo e credenciais; não executa inferência nem troca de modelo. */
-export async function preflightSpecialists(models: Record<PreparationRole, SpecialistModel>, authPath?: string): Promise<void> {
+export async function preflightSpecialists(models: Partial<Record<TextualRole, SpecialistModel>>, authPath?: string, material?: string): Promise<void> {
   try {
     const runtime = await privateModelRuntime(authPath);
-    for (const model of Object.values(models)) await checkedModel(runtime, model);
+    for (const selection of Object.values(models)) {
+      const { model } = await checkedModel(runtime, selection);
+      if (material && Buffer.byteLength(material, 'utf8') + 32768 > model.contextWindow) {
+        throw new SpecialistError('CONTEXT_LIMIT', 'O material excede o contexto suportado. Reduza as entradas; nenhum conteúdo foi truncado.');
+      }
+    }
   } catch (error) {
     if (error instanceof SpecialistError) throw error;
     throw new SpecialistError('MODEL_ERROR', 'Não foi possível verificar a configuração privada do Pi.');
@@ -116,6 +123,10 @@ export async function executeSpecialistTask(task: SpecialistTask): Promise<Speci
     await resourceLoader.reload();
     const modelRuntime = await privateModelRuntime(task.authPath, signal);
     const { model, subscription } = await checkedModel(modelRuntime, task.model, signal);
+    // UTF-8 bytes dão um teto conservador, sem truncar nenhuma fonte ou instrução.
+    if (Buffer.byteLength(task.prompt + skill, 'utf8') + 8192 > model.contextWindow) {
+      throw new SpecialistError('CONTEXT_LIMIT', 'O material excede o contexto suportado. Reduza explicitamente as entradas antes de iniciar.', metadata);
+    }
     signal.throwIfAborted();
     ({ session } = await createAgentSession({
       cwd: directory, agentDir: directory, modelRuntime, model, resourceLoader, settingsManager,

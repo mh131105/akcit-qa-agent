@@ -185,7 +185,13 @@ async function visualCall(task) {
   assert.ok(Array.isArray(task.images) && task.images.length === 3, 'Validador recebe as próprias imagens referenciadas.');
   return { payload: { status: 'approved', reason: 'Mapa sustentado pelas imagens (simulado).', findings: [] }, metadata, calls };
 }
-async function visible(locator) { await locator.first().waitFor({ state: 'visible' }); }
+async function visible(locator) {
+  const target = locator.first(); await target.waitFor({ state: 'attached' });
+  const pane = await target.evaluate(node => node.closest('[role=tabpanel]')?.id);
+  if (pane && !await target.isVisible()) await target.page().locator(`[role=tab][aria-controls="${pane}"]`).click();
+  for (const detail of await target.locator('xpath=ancestor::details').all()) if (await detail.getAttribute('open') === null) await detail.locator('summary').first().click();
+  await target.waitFor({ state: 'visible' });
+}
 async function bodyIncludes(value) { await visible(page.getByText(value, { exact: false })); }
 async function history() {
   await page.getByRole('link', { name: 'Minhas execuções', exact: true }).first().click();
@@ -616,7 +622,7 @@ async function preparationJourney(context, store, owner) {
   await answerForm('Q-02').getByRole('button', { name: 'Registrar resposta', exact: true }).click();
   assert.equal((await conflictResponse).status(), 409);
   await page.getByRole('button', { name: 'Consultar registro atualizado', exact: true }).click();
-  const preserved = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Texto não enviado · Q-02 · Curadoria r1', exact: true }) });
+  const preserved = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Texto não enviado · Q-02 · Revisão 1', exact: true }) });
   await visible(preserved);
   assert.equal(await preserved.locator('blockquote').textContent(), localAnswer);
   assert.equal((await api(context, `/api/runs/${id}`, owner.id)).answers.length, 2);
@@ -864,6 +870,98 @@ async function preparationJourney(context, store, owner) {
   // Snapshot com casos aprovados e dependências vigentes (antes da adulteração
   // sintética do BUG-T6.2-01): sustenta a jornada de mapeamento a seguir.
   return { approvedRecord: storedRecordAfter, savedCases };
+}
+
+async function completionInterfaceJourney(context, store, owner, origin, source, foreignContext, other) {
+  await page.goto('/perfil');
+  await page.getByLabel('Nome', { exact: true }).fill('Pessoa QA atualizada');
+  await page.getByLabel('Equipe (opcional)', { exact: true }).fill('Equipe de verificação');
+  await page.getByRole('button', { name: 'Salvar perfil', exact: true }).click();
+  await bodyIncludes('Perfil atualizado.'); await page.reload();
+  assert.equal(await page.getByLabel('Nome', { exact: true }).inputValue(), 'Pessoa QA atualizada');
+  await screenshot('21-perfil-mobile.png', 390);
+  await page.goto('/execucoes/nova'); await fillRun('Upload de duas fontes', '');
+  // O navegador produz um PDF verdadeiro; pdftotext na imagem faz a extração real.
+  const pdfPage = await context.newPage(); await pdfPage.setContent('<p>CA-02: O comentário é opcional.</p>');
+  const pdf = await pdfPage.pdf(); await pdfPage.setContent('<body></body>'); const emptyPdf = await pdfPage.pdf(); await pdfPage.close();
+  await page.getByLabel('Arquivos de requisitos (opcional)', { exact: true }).setInputFiles({ name: 'sem-texto.pdf', mimeType: 'application/pdf', buffer: emptyPdf });
+  await page.getByRole('button', { name: 'Salvar rascunho', exact: true }).click();
+  await bodyIncludes('O PDF não contém texto selecionável.');
+  assert.equal(await page.getByLabel('Nome da execução', { exact: true }).inputValue(), 'Upload de duas fontes');
+  assert.equal(await page.getByLabel('Arquivos de requisitos (opcional)', { exact: true }).evaluate(input => input.files.length), 1, 'Erro conserva a seleção nesta página.');
+  await page.getByLabel('Arquivos de requisitos (opcional)', { exact: true }).setInputFiles([
+    { name: 'regras.md', mimeType: 'text/markdown', buffer: Buffer.from('US-01: Reservar.\nCA-01: Aceitar de 1 a 10.') },
+    { name: 'comentario.pdf', mimeType: 'application/pdf', buffer: pdf },
+  ]);
+  await page.getByRole('button', { name: 'Salvar rascunho', exact: true }).click();
+  await page.waitForURL(url => /^\/execucoes\/run-/.test(url.pathname));
+  await bodyIncludes('Fontes recebidas'); const uploadId = new URL(page.url()).pathname.split('/').at(-1);
+  const upload = await api(context, `/api/runs/${uploadId}`, owner.id);
+  assert.equal(upload.artifacts.length, 2); assert.equal(upload.artifacts[1].pages.length, 1);
+  const stored = (await store.read(uploadId)).run;
+  assert.ok(stored.artifacts[1].text.includes('comentário')); assert.notEqual(stored.artifacts[1].id, stored.artifacts[1].originalId);
+  await page.getByRole('button', { name: 'Duplicar', exact: true }).click();
+  await page.getByRole('dialog').getByLabel('comentario.pdf', { exact: true }).uncheck();
+  await page.getByRole('button', { name: 'Criar cópia', exact: true }).click();
+  await page.waitForURL(url => /^\/execucoes\/run-/.test(url.pathname) && !url.pathname.endsWith(uploadId));
+  const copiedId = new URL(page.url()).pathname.split('/').at(-1); await bodyIncludes('Fontes recebidas');
+  const copied = (await store.read(copiedId)).run;
+  assert.equal(copied.artifacts.length, 1); assert.equal(copied.input.authorizedTarget, false); assert.equal(copied.input.credentialRef, null);
+  assert.deepEqual(copied.approvals, []); assert.deepEqual(copied.outputs, []);
+  await store.update(copiedId, record => { record.run.status = 'cancelled'; return { value: null, save: true }; });
+  await page.reload(); await page.getByRole('button', { name: 'Excluir', exact: true }).click();
+  await visible(page.getByRole('dialog')); assert.ok((await store.read(copiedId)).run);
+  await page.getByRole('button', { name: 'Excluir definitivamente', exact: true }).click();
+  await page.waitForURL('**/execucoes'); await assert.rejects(store.read(copiedId), { code: 'RUN_NOT_FOUND' });
+  checked.push('T9.1: perfil persistido → PDF sem texto recusado sem perder formulário/arquivo → upload MD+PDF com extração/páginas reais → duplicação selecionada sem segredos/aprovações → exclusão confirmada');
+
+  // Fixture explicitamente sintética: testa publicação/renderização/Blob/PDF, não qualidade de LLM nem execução real.
+  const run = structuredClone(source); run.id = 'run-report-ui-synthetic'; run.name = 'Relatório sintético da interface';
+  run.status = 'completed'; run.phase = 'done'; run.input.credentialRef = null; run.input.authorizedTarget = false;
+  const cases = run.outputs.findLast(output => output.phase === 'case_design');
+  const route = run.outputs.findLast(output => output.phase === 'route_detail'); const caseId = cases.payload.testCases[0].id;
+  const image = await page.screenshot({ type: 'png' });
+  const attemptId = 'attempt-ui-original', observationId = 'observation-ui-execution', assetId = 'asset-ui-execution';
+  await mkdir(join(root, 'media', run.id), { recursive: true }); await writeFile(join(root, 'media', run.id, `${assetId}.png`), image);
+  run.observations = [{ id: observationId, assetId, at: new Date().toISOString(), width: 390, height: 844, caseId, attemptId }];
+  run.mappingActions = [];
+  run.executionAttempts = [{ id: attemptId, caseId, approvedCaseRevision: { outputId: cases.id, revision: cases.revision }, routeDetailRef: { outputId: route.id, revision: route.revision },
+    startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), status: 'completed', setupObservation: 'Preparo sintético conferido.', events: [], observed: 'Resultado sintético observado.',
+    verdict: 'passed', reason: 'Conclusão sintética para conferir a interface.', evidenceIds: [observationId], evidenceGaps: [] }];
+  const output = { id: 'execution-ui-result', phase: 'execution', revision: 1, dependsOn: [{ outputId: route.id, revision: route.revision }], payload: {
+    caseId, attemptId, setupObservation: 'Preparo sintético conferido.', observed: 'Resultado sintético observado.', verdict: 'passed', reason: 'Conclusão sintética para conferir a interface.', evidenceIds: [observationId], evidenceGaps: [], question: null, reproduce: false,
+  } };
+  run.outputs.push(output); run.validations.push({ outputId: output.id, outputRevision: 1, validator: 'output-validator', status: 'approved' });
+  const { buildReportSnapshot } = await import('../dist/domain/test-report.js');
+  const snapshot = buildReportSnapshot(run, 'final');
+  const report = { id: 'report-ui-published', phase: 'report', revision: 1, dependsOn: [], payload: { snapshot, narrative: {
+    summary: 'Resumo publicado da revisão 1.', scope: 'Escopo sintético da interface.', limitations: ['Este smoke usa conclusões e validações substituídas.'], conclusion: 'Conclusão publicada da revisão 1.',
+  } } };
+  run.outputs.push(report, { ...structuredClone(report), revision: 2, payload: { ...structuredClone(report.payload), narrative: { ...report.payload.narrative, summary: 'REVISÃO REJEITADA NÃO PUBLICAR' } } });
+  run.validations.push({ outputId: report.id, outputRevision: 1, validator: 'output-validator', status: 'approved' }, { outputId: report.id, outputRevision: 2, validator: 'output-validator', status: 'changes_requested' });
+  run.publishedReport = { outputId: report.id, revision: 1 };
+  await store.create(run); await page.goto(`/execucoes/${run.id}`);
+  await bodyIncludes('Resumo publicado da revisão 1.'); await bodyIncludes('Há uma nova revisão em análise.');
+  assert.ok(!(await page.locator('body').innerText()).includes('REVISÃO REJEITADA NÃO PUBLICAR'));
+  await page.getByRole('tab', { name: 'Resultados', exact: true }).focus(); await page.keyboard.press('Home');
+  assert.equal(await page.getByRole('tab', { name: 'Visão geral', exact: true }).getAttribute('aria-selected'), 'true');
+  await page.keyboard.press('End');
+  assert.equal(await page.getByRole('tab', { name: 'Resultados', exact: true }).getAttribute('aria-selected'), 'true');
+  await screenshot('22-relatorio-desktop.png', 1366); await screenshot('23-relatorio-mobile.png', 390);
+  await page.exposeFunction('recordPrint', async () => {
+    assert.equal(await page.locator('#published-report').getAttribute('data-report-revision'), '1');
+    assert.ok(await page.locator('#published-report img').evaluateAll(images => images.length > 0 && images.every(image => image.complete && image.naturalWidth > 0 && image.src.startsWith('blob:'))));
+    await page.emulateMedia({ media: 'print' });
+    const pdf = await page.pdf({ preferCSSPageSize: true });
+    assert.ok(pdf.length > 1000); if (artifactDir) await writeFile(join(artifactDir, '24-relatorio-publicado.pdf'), pdf);
+    await page.emulateMedia({ media: 'screen' });
+  });
+  await page.evaluate(() => { window.print = () => { window.smokePrinted = window.recordPrint(); return window.smokePrinted; }; });
+  await page.getByRole('button', { name: 'Salvar em PDF', exact: true }).click();
+  await page.waitForFunction(() => window.smokePrinted); await page.evaluate(() => window.smokePrinted);
+  assert.equal((await foreignContext.request.get(`/api/runs/${run.id}`, { headers: { 'X-Expected-User-Id': other.id } })).status(), 404);
+  assert.equal((await foreignContext.request.get(`/api/runs/${run.id}/evidence/${assetId}`, { headers: { 'X-Expected-User-Id': other.id } })).status(), 404);
+  checked.push('T9.1: relatório sintético publicado r1 preservado diante de r2 rejeitada → tabs teclado/1366/390 → impressão espera Blob autenticado e gera PDF da revisão publicada → outra conta recebe 404');
 }
 
 try {
@@ -1384,12 +1482,13 @@ try {
   assert.equal(repeatRoutes.status(), 200);
   const foreignRoutes = await foreignContext.request.get(`/api/runs/${mappingId}`, { headers: { 'X-Expected-User-Id': other.id } });
   assert.equal(foreignRoutes.status(), 404);
+  assert.equal(await page.getByRole('button', { name: 'Executar testes', exact: true }).count(), 1);
+  await completionInterfaceJourney(context, store, owner, origin, afterRoutes.run, foreignContext, other);
   await foreignContext.close();
-  assert.equal(await page.getByRole('button', { name: 'Executar testes', exact: true }).count(), 0);
   checked.push('T6.3: detalhar pela interface → andamento/provisório → percursos validados e pendências por caso → snapshots/aprovações preservados → recarga/idempotência/isolamento → desktop e mobile');
   }
   await regressions(origin, store, owner, other);
-  result = { status: 'passed', scope: 'T2.1/T4.1/T6.1/T6.2/T8.1/T8.2/T6.3 — navegador, API, coordenador e persistência reais; chamada de modelo substituída, sem inferência paga', checked,
+  result = { status: 'passed', scope: 'T2.1/T4.1/T6.1/T6.2/T8.1/T8.2/T6.3/T9.1 — navegador, API, coordenador e persistência reais; chamada de modelo substituída, sem inferência paga', checked,
     node: process.versions.node, chromium: browser.version(), durationMs: Date.now() - started };
 } catch (error) {
   result = { status: 'failed', checked, error: error.message, pageUrl: page?.url(), durationMs: Date.now() - started };

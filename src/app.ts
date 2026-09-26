@@ -7,7 +7,7 @@ import { AuthService } from './auth.js';
 import { PreparationCoordinator, type PreparationOptions } from './application/prepare-plan.js';
 import { handleApi } from './http/api.js';
 
-const pages = new Set(['/acesso', '/execucoes', '/execucoes/nova']);
+const pages = new Set(['/perfil', '/acesso', '/execucoes', '/execucoes/nova']);
 // src/app.ts e dist/app.js têm o mesmo diretório pai; o runtime inclui src/web.
 const webFiles = new Map([
   ['/web/styles.css', { url: new URL('../src/web/styles.css', import.meta.url), type: 'text/css; charset=utf-8' }],

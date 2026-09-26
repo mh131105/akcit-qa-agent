@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import fs from 'node:fs/promises';
 import { join, resolve } from 'node:path';
+import type { ExecutionAttempt } from '../domain/test-execution.js';
 import type { PlanApprovalState, PlanDecision } from '../domain/plan-approval.js';
 
 type JsonObject = Record<string, unknown>;
@@ -13,9 +14,9 @@ export type RunOutput = JsonObject & {
   answerRefs?: { questionId: string; revision: number; answerId?: string }[];
 };
 export type PreparationCall = {
-  id: string; role: 'artifact-curator' | 'test-designer' | 'output-validator' | 'test-executor';
+  id: string; role: 'artifact-curator' | 'test-designer' | 'output-validator' | 'test-executor' | 'report-writer';
   provider: string; model: string; thinkingLevel?: 'off' | 'low' | 'high';
-  phase: 'curation' | 'planning' | 'case_design' | 'mapping' | 'mapping_validation' | 'route_detail'; attempt: number;
+  phase: 'curation' | 'planning' | 'case_design' | 'mapping' | 'mapping_validation' | 'route_detail' | 'feedback' | 'execution' | 'execution_validation' | 'report'; attempt: number;
   outputRevision: number; startedAt: string; finishedAt?: string; durationMs?: number;
   status: 'running' | 'completed' | 'invalid' | 'error' | 'cancelled' | 'interrupted';
   budgetCycleId?: string; errorCode?: string; usage?: Record<string, number>; estimatedCost?: number;
@@ -54,9 +55,12 @@ export type RunRecord = JsonObject & {
   interruptions?: Interruption[];
   observations?: ObservationRecord[];
   mappingActions?: MappingActionRecord[];
+  executionAttempts?: ExecutionAttempt[];
+  publishedReport?: { outputId: string; revision: number };
+  invalidations?: { id: string; outputId: string; outputRevision: number; reason: string; at: string; feedbackRef: { outputId: string; revision: number }; caseIds: string[] }[];
 };
 export type WorkIntent = {
-  id: string; type: 'create_cases' | 'analyze_feedback' | 'create_map' | 'detail_routes';
+  id: string; type: 'create_cases' | 'analyze_feedback' | 'create_map' | 'detail_routes' | 'execute_tests' | 'write_report';
   outputId: string; outputRevision: number; createdAt: string;
   status: 'pending' | 'completed' | 'interrupted' | 'cancelled'; interruption?: Interruption;
   processingId?: string; finishedAt?: string; reason?: { code: string; message: string };
@@ -68,22 +72,25 @@ export type WorkIntent = {
 export type ObservationRecord = {
   id: string; assetId: string; at: string; width: number; height: number;
   mappingPreparationId?: string;
+  caseId?: string; attemptId?: string;
 };
 export type MappingActionRecord = {
   id: string; at: string; tool: 'observe_screen' | 'pointer' | 'keyboard_scroll' | 'fill_credential';
   params: JsonObject; outcome: 'ok' | 'error'; observationId?: string; note?: string;
   mappingPreparationId?: string;
+  caseId?: string; attemptId?: string;
 };
 export type TargetCredential = { ref: string; username: string; password: string };
 export type StoredRun = { schemaVersion: 1; run: RunRecord; workIntents: WorkIntent[]; targetCredential?: TargetCredential };
 export type StorageErrorCode =
   | 'INVALID_RUN_ID' | 'RUN_NOT_FOUND' | 'RUN_INACCESSIBLE'
-  | 'RUN_EXISTS' | 'IDEMPOTENCY_CONFLICT' | 'INVALID_RECORD' | 'AMBIGUOUS_RECORD' | 'STORAGE_FAILURE';
+  | 'RUN_ACTIVE' | 'RUN_EXISTS' | 'IDEMPOTENCY_CONFLICT' | 'INVALID_RECORD' | 'AMBIGUOUS_RECORD' | 'STORAGE_FAILURE';
 
 const messages: Record<StorageErrorCode, string> = {
   INVALID_RUN_ID: 'Identificador de execução inválido.',
   RUN_NOT_FOUND: 'Execução não encontrada.',
   RUN_INACCESSIBLE: 'Registro da execução inacessível.',
+  RUN_ACTIVE: 'Encerre a execução e aguarde o término do trabalho antes de excluir.',
   RUN_EXISTS: 'A execução já existe.',
   IDEMPOTENCY_CONFLICT: 'A chave de idempotência já foi utilizada com outro conteúdo.',
   INVALID_RECORD: 'Registro de execução inválido; os dados foram preservados.',
@@ -124,7 +131,7 @@ const nonnegative = (value: unknown) => typeof value === 'number' && Number.isFi
 function validPreparation(value: unknown): boolean {
   if (!object(value) || !strings(value, ['id', 'budgetCycleId']) || !value.id || !value.budgetCycleId ||
     !utc(value.startedAt) || (value.finishedAt !== null && !utc(value.finishedAt)) ||
-    ![null, 'artifact-curator', 'test-designer', 'output-validator', 'test-executor'].includes(value.activeRole as string | null) ||
+    ![null, 'artifact-curator', 'test-designer', 'output-validator', 'test-executor', 'report-writer'].includes(value.activeRole as string | null) ||
     (value.activity !== null && typeof value.activity !== 'string') ||
     (value.stopReason !== null && (!object(value.stopReason) || !strings(value.stopReason, ['code', 'message']))) ||
     (value.accumulatedActiveMs !== undefined && !nonnegative(value.accumulatedActiveMs)) ||
@@ -140,8 +147,8 @@ function validPreparation(value: unknown): boolean {
       .some(([key, ceiling]) => ((value.limits as JsonObject)[key] as number) > ceiling) || !objects(value.calls)) return false;
   return new Set(value.calls.map(call => call.id)).size === value.calls.length && value.calls.every(call =>
     strings(call, ['id', 'provider', 'model']) && !!call.id && !!call.provider && !!call.model &&
-    ['artifact-curator', 'test-designer', 'output-validator', 'test-executor'].includes(call.role as string) &&
-    ['curation', 'planning', 'case_design', 'mapping', 'mapping_validation', 'route_detail'].includes(call.phase as string) && positive(call.attempt) && positive(call.outputRevision) &&
+    ['artifact-curator', 'test-designer', 'output-validator', 'test-executor', 'report-writer'].includes(call.role as string) &&
+    ['curation', 'planning', 'case_design', 'mapping', 'mapping_validation', 'route_detail', 'feedback', 'execution', 'execution_validation', 'report'].includes(call.phase as string) && positive(call.attempt) && positive(call.outputRevision) &&
     (call.thinkingLevel === undefined || ['off', 'low', 'high'].includes(call.thinkingLevel as string)) &&
     utc(call.startedAt) && (call.finishedAt === undefined || utc(call.finishedAt)) &&
     (call.durationMs === undefined || nonnegative(call.durationMs)) &&
@@ -217,7 +224,7 @@ function validate(record: unknown, runId: string): asserts record is StoredRun {
       new Set(run.answerArtifacts.map(artifact => artifact.id)).size !== run.answerArtifacts.length ||
       !(run.answers as JsonObject[]).every(answer => answer.artifactId === undefined || (strings(answer,
         ['id', 'outputId', 'questionId', 'text', 'artifactId', 'actorId']) && !!answer.id &&
-        answer.revision === 1 && positive(answer.outputRevision) && utc(answer.at) &&
+        positive(answer.revision) && positive(answer.outputRevision) && utc(answer.at) &&
         !!(answer.text as string).trim() && [...answer.text as string].length <= 4000 &&
         (run.answerArtifacts as JsonObject[]).some(artifact => artifact.id === answer.artifactId && artifact.text === answer.text))) ||
       new Set((run.answers as JsonObject[]).filter(answer => answer.artifactId !== undefined).map(answer => answer.id)).size !==
@@ -228,7 +235,7 @@ function validate(record: unknown, runId: string): asserts record is StoredRun {
     !objects(record.workIntents) || !record.workIntents.every(work =>
       strings(work, ['id', 'outputId']) && !!work.id && !!work.outputId &&
       Number.isSafeInteger(work.outputRevision) && (work.outputRevision as number) > 0 && utc(work.createdAt) &&
-      ['create_cases', 'analyze_feedback', 'create_map', 'detail_routes'].includes(work.type as string) &&
+      ['create_cases', 'analyze_feedback', 'create_map', 'detail_routes', 'execute_tests', 'write_report'].includes(work.type as string) &&
       (work.accessRevision === undefined || positive(work.accessRevision)) &&
       (work.processingId === undefined || (typeof work.processingId === 'string' && !!work.processingId)) &&
       (work.finishedAt === undefined || utc(work.finishedAt)) &&
@@ -255,6 +262,38 @@ function validate(record: unknown, runId: string): asserts record is StoredRun {
   }
 }
 
+/** Contratos novos são conferidos também ao recarregar o registro confirmado. */
+function validateCompletion(run: RunRecord): void {
+  const invalid = () => { throw new StorageError('INVALID_RECORD'); };
+  const reference = (value: unknown): value is { outputId: string; revision: number } => object(value) &&
+    typeof value.outputId === 'string' && positive(value.revision) &&
+    run.outputs.some(output => output.id === value.outputId && output.revision === value.revision);
+  const textArray = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === 'string');
+  if (run.executionAttempts !== undefined) {
+    if (!objects(run.executionAttempts) || new Set(run.executionAttempts.map(attempt => attempt.id)).size !== run.executionAttempts.length) invalid();
+    for (const attempt of run.executionAttempts) {
+      if (!strings(attempt, ['id', 'caseId', 'setupObservation', 'observed', 'reason']) || !attempt.id || !attempt.caseId ||
+        !reference(attempt.approvedCaseRevision) || !reference(attempt.routeDetailRef) || !utc(attempt.startedAt) ||
+        !['running', 'completed', 'cancelled', 'interrupted'].includes(attempt.status) ||
+        (attempt.status === 'running' ? attempt.finishedAt !== null : !utc(attempt.finishedAt)) ||
+        ![null, 'passed', 'failed', 'blocked', 'inconclusive', 'not_run'].includes(attempt.verdict) ||
+        !textArray(attempt.evidenceIds) || !textArray(attempt.evidenceGaps) || !objects(attempt.events) || attempt.events.length > 50 ||
+        attempt.events.some(event => !strings(event, ['id', 'tool', 'at']) || !utc(event.at) || !object(event.params) ||
+          !['pointer', 'keyboard_scroll', 'fill_credential', 'observe_screen'].includes(event.tool) || !['ok', 'error'].includes(event.outcome)) ||
+        attempt.evidenceIds.some(id => !run.observations?.some(observation => observation.id === id && observation.caseId === attempt.caseId && observation.attemptId === attempt.id)) ||
+        run.executionAttempts.filter(item => item.caseId === attempt.caseId).length > 2 ||
+        (attempt.reproducesAttemptId !== undefined && !run.executionAttempts.some(original => original.id === attempt.reproducesAttemptId &&
+          original.id !== attempt.id && original.caseId === attempt.caseId))) invalid();
+    }
+  }
+  if (run.publishedReport !== undefined && (!reference(run.publishedReport) ||
+    !run.outputs.some(output => output.id === run.publishedReport!.outputId && output.revision === run.publishedReport!.revision && output.phase === 'report') ||
+    !run.validations.some(validation => validation.outputId === run.publishedReport!.outputId && validation.outputRevision === run.publishedReport!.revision &&
+      validation.validator === 'output-validator' && validation.status === 'approved'))) invalid();
+  if (run.invalidations !== undefined && (!objects(run.invalidations) || run.invalidations.some(item =>
+    !strings(item, ['id', 'outputId', 'reason']) || !positive(item.outputRevision) || !utc(item.at) || !reference(item.feedbackRef) || !textArray(item.caseIds)))) invalid();
+}
+
 function ioError(error: unknown): StorageError {
   if (error instanceof StorageError) return error;
   const code = object(error) ? error.code : undefined;
@@ -266,7 +305,7 @@ function ioError(error: unknown): StorageError {
 }
 
 export class RunStore {
-  private readonly dataDir: string;
+  readonly dataDir: string;
   private readonly directory: string;
 
   constructor(dataDir: string) {
@@ -302,6 +341,7 @@ export class RunStore {
           throw error;
         }
         validate(record, runId);
+        validateCompletion(record.run);
         return record;
       } finally { await file.close(); }
     } catch (error) { throw ioError(error); }
@@ -310,6 +350,7 @@ export class RunStore {
   private async save(runId: string, record: StoredRun): Promise<void> {
     const path = this.path(runId);
     validate(record, runId);
+    validateCompletion(record.run);
     const temporary = join(this.directory, `.${runId}-${randomUUID()}.tmp`);
     try {
       const file = await fs.open(temporary, 'wx', 0o600);
@@ -396,6 +437,23 @@ export class RunStore {
     });
   }
 
+  /** Arquivos primeiro, registro por último: falhas mantêm a autorização para repetir. */
+  async remove(runId: string, ownerId: string): Promise<void> {
+    validId(runId);
+    await locked(async () => {
+      const record = await this.read(runId);
+      if (record.run.ownerId !== ownerId) throw new StorageError('RUN_NOT_FOUND');
+      if (!['completed', 'cancelled', 'interrupted', 'error'].includes(record.run.status) ||
+        record.workIntents.some(work => work.status === 'pending') ||
+        record.run.preparation?.calls.some(call => call.status === 'running') ||
+        record.run.executionAttempts?.some(attempt => attempt.status === 'running')) throw new StorageError('RUN_ACTIVE');
+      try {
+        for (const kind of ['artifacts', 'media']) await fs.rm(join(this.dataDir, kind, runId), { recursive: true, force: true });
+        await fs.unlink(this.path(runId));
+      } catch (error) { throw ioError(error); }
+    });
+  }
+
   async recoverInterrupted(): Promise<number> {
     let names: string[];
     try { names = await fs.readdir(this.directory); }
@@ -421,6 +479,13 @@ export class RunStore {
               call.errorCode = 'SERVICE_RESTART';
             }
           }
+        }
+        for (const attempt of record.run.executionAttempts ?? []) {
+          if (attempt.status !== 'running') continue;
+          attempt.status = 'interrupted'; attempt.finishedAt = event.at;
+          attempt.verdict = 'inconclusive';
+          attempt.reason = 'Serviço reiniciado durante a tentativa; nenhuma ação foi repetida.';
+          attempt.evidenceGaps.push('Tentativa interrompida antes da validação.');
         }
         record.run.interruptions = [...(record.run.interruptions ?? []), event];
         for (const work of record.workIntents) {

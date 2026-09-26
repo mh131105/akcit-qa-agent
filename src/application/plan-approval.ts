@@ -1,3 +1,7 @@
+import { canExecuteTests } from './execute-tests.js';
+import { latestExecutionOutputs, type ExecutionAttempt } from '../domain/test-execution.js';
+import { publishedReport, type TestReportPayload } from '../domain/test-report.js';
+import { canReport, answersCurrent, currentQuestions, effectiveAnswers, latestOutput } from './prepare-plan.js';
 import { canDetailRoutes, currentRouteDetail } from './route-detail.js';
 import { validateRouteDetail, type RouteDetailPayload } from '../domain/route-detail.js';
 import type { NavigationPayload } from '../domain/navigation.js';
@@ -49,6 +53,13 @@ export type PlanReview = {
     startedAt: string | null; finishedAt: string | null };
   stopReason: { code: string; message: string } | null;
   canResume: boolean;
+  canCancel: boolean; canAnalyzeFeedback: boolean; canExecute: boolean; canWriteReport: boolean; canClosePending: boolean; canPartialReport: boolean;
+  artifacts: Record<string, unknown>[];
+  executionResults: (RunOutput & { validations: RunRecord['validations'] })[];
+  attempts: ExecutionAttempt[];
+  report: { id: string; revision: number; payload: TestReportPayload; underReview: boolean } | null;
+  invalidations: NonNullable<RunRecord['invalidations']>;
+  versions: { id: string; revision: number; phase: string; createdAt?: string }[];
   canCreateCases: boolean;
   canDecideCases: boolean;
   cases: { id: string; revision: number; current: boolean;
@@ -239,7 +250,7 @@ export async function getPlanReview(
         const dependencies = caseDependencies(run, { outputId: plan.id, outputRevision: plan.revision }, false);
         currentCases = cases.dependsOn.length === 2 && [dependencies.curation, dependencies.plan].every(output =>
           cases.dependsOn.some(ref => ref.outputId === output.id && ref.revision === output.revision)) &&
-          JSON.stringify(cases.answerRefs ?? []) === JSON.stringify(plan.answerRefs ?? []);
+          answersCurrent(run, cases);
       } catch { /* O histórico continua consultável, sem autorizar avanço. */ }
     }
     const answers = preparationAnswers(run).map(answer => ({ id: answer.id, revision: answer.revision,
@@ -258,6 +269,24 @@ export async function getPlanReview(
       stopReason: run.preparation?.stopReason ? { code: run.preparation.stopReason.code, message: run.preparation.stopReason.message }
         : run.status === 'interrupted' && run.interruptions?.length ? { code: 'SERVICE_RESTART', message: 'O serviço reiniciou. O trabalho foi interrompido.' }
         : run.status === 'cancelled' ? { code: 'CANCELLED', message: 'Execução cancelada pelo usuário.' } : null,
+      canCancel: ['draft', 'running', 'ready', 'awaiting_input', 'awaiting_approval'].includes(run.status),
+      canAnalyzeFeedback: ['awaiting_approval', 'awaiting_input'].includes(run.status) &&
+        [plan, cases].some(output => output && run.approvals.some(decision => decision.outputId === output.id &&
+          decision.outputRevision === output.revision && decision.decision === 'changes_requested')),
+      canExecute: canExecuteTests(record, config), canWriteReport: run.phase === 'execution' && canReport(record, config, 'final'),
+      canClosePending: canReport(record, config, 'final'), canPartialReport: canReport(record, config, 'partial'),
+      artifacts: run.artifacts.map(item => ({ id: item.id, name: item.name, version: item.version,
+        format: item.format ?? 'txt', originalId: item.originalId ?? null, sizeBytes: item.sizeBytes ?? null, pages: item.pages ?? [] })),
+      executionResults: latestExecutionOutputs(run).map(output => ({ id: output.id, phase: output.phase, revision: output.revision, dependsOn: output.dependsOn.map(ref => ({ outputId: ref.outputId, revision: ref.revision })),
+        payload: Object.fromEntries(['caseId', 'attemptId', 'setupObservation', 'observed', 'verdict', 'reason', 'evidenceIds', 'evidenceGaps', 'question', 'reproduce'].map(key => [key, output.payload[key]])),
+        validations: run.validations.filter(item => item.outputId === output.id && item.outputRevision === output.revision) })),
+      attempts: structuredClone(run.executionAttempts ?? []),
+      report: (() => { const published = publishedReport(run); const latest = latestOutput(run, 'report');
+        return published ? { id: published.id, revision: published.revision, payload: published.payload as TestReportPayload,
+          underReview: latest?.revision !== published.revision || run.status === 'running' && run.phase === 'report' } : null; })(),
+      invalidations: structuredClone(run.invalidations ?? []),
+      versions: run.outputs.map(output => ({ id: output.id, revision: output.revision, phase: output.phase,
+        ...(output.createdAt ? { createdAt: output.createdAt } : {}) })),
       canResume: canResumePreparation(run), canCreateCases: canCreateCases(run), canDecideCases: canDecideCases(run),
       canMap: canMap(record, { targetAllowedOrigins: config.targetAllowedOrigins }),
       canDetailRoutes: canDetailRoutes(run, config),
@@ -293,9 +322,9 @@ export async function getPlanReview(
       } : null,
       curation: curation ? { id: curation.id, revision: curation.revision,
         payload: publicCuration(curation.payload), validations: validations(curation) } : null,
-      questions: run.questions.map(question => ({ ...publicQuestion(question),
-        outputId: curation?.id ?? null, outputRevision: curation?.revision ?? null,
-        answerId: answers.find(answer => answer.outputId === curation?.id && answer.outputRevision === curation?.revision &&
+      questions: currentQuestions(run).map(question => ({ ...publicQuestion(question),
+        outputId: question.outputId, outputRevision: question.outputRevision,
+        answerId: effectiveAnswers(run).find(answer => answer.outputId === question.outputId && answer.outputRevision === question.outputRevision &&
           answer.questionId === question.id)?.id ?? null,
       })),
       plan: plan ? {
@@ -330,7 +359,7 @@ export function canDecideCases(run: RunRecord): boolean {
     const validDeps = cases.dependsOn.length === 2 &&
       [dependencies.curation, dependencies.plan].every(output =>
         cases.dependsOn.some(ref => ref.outputId === output.id && ref.revision === output.revision)) &&
-      JSON.stringify(cases.answerRefs ?? []) === JSON.stringify(plan.answerRefs ?? []);
+      answersCurrent(run, cases);
     if (!validDeps) return false;
   } catch {
     return false;

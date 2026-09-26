@@ -1,6 +1,6 @@
 {
   "fixture": true,
-  "notice": "EXEMPLO SINTÉTICO. Não houve execução, chamada de modelo, aprovação humana real ou geração de evidências. Ilustra plano e casos aprovados antes do mapa, detalhamento sem mudança semântica e correção de uma saída sem prova antes do relatório parcial.",
+  "notice": "EXEMPLO SINTÉTICO T9.1. Não houve execução, chamada de modelo, aprovação humana real ou mídia. Ilustra resultados por caso, correção textual sem repetição física, tentativas preservadas e publicação de relatório parcial.",
   "run": {
     "id": "run-demo-001",
     "status": "interrupted",
@@ -44,7 +44,7 @@
                   "sources": [
                     {
                       "artifactId": "artifact-demo",
-                      "locator": "CA-01",
+                      "locator": "L7-L10",
                       "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                     }
                   ]
@@ -55,7 +55,7 @@
                   "sources": [
                     {
                       "artifactId": "artifact-demo",
-                      "locator": "CA-02",
+                      "locator": "L14",
                       "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                     }
                   ]
@@ -64,12 +64,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ]
@@ -128,12 +128,12 @@
             "sources": [
               {
                 "artifactId": "artifact-demo",
-                "locator": "CA-01",
+                "locator": "L7-L10",
                 "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
               },
               {
                 "artifactId": "artifact-demo",
-                "locator": "CA-02",
+                "locator": "L14",
                 "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
               }
             ]
@@ -197,12 +197,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
@@ -246,12 +246,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
@@ -295,12 +295,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
@@ -344,12 +344,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
@@ -386,12 +386,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
@@ -435,12 +435,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
@@ -484,12 +484,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
@@ -526,12 +526,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
@@ -713,12 +713,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
@@ -766,12 +766,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
@@ -819,12 +819,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
@@ -872,12 +872,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
@@ -918,12 +918,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
@@ -971,12 +971,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
@@ -1024,12 +1024,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
@@ -1070,12 +1070,12 @@
               "sources": [
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-01",
+                  "locator": "L7-L10",
                   "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
                 },
                 {
                   "artifactId": "artifact-demo",
-                  "locator": "CA-02",
+                  "locator": "L14",
                   "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
                 }
               ],
@@ -1098,295 +1098,257 @@
         "accessRevision": 1
       },
       {
-        "id": "out-execution",
+        "id": "out-execution-case-1",
         "phase": "execution",
         "producer": "test-executor",
         "revision": 1,
         "dependsOn": [
           {
-            "outputId": "out-route-detail",
+            "outputId": "out-case-design",
             "revision": 1
-          }
-        ],
-        "payload": {
-          "results": [
-            {
-              "caseId": "case-1",
-              "verdict": "passed",
-              "attempts": [
-                {
-                  "id": "attempt-1-1",
-                  "status": "completed",
-                  "events": [
-                    {
-                      "at": "2026-09-23T20:01:00Z",
-                      "action": "Percorrer o caminho, preencher quantidade e confirmar.",
-                      "observation": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 1."
-                    }
-                  ],
-                  "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 1.",
-                  "evidenceIds": [],
-                  "evidenceGaps": [
-                    "Fixture sintética: nenhuma gravação ou imagem foi produzida."
-                  ],
-                  "reason": "Observação simulada atende à expectativa.",
-                  "verdict": "passed",
-                  "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado."
-                }
-              ],
-              "reason": "Observação simulada atende à expectativa."
-            },
-            {
-              "caseId": "case-2",
-              "verdict": "failed",
-              "attempts": [
-                {
-                  "id": "attempt-2-1",
-                  "status": "completed",
-                  "events": [
-                    {
-                      "at": "2026-09-23T20:02:00Z",
-                      "action": "Percorrer o caminho, preencher quantidade e confirmar.",
-                      "observation": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 11."
-                    }
-                  ],
-                  "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 11.",
-                  "evidenceIds": [],
-                  "evidenceGaps": [
-                    "Fixture sintética: nenhuma gravação ou imagem foi produzida."
-                  ],
-                  "reason": "Defeito fictício: a observação simulada contradiz CA-01.",
-                  "verdict": "failed",
-                  "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado."
-                }
-              ],
-              "reason": "Defeito fictício: a observação simulada contradiz CA-01."
-            },
-            {
-              "caseId": "case-3",
-              "verdict": "blocked",
-              "attempts": [
-                {
-                  "id": "attempt-3-1",
-                  "status": "blocked",
-                  "events": [
-                    {
-                      "at": "2026-09-23T20:03:00Z",
-                      "action": "Abrir a entrada autorizada.",
-                      "observation": "Login indisponível antes de alcançar o formulário."
-                    }
-                  ],
-                  "observed": "Login indisponível antes de alcançar o formulário.",
-                  "evidenceIds": [],
-                  "evidenceGaps": [
-                    "Fixture sintética: nenhuma gravação ou imagem foi produzida."
-                  ],
-                  "reason": "Acesso é pré-condição; o caso não pôde prosseguir.",
-                  "verdict": "blocked",
-                  "setupObservation": "Exemplo de acesso indisponível; pré-condição não estabelecida."
-                }
-              ],
-              "reason": "Acesso é pré-condição; o caso não pôde prosseguir."
-            },
-            {
-              "caseId": "case-4",
-              "verdict": "inconclusive",
-              "attempts": [
-                {
-                  "id": "attempt-4-1",
-                  "status": "error",
-                  "events": [
-                    {
-                      "at": "2026-09-23T20:04:00Z",
-                      "action": "Preencher quantidade e confirmar; tentar capturar resposta.",
-                      "observation": "Após confirmar, a captura de tela falhou antes de observar a resposta."
-                    }
-                  ],
-                  "observed": "Após confirmar, a captura de tela falhou antes de observar a resposta.",
-                  "evidenceIds": [],
-                  "evidenceGaps": [
-                    "Fixture sintética: nenhuma gravação ou imagem foi produzida."
-                  ],
-                  "reason": "Sem observação suficiente para avaliar a aplicação.",
-                  "verdict": "inconclusive",
-                  "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado."
-                }
-              ],
-              "reason": "Sem observação suficiente para avaliar a aplicação."
-            },
-            {
-              "caseId": "case-5",
-              "verdict": "not_run",
-              "attempts": [],
-              "reason": "Execução ilustrativa interrompida antes deste caso."
-            },
-            {
-              "caseId": "case-6",
-              "verdict": "not_run",
-              "attempts": [],
-              "reason": "Execução ilustrativa interrompida antes deste caso."
-            },
-            {
-              "caseId": "case-7",
-              "verdict": "not_run",
-              "attempts": [],
-              "reason": "Execução ilustrativa interrompida antes deste caso."
-            },
-            {
-              "caseId": "case-8",
-              "verdict": "not_run",
-              "attempts": [],
-              "reason": "Execução ilustrativa interrompida antes deste caso."
-            }
-          ],
-          "evidence": []
-        },
-        "answerRefs": [],
-        "budgetCycleId": "budget-1"
-      },
-      {
-        "id": "out-execution",
-        "phase": "execution",
-        "producer": "test-executor",
-        "revision": 2,
-        "dependsOn": [
+          },
           {
             "outputId": "out-route-detail",
             "revision": 1
           }
         ],
         "payload": {
-          "results": [
-            {
-              "caseId": "case-1",
-              "verdict": "inconclusive",
-              "attempts": [
-                {
-                  "id": "attempt-1-1",
-                  "status": "completed",
-                  "events": [
-                    {
-                      "at": "2026-09-23T20:01:00Z",
-                      "action": "Percorrer o caminho, preencher quantidade e confirmar.",
-                      "observation": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 1."
-                    }
-                  ],
-                  "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 1.",
-                  "evidenceIds": [],
-                  "evidenceGaps": [
-                    "Fixture sintética: nenhuma gravação ou imagem foi produzida."
-                  ],
-                  "reason": "Correção ilustrativa: falta evidência verificável para sustentar o veredito da revisão 1; manter a limitação explícita.",
-                  "verdict": "inconclusive",
-                  "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado."
-                }
-              ],
-              "reason": "Correção ilustrativa: falta evidência verificável para sustentar o veredito da revisão 1; manter a limitação explícita."
-            },
-            {
-              "caseId": "case-2",
-              "verdict": "inconclusive",
-              "attempts": [
-                {
-                  "id": "attempt-2-1",
-                  "status": "completed",
-                  "events": [
-                    {
-                      "at": "2026-09-23T20:02:00Z",
-                      "action": "Percorrer o caminho, preencher quantidade e confirmar.",
-                      "observation": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 11."
-                    }
-                  ],
-                  "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 11.",
-                  "evidenceIds": [],
-                  "evidenceGaps": [
-                    "Fixture sintética: nenhuma gravação ou imagem foi produzida."
-                  ],
-                  "reason": "Correção ilustrativa: falta evidência verificável para sustentar o veredito da revisão 1; manter a limitação explícita.",
-                  "verdict": "inconclusive",
-                  "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado."
-                }
-              ],
-              "reason": "Correção ilustrativa: falta evidência verificável para sustentar o veredito da revisão 1; manter a limitação explícita."
-            },
-            {
-              "caseId": "case-3",
-              "verdict": "blocked",
-              "attempts": [
-                {
-                  "id": "attempt-3-1",
-                  "status": "blocked",
-                  "events": [
-                    {
-                      "at": "2026-09-23T20:03:00Z",
-                      "action": "Abrir a entrada autorizada.",
-                      "observation": "Login indisponível antes de alcançar o formulário."
-                    }
-                  ],
-                  "observed": "Login indisponível antes de alcançar o formulário.",
-                  "evidenceIds": [],
-                  "evidenceGaps": [
-                    "Fixture sintética: nenhuma gravação ou imagem foi produzida."
-                  ],
-                  "reason": "Acesso é pré-condição; o caso não pôde prosseguir.",
-                  "verdict": "blocked",
-                  "setupObservation": "Exemplo de acesso indisponível; pré-condição não estabelecida."
-                }
-              ],
-              "reason": "Acesso é pré-condição; o caso não pôde prosseguir."
-            },
-            {
-              "caseId": "case-4",
-              "verdict": "inconclusive",
-              "attempts": [
-                {
-                  "id": "attempt-4-1",
-                  "status": "error",
-                  "events": [
-                    {
-                      "at": "2026-09-23T20:04:00Z",
-                      "action": "Preencher quantidade e confirmar; tentar capturar resposta.",
-                      "observation": "Após confirmar, a captura de tela falhou antes de observar a resposta."
-                    }
-                  ],
-                  "observed": "Após confirmar, a captura de tela falhou antes de observar a resposta.",
-                  "evidenceIds": [],
-                  "evidenceGaps": [
-                    "Fixture sintética: nenhuma gravação ou imagem foi produzida."
-                  ],
-                  "reason": "Sem observação suficiente para avaliar a aplicação.",
-                  "verdict": "inconclusive",
-                  "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado."
-                }
-              ],
-              "reason": "Sem observação suficiente para avaliar a aplicação."
-            },
-            {
-              "caseId": "case-5",
-              "verdict": "not_run",
-              "attempts": [],
-              "reason": "Execução ilustrativa interrompida antes deste caso."
-            },
-            {
-              "caseId": "case-6",
-              "verdict": "not_run",
-              "attempts": [],
-              "reason": "Execução ilustrativa interrompida antes deste caso."
-            },
-            {
-              "caseId": "case-7",
-              "verdict": "not_run",
-              "attempts": [],
-              "reason": "Execução ilustrativa interrompida antes deste caso."
-            },
-            {
-              "caseId": "case-8",
-              "verdict": "not_run",
-              "attempts": [],
-              "reason": "Execução ilustrativa interrompida antes deste caso."
-            }
+          "caseId": "case-1",
+          "attemptId": "attempt-1-1",
+          "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado.",
+          "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 1.",
+          "verdict": "inconclusive",
+          "reason": "Conclusão sintética contraditória: afirmar sucesso mesmo sem evidência.",
+          "evidenceIds": [],
+          "evidenceGaps": [
+            "Fixture sintética: nenhuma gravação ou imagem foi produzida."
           ],
-          "evidence": []
+          "question": null,
+          "reproduce": false
+        },
+        "answerRefs": [],
+        "budgetCycleId": "budget-1"
+      },
+      {
+        "id": "out-execution-case-1",
+        "phase": "execution",
+        "producer": "test-executor",
+        "revision": 2,
+        "dependsOn": [
+          {
+            "outputId": "out-case-design",
+            "revision": 1
+          },
+          {
+            "outputId": "out-route-detail",
+            "revision": 1
+          }
+        ],
+        "payload": {
+          "caseId": "case-1",
+          "attemptId": "attempt-1-1",
+          "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado.",
+          "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 1.",
+          "verdict": "inconclusive",
+          "reason": "Correção ilustrativa: falta evidência verificável para sustentar o veredito da revisão 1; manter a limitação explícita.",
+          "evidenceIds": [],
+          "evidenceGaps": [
+            "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+          ],
+          "question": null,
+          "reproduce": false
+        },
+        "answerRefs": [],
+        "budgetCycleId": "budget-1"
+      },
+      {
+        "id": "out-execution-case-2",
+        "phase": "execution",
+        "producer": "test-executor",
+        "revision": 1,
+        "dependsOn": [
+          {
+            "outputId": "out-case-design",
+            "revision": 1
+          },
+          {
+            "outputId": "out-route-detail",
+            "revision": 1
+          }
+        ],
+        "payload": {
+          "caseId": "case-2",
+          "attemptId": "attempt-2-1",
+          "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado.",
+          "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 11.",
+          "verdict": "inconclusive",
+          "reason": "Conclusão sintética contraditória: afirmar defeito mesmo sem evidência.",
+          "evidenceIds": [],
+          "evidenceGaps": [
+            "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+          ],
+          "question": null,
+          "reproduce": false
+        },
+        "answerRefs": [],
+        "budgetCycleId": "budget-1"
+      },
+      {
+        "id": "out-execution-case-2",
+        "phase": "execution",
+        "producer": "test-executor",
+        "revision": 2,
+        "dependsOn": [
+          {
+            "outputId": "out-case-design",
+            "revision": 1
+          },
+          {
+            "outputId": "out-route-detail",
+            "revision": 1
+          }
+        ],
+        "payload": {
+          "caseId": "case-2",
+          "attemptId": "attempt-2-1",
+          "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado.",
+          "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 11.",
+          "verdict": "inconclusive",
+          "reason": "Correção ilustrativa: falta evidência verificável para sustentar o veredito da revisão 1; manter a limitação explícita.",
+          "evidenceIds": [],
+          "evidenceGaps": [
+            "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+          ],
+          "question": null,
+          "reproduce": false
+        },
+        "answerRefs": [],
+        "budgetCycleId": "budget-1"
+      },
+      {
+        "id": "out-execution-case-3",
+        "phase": "execution",
+        "producer": "test-executor",
+        "revision": 1,
+        "dependsOn": [
+          {
+            "outputId": "out-case-design",
+            "revision": 1
+          },
+          {
+            "outputId": "out-route-detail",
+            "revision": 1
+          }
+        ],
+        "payload": {
+          "caseId": "case-3",
+          "attemptId": "attempt-3-1",
+          "setupObservation": "Exemplo de acesso indisponível; pré-condição não estabelecida.",
+          "observed": "Login indisponível antes de alcançar o formulário.",
+          "verdict": "blocked",
+          "reason": "Acesso é pré-condição; o caso não pôde prosseguir.",
+          "evidenceIds": [],
+          "evidenceGaps": [
+            "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+          ],
+          "question": "O acesso de teste está disponível para nova tentativa?",
+          "reproduce": false
+        },
+        "answerRefs": [],
+        "budgetCycleId": "budget-1"
+      },
+      {
+        "id": "out-execution-case-3",
+        "phase": "execution",
+        "producer": "test-executor",
+        "revision": 2,
+        "dependsOn": [
+          {
+            "outputId": "out-case-design",
+            "revision": 1
+          },
+          {
+            "outputId": "out-route-detail",
+            "revision": 1
+          }
+        ],
+        "payload": {
+          "caseId": "case-3",
+          "attemptId": "attempt-3-1",
+          "setupObservation": "Exemplo de acesso indisponível; pré-condição não estabelecida.",
+          "observed": "Login indisponível antes de alcançar o formulário.",
+          "verdict": "blocked",
+          "reason": "Acesso é pré-condição; o caso não pôde prosseguir.",
+          "evidenceIds": [],
+          "evidenceGaps": [
+            "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+          ],
+          "question": "O acesso de teste está disponível para nova tentativa?",
+          "reproduce": false
+        },
+        "answerRefs": [],
+        "budgetCycleId": "budget-1"
+      },
+      {
+        "id": "out-execution-case-4",
+        "phase": "execution",
+        "producer": "test-executor",
+        "revision": 1,
+        "dependsOn": [
+          {
+            "outputId": "out-case-design",
+            "revision": 1
+          },
+          {
+            "outputId": "out-route-detail",
+            "revision": 1
+          }
+        ],
+        "payload": {
+          "caseId": "case-4",
+          "attemptId": "attempt-4-1",
+          "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado.",
+          "observed": "Após confirmar, a captura de tela falhou antes de observar a resposta.",
+          "verdict": "inconclusive",
+          "reason": "Sem observação suficiente para avaliar a aplicação.",
+          "evidenceIds": [],
+          "evidenceGaps": [
+            "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+          ],
+          "question": null,
+          "reproduce": false
+        },
+        "answerRefs": [],
+        "budgetCycleId": "budget-1"
+      },
+      {
+        "id": "out-execution-case-4",
+        "phase": "execution",
+        "producer": "test-executor",
+        "revision": 2,
+        "dependsOn": [
+          {
+            "outputId": "out-case-design",
+            "revision": 1
+          },
+          {
+            "outputId": "out-route-detail",
+            "revision": 1
+          }
+        ],
+        "payload": {
+          "caseId": "case-4",
+          "attemptId": "attempt-4-1",
+          "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado.",
+          "observed": "Após confirmar, a captura de tela falhou antes de observar a resposta.",
+          "verdict": "inconclusive",
+          "reason": "Sem observação suficiente para avaliar a aplicação.",
+          "evidenceIds": [],
+          "evidenceGaps": [
+            "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+          ],
+          "question": null,
+          "reproduce": false
         },
         "answerRefs": [],
         "budgetCycleId": "budget-1"
@@ -1410,34 +1372,900 @@
             "revision": 1
           },
           {
+            "outputId": "out-mapping",
+            "revision": 1
+          },
+          {
             "outputId": "out-route-detail",
             "revision": 1
           },
           {
-            "outputId": "out-execution",
+            "outputId": "out-execution-case-1",
+            "revision": 2
+          },
+          {
+            "outputId": "out-execution-case-2",
+            "revision": 2
+          },
+          {
+            "outputId": "out-execution-case-3",
+            "revision": 2
+          },
+          {
+            "outputId": "out-execution-case-4",
             "revision": 2
           }
         ],
         "payload": {
-          "report": {
-            "summary": "Relatório parcial simulado após revisão do validador: três casos inconclusivos, um bloqueado e quatro não executados. Nenhum defeito foi confirmado.",
-            "caseIds": [
-              "case-1",
-              "case-2",
-              "case-3",
-              "case-4",
-              "case-5",
-              "case-6",
-              "case-7",
-              "case-8"
+          "snapshot": {
+            "runId": "run-demo-001",
+            "name": "Reservas — exemplo de relatório parcial",
+            "applicationName": "Aplicação controlada de reservas",
+            "createdAt": "2026-09-23T19:35:00Z",
+            "mode": "partial",
+            "counts": {
+              "total": 8,
+              "passed": 0,
+              "failed": 0,
+              "blocked": 2,
+              "inconclusive": 3,
+              "not_run": 3
+            },
+            "scope": {
+              "objective": "Verificar reservas conforme US-01 e CA-01/CA-02.",
+              "current": true,
+              "requirementIds": [
+                "US-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "sources": [
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "L7-L10",
+                  "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                },
+                {
+                  "artifactId": "artifact-demo",
+                  "locator": "L14",
+                  "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                }
+              ],
+              "exclusions": [
+                {
+                  "description": "Outras funcionalidades da aplicação.",
+                  "reason": "Não fazem parte das histórias recebidas."
+                }
+              ]
+            },
+            "coverage": [
+              {
+                "requirementId": "US-01",
+                "statement": "Usuário autenticado reserva itens informando a quantidade desejada.",
+                "rules": [
+                  {
+                    "ruleId": "CA-01",
+                    "statement": "Quantidade inteira de 1 a 10 inclusive gera reserva; quantidade fora do intervalo ou não inteira gera mensagem de erro e não cria reserva.",
+                    "selected": true,
+                    "caseIds": [
+                      "case-1",
+                      "case-2",
+                      "case-3",
+                      "case-4",
+                      "case-5",
+                      "case-6",
+                      "case-7",
+                      "case-8"
+                    ],
+                    "attemptedCaseIds": [
+                      "case-1",
+                      "case-2",
+                      "case-3",
+                      "case-4"
+                    ],
+                    "validatedCaseIds": [],
+                    "pendingCaseIds": [
+                      "case-1",
+                      "case-2",
+                      "case-3",
+                      "case-4",
+                      "case-5",
+                      "case-6",
+                      "case-7",
+                      "case-8"
+                    ],
+                    "uncovered": true,
+                    "partial": false,
+                    "limitation": "Os casos associados ainda não possuem conclusão de execução suficiente."
+                  },
+                  {
+                    "ruleId": "CA-02",
+                    "statement": "Comentário é opcional; quando informado, é salvo junto à reserva.",
+                    "selected": true,
+                    "caseIds": [
+                      "case-1",
+                      "case-2",
+                      "case-3",
+                      "case-4",
+                      "case-5",
+                      "case-6",
+                      "case-7",
+                      "case-8"
+                    ],
+                    "attemptedCaseIds": [
+                      "case-1",
+                      "case-2",
+                      "case-3",
+                      "case-4"
+                    ],
+                    "validatedCaseIds": [],
+                    "pendingCaseIds": [
+                      "case-1",
+                      "case-2",
+                      "case-3",
+                      "case-4",
+                      "case-5",
+                      "case-6",
+                      "case-7",
+                      "case-8"
+                    ],
+                    "uncovered": true,
+                    "partial": false,
+                    "limitation": "Os casos associados ainda não possuem conclusão de execução suficiente."
+                  }
+                ]
+              }
             ],
+            "cases": [
+              {
+                "caseId": "case-1",
+                "current": true,
+                "requirementIds": [
+                  "US-01"
+                ],
+                "ruleIds": [
+                  "CA-01",
+                  "CA-02"
+                ],
+                "expected": "Mostrar “Reserva criada” e criar a reserva com a quantidade informada, sem exigir comentário.",
+                "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial.",
+                "preconditions": [
+                  "Conta de teste válida e autenticada.",
+                  "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+                ],
+                "data": {
+                  "quantity": 1,
+                  "comment": ""
+                },
+                "sources": [
+                  {
+                    "artifactId": "artifact-demo",
+                    "locator": "L7-L10",
+                    "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                  },
+                  {
+                    "artifactId": "artifact-demo",
+                    "locator": "L14",
+                    "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                  }
+                ],
+                "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 1.",
+                "verdict": "inconclusive",
+                "reason": "Correção ilustrativa: falta evidência verificável para sustentar o veredito da revisão 1; manter a limitação explícita.",
+                "variation": false,
+                "attempts": [
+                  {
+                    "id": "attempt-1-1",
+                    "caseId": "case-1",
+                    "approvedCaseRevision": {
+                      "outputId": "out-case-design",
+                      "revision": 1
+                    },
+                    "routeDetailRef": {
+                      "outputId": "out-route-detail",
+                      "revision": 1
+                    },
+                    "startedAt": "2026-09-23T20:00:00Z",
+                    "finishedAt": "2026-09-23T20:02:00Z",
+                    "status": "completed",
+                    "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado.",
+                    "events": [
+                      {
+                        "id": "fixture-event-case-1-0",
+                        "at": "2026-09-23T20:01:00Z",
+                        "tool": "keyboard_scroll",
+                        "params": {
+                          "action": "type",
+                          "text": "1"
+                        },
+                        "outcome": "ok",
+                        "note": "EVENTO SINTÉTICO: Percorrer o caminho, preencher quantidade e confirmar. Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 1.",
+                        "caseId": "case-1",
+                        "attemptId": "attempt-1-1"
+                      }
+                    ],
+                    "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 1.",
+                    "verdict": "inconclusive",
+                    "reason": "Correção ilustrativa: falta evidência verificável para sustentar o veredito da revisão 1; manter a limitação explícita.",
+                    "evidenceIds": [],
+                    "evidenceGaps": [
+                      "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+                    ],
+                    "current": true,
+                    "validatedResult": {
+                      "caseId": "case-1",
+                      "attemptId": "attempt-1-1",
+                      "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado.",
+                      "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 1.",
+                      "verdict": "inconclusive",
+                      "reason": "Correção ilustrativa: falta evidência verificável para sustentar o veredito da revisão 1; manter a limitação explícita.",
+                      "evidenceIds": [],
+                      "evidenceGaps": [
+                        "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+                      ],
+                      "question": null,
+                      "reproduce": false
+                    },
+                    "resultRef": {
+                      "outputId": "out-execution-case-1",
+                      "revision": 2,
+                      "phase": "execution",
+                      "current": true
+                    },
+                    "evidence": []
+                  }
+                ]
+              },
+              {
+                "caseId": "case-2",
+                "current": true,
+                "requirementIds": [
+                  "US-01"
+                ],
+                "ruleIds": [
+                  "CA-01",
+                  "CA-02"
+                ],
+                "expected": "Mostrar “Quantidade inválida” e não criar reserva.",
+                "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial.",
+                "preconditions": [
+                  "Conta de teste válida e autenticada.",
+                  "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+                ],
+                "data": {
+                  "quantity": 11,
+                  "comment": ""
+                },
+                "sources": [
+                  {
+                    "artifactId": "artifact-demo",
+                    "locator": "L7-L10",
+                    "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                  },
+                  {
+                    "artifactId": "artifact-demo",
+                    "locator": "L14",
+                    "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                  }
+                ],
+                "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 11.",
+                "verdict": "inconclusive",
+                "reason": "Correção ilustrativa: falta evidência verificável para sustentar o veredito da revisão 1; manter a limitação explícita.",
+                "variation": false,
+                "attempts": [
+                  {
+                    "id": "attempt-2-1",
+                    "caseId": "case-2",
+                    "approvedCaseRevision": {
+                      "outputId": "out-case-design",
+                      "revision": 1
+                    },
+                    "routeDetailRef": {
+                      "outputId": "out-route-detail",
+                      "revision": 1
+                    },
+                    "startedAt": "2026-09-23T20:00:00Z",
+                    "finishedAt": "2026-09-23T20:02:00Z",
+                    "status": "completed",
+                    "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado.",
+                    "events": [
+                      {
+                        "id": "fixture-event-case-2-0",
+                        "at": "2026-09-23T20:02:00Z",
+                        "tool": "keyboard_scroll",
+                        "params": {
+                          "action": "type",
+                          "text": "1"
+                        },
+                        "outcome": "ok",
+                        "note": "EVENTO SINTÉTICO: Percorrer o caminho, preencher quantidade e confirmar. Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 11.",
+                        "caseId": "case-2",
+                        "attemptId": "attempt-2-1"
+                      }
+                    ],
+                    "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 11.",
+                    "verdict": "inconclusive",
+                    "reason": "Correção ilustrativa: falta evidência verificável para sustentar o veredito da revisão 1; manter a limitação explícita.",
+                    "evidenceIds": [],
+                    "evidenceGaps": [
+                      "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+                    ],
+                    "current": true,
+                    "validatedResult": {
+                      "caseId": "case-2",
+                      "attemptId": "attempt-2-1",
+                      "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado.",
+                      "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 11.",
+                      "verdict": "inconclusive",
+                      "reason": "Correção ilustrativa: falta evidência verificável para sustentar o veredito da revisão 1; manter a limitação explícita.",
+                      "evidenceIds": [],
+                      "evidenceGaps": [
+                        "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+                      ],
+                      "question": null,
+                      "reproduce": false
+                    },
+                    "resultRef": {
+                      "outputId": "out-execution-case-2",
+                      "revision": 2,
+                      "phase": "execution",
+                      "current": true
+                    },
+                    "evidence": []
+                  }
+                ]
+              },
+              {
+                "caseId": "case-3",
+                "current": true,
+                "requirementIds": [
+                  "US-01"
+                ],
+                "ruleIds": [
+                  "CA-01",
+                  "CA-02"
+                ],
+                "expected": "Mostrar “Quantidade inválida” e não criar reserva.",
+                "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial.",
+                "preconditions": [
+                  "Conta de teste válida e autenticada.",
+                  "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+                ],
+                "data": {
+                  "quantity": 0,
+                  "comment": ""
+                },
+                "sources": [
+                  {
+                    "artifactId": "artifact-demo",
+                    "locator": "L7-L10",
+                    "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                  },
+                  {
+                    "artifactId": "artifact-demo",
+                    "locator": "L14",
+                    "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                  }
+                ],
+                "observed": "Login indisponível antes de alcançar o formulário.",
+                "verdict": "blocked",
+                "reason": "Acesso é pré-condição; o caso não pôde prosseguir.",
+                "variation": false,
+                "attempts": [
+                  {
+                    "id": "attempt-3-1",
+                    "caseId": "case-3",
+                    "approvedCaseRevision": {
+                      "outputId": "out-case-design",
+                      "revision": 1
+                    },
+                    "routeDetailRef": {
+                      "outputId": "out-route-detail",
+                      "revision": 1
+                    },
+                    "startedAt": "2026-09-23T20:00:00Z",
+                    "finishedAt": "2026-09-23T20:02:00Z",
+                    "status": "completed",
+                    "setupObservation": "Exemplo de acesso indisponível; pré-condição não estabelecida.",
+                    "events": [
+                      {
+                        "id": "fixture-event-case-3-0",
+                        "at": "2026-09-23T20:03:00Z",
+                        "tool": "keyboard_scroll",
+                        "params": {
+                          "action": "type",
+                          "text": "1"
+                        },
+                        "outcome": "ok",
+                        "note": "EVENTO SINTÉTICO: Abrir a entrada autorizada. Login indisponível antes de alcançar o formulário.",
+                        "caseId": "case-3",
+                        "attemptId": "attempt-3-1"
+                      }
+                    ],
+                    "observed": "Login indisponível antes de alcançar o formulário.",
+                    "verdict": "blocked",
+                    "reason": "Acesso é pré-condição; o caso não pôde prosseguir.",
+                    "evidenceIds": [],
+                    "evidenceGaps": [
+                      "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+                    ],
+                    "current": true,
+                    "validatedResult": {
+                      "caseId": "case-3",
+                      "attemptId": "attempt-3-1",
+                      "setupObservation": "Exemplo de acesso indisponível; pré-condição não estabelecida.",
+                      "observed": "Login indisponível antes de alcançar o formulário.",
+                      "verdict": "blocked",
+                      "reason": "Acesso é pré-condição; o caso não pôde prosseguir.",
+                      "evidenceIds": [],
+                      "evidenceGaps": [
+                        "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+                      ],
+                      "question": "O acesso de teste está disponível para nova tentativa?",
+                      "reproduce": false
+                    },
+                    "resultRef": {
+                      "outputId": "out-execution-case-3",
+                      "revision": 2,
+                      "phase": "execution",
+                      "current": true
+                    },
+                    "evidence": []
+                  }
+                ]
+              },
+              {
+                "caseId": "case-4",
+                "current": true,
+                "requirementIds": [
+                  "US-01"
+                ],
+                "ruleIds": [
+                  "CA-01",
+                  "CA-02"
+                ],
+                "expected": "Mostrar “Reserva criada” e criar a reserva com a quantidade informada, sem exigir comentário.",
+                "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial.",
+                "preconditions": [
+                  "Conta de teste válida e autenticada.",
+                  "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+                ],
+                "data": {
+                  "quantity": 10,
+                  "comment": ""
+                },
+                "sources": [
+                  {
+                    "artifactId": "artifact-demo",
+                    "locator": "L7-L10",
+                    "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                  },
+                  {
+                    "artifactId": "artifact-demo",
+                    "locator": "L14",
+                    "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                  }
+                ],
+                "observed": "Após confirmar, a captura de tela falhou antes de observar a resposta.",
+                "verdict": "inconclusive",
+                "reason": "Sem observação suficiente para avaliar a aplicação.",
+                "variation": false,
+                "attempts": [
+                  {
+                    "id": "attempt-4-1",
+                    "caseId": "case-4",
+                    "approvedCaseRevision": {
+                      "outputId": "out-case-design",
+                      "revision": 1
+                    },
+                    "routeDetailRef": {
+                      "outputId": "out-route-detail",
+                      "revision": 1
+                    },
+                    "startedAt": "2026-09-23T20:00:00Z",
+                    "finishedAt": "2026-09-23T20:02:00Z",
+                    "status": "completed",
+                    "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado.",
+                    "events": [
+                      {
+                        "id": "fixture-event-case-4-0",
+                        "at": "2026-09-23T20:04:00Z",
+                        "tool": "keyboard_scroll",
+                        "params": {
+                          "action": "type",
+                          "text": "1"
+                        },
+                        "outcome": "ok",
+                        "note": "EVENTO SINTÉTICO: Preencher quantidade e confirmar; tentar capturar resposta. Após confirmar, a captura de tela falhou antes de observar a resposta.",
+                        "caseId": "case-4",
+                        "attemptId": "attempt-4-1"
+                      }
+                    ],
+                    "observed": "Após confirmar, a captura de tela falhou antes de observar a resposta.",
+                    "verdict": "inconclusive",
+                    "reason": "Sem observação suficiente para avaliar a aplicação.",
+                    "evidenceIds": [],
+                    "evidenceGaps": [
+                      "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+                    ],
+                    "current": true,
+                    "validatedResult": {
+                      "caseId": "case-4",
+                      "attemptId": "attempt-4-1",
+                      "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado.",
+                      "observed": "Após confirmar, a captura de tela falhou antes de observar a resposta.",
+                      "verdict": "inconclusive",
+                      "reason": "Sem observação suficiente para avaliar a aplicação.",
+                      "evidenceIds": [],
+                      "evidenceGaps": [
+                        "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+                      ],
+                      "question": null,
+                      "reproduce": false
+                    },
+                    "resultRef": {
+                      "outputId": "out-execution-case-4",
+                      "revision": 2,
+                      "phase": "execution",
+                      "current": true
+                    },
+                    "evidence": []
+                  }
+                ]
+              },
+              {
+                "caseId": "case-5",
+                "current": true,
+                "requirementIds": [
+                  "US-01"
+                ],
+                "ruleIds": [
+                  "CA-01",
+                  "CA-02"
+                ],
+                "expected": "Mostrar “Quantidade inválida” e não criar reserva.",
+                "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial.",
+                "preconditions": [
+                  "Conta de teste válida e autenticada.",
+                  "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+                ],
+                "data": {
+                  "quantity": 1.5,
+                  "comment": ""
+                },
+                "sources": [
+                  {
+                    "artifactId": "artifact-demo",
+                    "locator": "L7-L10",
+                    "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                  },
+                  {
+                    "artifactId": "artifact-demo",
+                    "locator": "L14",
+                    "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                  }
+                ],
+                "observed": "",
+                "verdict": "not_run",
+                "reason": "Não houve tentativa nem impedimento específico registrado.",
+                "variation": false,
+                "attempts": []
+              },
+              {
+                "caseId": "case-6",
+                "current": true,
+                "requirementIds": [
+                  "US-01"
+                ],
+                "ruleIds": [
+                  "CA-01",
+                  "CA-02"
+                ],
+                "expected": "Mostrar “Reserva criada”, criar a reserva com a quantidade informada, sem exigir comentário.",
+                "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial.",
+                "preconditions": [
+                  "Conta de teste válida e autenticada.",
+                  "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+                ],
+                "data": {
+                  "quantity": 2,
+                  "comment": ""
+                },
+                "sources": [
+                  {
+                    "artifactId": "artifact-demo",
+                    "locator": "L7-L10",
+                    "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                  },
+                  {
+                    "artifactId": "artifact-demo",
+                    "locator": "L14",
+                    "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                  }
+                ],
+                "observed": "",
+                "verdict": "not_run",
+                "reason": "Não houve tentativa nem impedimento específico registrado.",
+                "variation": false,
+                "attempts": []
+              },
+              {
+                "caseId": "case-7",
+                "current": true,
+                "requirementIds": [
+                  "US-01"
+                ],
+                "ruleIds": [
+                  "CA-01",
+                  "CA-02"
+                ],
+                "expected": "Mostrar “Reserva criada”, criar a reserva com a quantidade informada, sem exigir comentário.",
+                "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial.",
+                "preconditions": [
+                  "Conta de teste válida e autenticada.",
+                  "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+                ],
+                "data": {
+                  "quantity": 9,
+                  "comment": ""
+                },
+                "sources": [
+                  {
+                    "artifactId": "artifact-demo",
+                    "locator": "L7-L10",
+                    "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                  },
+                  {
+                    "artifactId": "artifact-demo",
+                    "locator": "L14",
+                    "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                  }
+                ],
+                "observed": "",
+                "verdict": "not_run",
+                "reason": "Não houve tentativa nem impedimento específico registrado.",
+                "variation": false,
+                "attempts": []
+              },
+              {
+                "caseId": "case-8",
+                "current": true,
+                "requirementIds": [
+                  "US-01"
+                ],
+                "ruleIds": [
+                  "CA-01",
+                  "CA-02"
+                ],
+                "expected": "Mostrar “Reserva criada”, criar a reserva com a quantidade informada e salvar o comentário informado.",
+                "setup": "Procedimento ilustrativo: restaurar dados do alvo controlado e autenticar a conta de teste antes do caso; confirmar estado inicial.",
+                "preconditions": [
+                  "Conta de teste válida e autenticada.",
+                  "Alvo disponível, dados restaurados conforme procedimento do ambiente."
+                ],
+                "data": {
+                  "quantity": 5,
+                  "comment": "Reserva de demonstração"
+                },
+                "sources": [
+                  {
+                    "artifactId": "artifact-demo",
+                    "locator": "L7-L10",
+                    "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                  },
+                  {
+                    "artifactId": "artifact-demo",
+                    "locator": "L14",
+                    "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                  }
+                ],
+                "observed": "",
+                "verdict": "blocked",
+                "reason": "O mapa não identifica onde conferir a persistência do comentário.",
+                "variation": false,
+                "attempts": []
+              }
+            ],
+            "questions": [
+              {
+                "id": "mapping:0",
+                "cause": "Local de consulta do comentário não observado.",
+                "description": "Local de consulta do comentário não observado.",
+                "caseIds": [
+                  "case-8"
+                ],
+                "blocking": true,
+                "outputId": "out-mapping",
+                "outputRevision": 1
+              },
+              {
+                "id": "route:case-8",
+                "cause": "O mapa não identifica onde conferir a persistência do comentário.",
+                "description": "O mapa não identifica onde conferir a persistência do comentário.",
+                "caseIds": [
+                  "case-8"
+                ],
+                "blocking": true,
+                "outputId": "out-route-detail",
+                "outputRevision": 1
+              },
+              {
+                "id": "execution:case-3",
+                "cause": "Acesso é pré-condição; o caso não pôde prosseguir.",
+                "description": "O acesso de teste está disponível para nova tentativa?",
+                "caseIds": [
+                  "case-3"
+                ],
+                "blocking": true,
+                "outputId": "out-execution-case-3",
+                "outputRevision": 2
+              }
+            ],
+            "answers": [],
+            "pending": [
+              {
+                "caseId": "case-8",
+                "reason": "O mapa não identifica onde conferir a persistência do comentário."
+              }
+            ],
+            "references": [
+              {
+                "outputId": "out-curation",
+                "revision": 1,
+                "phase": "curation",
+                "current": true
+              },
+              {
+                "outputId": "out-planning",
+                "revision": 1,
+                "phase": "planning",
+                "current": true
+              },
+              {
+                "outputId": "out-case-design",
+                "revision": 1,
+                "phase": "case_design",
+                "current": true
+              },
+              {
+                "outputId": "out-mapping",
+                "revision": 1,
+                "phase": "mapping",
+                "current": true
+              },
+              {
+                "outputId": "out-route-detail",
+                "revision": 1,
+                "phase": "route_detail",
+                "current": true
+              },
+              {
+                "outputId": "out-execution-case-1",
+                "revision": 2,
+                "phase": "execution",
+                "current": true
+              },
+              {
+                "outputId": "out-execution-case-2",
+                "revision": 2,
+                "phase": "execution",
+                "current": true
+              },
+              {
+                "outputId": "out-execution-case-3",
+                "revision": 2,
+                "phase": "execution",
+                "current": true
+              },
+              {
+                "outputId": "out-execution-case-4",
+                "revision": 2,
+                "phase": "execution",
+                "current": true
+              }
+            ],
+            "validations": [
+              {
+                "id": "validation-1",
+                "outputId": "out-curation",
+                "outputRevision": 1,
+                "validator": "output-validator",
+                "status": "approved",
+                "findings": [],
+                "reason": "Parecer fictício para ilustrar saída coerente com suas entradas e limitações; não houve validação real."
+              },
+              {
+                "id": "validation-2",
+                "outputId": "out-planning",
+                "outputRevision": 1,
+                "validator": "output-validator",
+                "status": "approved",
+                "findings": [],
+                "reason": "Parecer fictício: o plano descreve cobertura e abordagem com base nas US/CA, antes do mapeamento."
+              },
+              {
+                "outputId": "out-case-design",
+                "outputRevision": 1,
+                "validator": "output-validator",
+                "status": "approved",
+                "findings": [],
+                "reason": "Parecer fictício; não houve revisão real. A saída preserva as fontes e as dependências declaradas.",
+                "id": "validation-3"
+              },
+              {
+                "id": "validation-4",
+                "outputId": "out-mapping",
+                "outputRevision": 1,
+                "validator": "output-validator",
+                "status": "approved",
+                "findings": [],
+                "reason": "Parecer fictício para ilustrar saída coerente com suas entradas e limitações; não houve validação real."
+              },
+              {
+                "outputId": "out-route-detail",
+                "outputRevision": 1,
+                "validator": "output-validator",
+                "status": "approved",
+                "findings": [],
+                "reason": "Parecer fictício: percurso observado acrescentado aos casos; escopo, pré-condições, preparação, dados, técnicas, expectativas e fontes permanecem iguais aos aprovados pelo usuário.",
+                "id": "validation-5"
+              },
+              {
+                "id": "validation-case-1-2",
+                "outputId": "out-execution-case-1",
+                "outputRevision": 2,
+                "validator": "output-validator",
+                "status": "approved",
+                "findings": [],
+                "reason": "PARECER SINTÉTICO: limitação e ausência de prova explícitas; não houve validação real."
+              },
+              {
+                "id": "validation-case-2-2",
+                "outputId": "out-execution-case-2",
+                "outputRevision": 2,
+                "validator": "output-validator",
+                "status": "approved",
+                "findings": [],
+                "reason": "PARECER SINTÉTICO: limitação e ausência de prova explícitas; não houve validação real."
+              },
+              {
+                "id": "validation-case-3-2",
+                "outputId": "out-execution-case-3",
+                "outputRevision": 2,
+                "validator": "output-validator",
+                "status": "approved",
+                "findings": [],
+                "reason": "PARECER SINTÉTICO: limitação e ausência de prova explícitas; não houve validação real."
+              },
+              {
+                "id": "validation-case-4-2",
+                "outputId": "out-execution-case-4",
+                "outputRevision": 2,
+                "validator": "output-validator",
+                "status": "approved",
+                "findings": [],
+                "reason": "PARECER SINTÉTICO: limitação e ausência de prova explícitas; não houve validação real."
+              }
+            ],
+            "limitations": [
+              "Relatório parcial; o encerramento técnico da execução permanece registrado.",
+              "Existem casos bloqueados, inconclusivos ou não executados.",
+              "Mapa e identificadores sintéticos; nenhuma mídia real acompanha este exemplo."
+            ]
+          },
+          "narrative": {
+            "summary": "EXEMPLO SINTÉTICO: três casos inconclusivos, dois bloqueados (um sem tentativa por percurso pendente) e três não executados; nenhum defeito confirmado.",
+            "scope": "Reservas US-01, critérios CA-01 e CA-02. Nada foi executado de verdade.",
             "limitations": [
               "Não houve interação com navegador, chamada de modelo ou revisão real de IA.",
               "Não há capturas reais. Este exemplo não atende ao critério de pronto da demonstração. Vídeos são evolução futura, conforme decisão de 26/09/2026.",
               "O validador pede correção da revisão 1 por falta de evidência; o executor documenta a incerteza na revisão 2.",
               "Os vereditos anteriores permanecem no snapshot rejeitado e não entram como conclusões no relatório.",
               "A execução ilustrativa foi interrompida; validar o relatório parcial não transforma a execução em concluída."
-            ]
+            ],
+            "conclusion": "Exemplo parcial com ausência de evidências reais, sem aceite de produto."
           }
         },
         "answerRefs": [],
@@ -1496,37 +2324,109 @@
         "id": "validation-5"
       },
       {
-        "id": "validation-6",
-        "outputId": "out-execution",
+        "id": "validation-case-1-1",
+        "outputId": "out-execution-case-1",
         "outputRevision": 1,
         "validator": "output-validator",
         "status": "changes_requested",
         "findings": [
           {
-            "code": "UNSUPPORTED_VERDICT",
-            "message": "Os casos 1 e 2 afirmam aprovação/reprovação sem evidência verificável. Solicitar captura/reprodução ao executor ou registrar a impossibilidade e corrigir a conclusão.",
-            "location": "payload.results[caseId=case-1|case-2]"
+            "code": "UNSUPPORTED_CONCLUSION",
+            "message": "Parecer fictício: retirar conclusão sem suporte das capturas.",
+            "location": "reason"
           }
         ],
-        "reason": "Parecer fictício: devolver ao executor; não encaminhar esta revisão ao redator."
+        "reason": "PARECER SINTÉTICO: revisar a conclusão antes de alimentar o relatório."
       },
       {
-        "id": "validation-7",
-        "outputId": "out-execution",
+        "id": "validation-case-1-2",
+        "outputId": "out-execution-case-1",
         "outputRevision": 2,
         "validator": "output-validator",
         "status": "approved",
         "findings": [],
-        "reason": "Parecer fictício: saída parcial registra falta de evidência e incerteza sem afirmar defeito ou aprovação sem suporte."
+        "reason": "PARECER SINTÉTICO: limitação e ausência de prova explícitas; não houve validação real."
       },
       {
-        "id": "validation-8",
+        "id": "validation-case-2-1",
+        "outputId": "out-execution-case-2",
+        "outputRevision": 1,
+        "validator": "output-validator",
+        "status": "changes_requested",
+        "findings": [
+          {
+            "code": "UNSUPPORTED_CONCLUSION",
+            "message": "Parecer fictício: retirar conclusão sem suporte das capturas.",
+            "location": "reason"
+          }
+        ],
+        "reason": "PARECER SINTÉTICO: revisar a conclusão antes de alimentar o relatório."
+      },
+      {
+        "id": "validation-case-2-2",
+        "outputId": "out-execution-case-2",
+        "outputRevision": 2,
+        "validator": "output-validator",
+        "status": "approved",
+        "findings": [],
+        "reason": "PARECER SINTÉTICO: limitação e ausência de prova explícitas; não houve validação real."
+      },
+      {
+        "id": "validation-case-3-1",
+        "outputId": "out-execution-case-3",
+        "outputRevision": 1,
+        "validator": "output-validator",
+        "status": "changes_requested",
+        "findings": [
+          {
+            "code": "UNSUPPORTED_CONCLUSION",
+            "message": "Parecer fictício: retirar conclusão sem suporte das capturas.",
+            "location": "reason"
+          }
+        ],
+        "reason": "PARECER SINTÉTICO: revisar a conclusão antes de alimentar o relatório."
+      },
+      {
+        "id": "validation-case-3-2",
+        "outputId": "out-execution-case-3",
+        "outputRevision": 2,
+        "validator": "output-validator",
+        "status": "approved",
+        "findings": [],
+        "reason": "PARECER SINTÉTICO: limitação e ausência de prova explícitas; não houve validação real."
+      },
+      {
+        "id": "validation-case-4-1",
+        "outputId": "out-execution-case-4",
+        "outputRevision": 1,
+        "validator": "output-validator",
+        "status": "changes_requested",
+        "findings": [
+          {
+            "code": "UNSUPPORTED_CONCLUSION",
+            "message": "Parecer fictício: retirar conclusão sem suporte das capturas.",
+            "location": "reason"
+          }
+        ],
+        "reason": "PARECER SINTÉTICO: revisar a conclusão antes de alimentar o relatório."
+      },
+      {
+        "id": "validation-case-4-2",
+        "outputId": "out-execution-case-4",
+        "outputRevision": 2,
+        "validator": "output-validator",
+        "status": "approved",
+        "findings": [],
+        "reason": "PARECER SINTÉTICO: limitação e ausência de prova explícitas; não houve validação real."
+      },
+      {
+        "id": "validation-report",
         "outputId": "out-report",
         "outputRevision": 1,
         "validator": "output-validator",
         "status": "approved",
         "findings": [],
-        "reason": "Parecer fictício para ilustrar saída coerente com suas entradas e limitações; não houve validação real."
+        "reason": "PARECER SINTÉTICO. Nenhuma chamada de modelo ou aprovação humana real ocorreu."
       }
     ],
     "ownerId": "user-demo",
@@ -1620,10 +2520,168 @@
         "outcome": "ok",
         "note": "Clicar em Nova reserva."
       }
-    ]
+    ],
+    "executionAttempts": [
+      {
+        "id": "attempt-1-1",
+        "caseId": "case-1",
+        "approvedCaseRevision": {
+          "outputId": "out-case-design",
+          "revision": 1
+        },
+        "routeDetailRef": {
+          "outputId": "out-route-detail",
+          "revision": 1
+        },
+        "startedAt": "2026-09-23T20:00:00Z",
+        "finishedAt": "2026-09-23T20:02:00Z",
+        "status": "completed",
+        "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado.",
+        "events": [
+          {
+            "id": "fixture-event-case-1-0",
+            "at": "2026-09-23T20:01:00Z",
+            "tool": "keyboard_scroll",
+            "params": {
+              "action": "type",
+              "text": "1"
+            },
+            "outcome": "ok",
+            "note": "EVENTO SINTÉTICO: Percorrer o caminho, preencher quantidade e confirmar. Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 1.",
+            "caseId": "case-1",
+            "attemptId": "attempt-1-1"
+          }
+        ],
+        "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 1.",
+        "verdict": "inconclusive",
+        "reason": "Correção ilustrativa: falta evidência verificável para sustentar o veredito da revisão 1; manter a limitação explícita.",
+        "evidenceIds": [],
+        "evidenceGaps": [
+          "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+        ]
+      },
+      {
+        "id": "attempt-2-1",
+        "caseId": "case-2",
+        "approvedCaseRevision": {
+          "outputId": "out-case-design",
+          "revision": 1
+        },
+        "routeDetailRef": {
+          "outputId": "out-route-detail",
+          "revision": 1
+        },
+        "startedAt": "2026-09-23T20:00:00Z",
+        "finishedAt": "2026-09-23T20:02:00Z",
+        "status": "completed",
+        "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado.",
+        "events": [
+          {
+            "id": "fixture-event-case-2-0",
+            "at": "2026-09-23T20:02:00Z",
+            "tool": "keyboard_scroll",
+            "params": {
+              "action": "type",
+              "text": "1"
+            },
+            "outcome": "ok",
+            "note": "EVENTO SINTÉTICO: Percorrer o caminho, preencher quantidade e confirmar. Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 11.",
+            "caseId": "case-2",
+            "attemptId": "attempt-2-1"
+          }
+        ],
+        "observed": "Mensagem “Reserva criada”; lista apresenta uma nova reserva com quantidade 11.",
+        "verdict": "inconclusive",
+        "reason": "Correção ilustrativa: falta evidência verificável para sustentar o veredito da revisão 1; manter a limitação explícita.",
+        "evidenceIds": [],
+        "evidenceGaps": [
+          "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+        ]
+      },
+      {
+        "id": "attempt-3-1",
+        "caseId": "case-3",
+        "approvedCaseRevision": {
+          "outputId": "out-case-design",
+          "revision": 1
+        },
+        "routeDetailRef": {
+          "outputId": "out-route-detail",
+          "revision": 1
+        },
+        "startedAt": "2026-09-23T20:00:00Z",
+        "finishedAt": "2026-09-23T20:02:00Z",
+        "status": "completed",
+        "setupObservation": "Exemplo de acesso indisponível; pré-condição não estabelecida.",
+        "events": [
+          {
+            "id": "fixture-event-case-3-0",
+            "at": "2026-09-23T20:03:00Z",
+            "tool": "keyboard_scroll",
+            "params": {
+              "action": "type",
+              "text": "1"
+            },
+            "outcome": "ok",
+            "note": "EVENTO SINTÉTICO: Abrir a entrada autorizada. Login indisponível antes de alcançar o formulário.",
+            "caseId": "case-3",
+            "attemptId": "attempt-3-1"
+          }
+        ],
+        "observed": "Login indisponível antes de alcançar o formulário.",
+        "verdict": "blocked",
+        "reason": "Acesso é pré-condição; o caso não pôde prosseguir.",
+        "evidenceIds": [],
+        "evidenceGaps": [
+          "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+        ]
+      },
+      {
+        "id": "attempt-4-1",
+        "caseId": "case-4",
+        "approvedCaseRevision": {
+          "outputId": "out-case-design",
+          "revision": 1
+        },
+        "routeDetailRef": {
+          "outputId": "out-route-detail",
+          "revision": 1
+        },
+        "startedAt": "2026-09-23T20:00:00Z",
+        "finishedAt": "2026-09-23T20:02:00Z",
+        "status": "completed",
+        "setupObservation": "Exemplo de pré-condições conferidas; nada foi executado.",
+        "events": [
+          {
+            "id": "fixture-event-case-4-0",
+            "at": "2026-09-23T20:04:00Z",
+            "tool": "keyboard_scroll",
+            "params": {
+              "action": "type",
+              "text": "1"
+            },
+            "outcome": "ok",
+            "note": "EVENTO SINTÉTICO: Preencher quantidade e confirmar; tentar capturar resposta. Após confirmar, a captura de tela falhou antes de observar a resposta.",
+            "caseId": "case-4",
+            "attemptId": "attempt-4-1"
+          }
+        ],
+        "observed": "Após confirmar, a captura de tela falhou antes de observar a resposta.",
+        "verdict": "inconclusive",
+        "reason": "Sem observação suficiente para avaliar a aplicação.",
+        "evidenceIds": [],
+        "evidenceGaps": [
+          "Fixture sintética: nenhuma gravação ou imagem foi produzida."
+        ]
+      }
+    ],
+    "publishedReport": {
+      "outputId": "out-report",
+      "revision": 1
+    }
   },
   "screenshotContractExample": {
-    "notice": "ILUSTRAÇÃO SINTÉTICA DO CONTRATO FUTURO. Não existe mídia e esta entrada não sustenta nenhum resultado.",
+    "notice": "ILUSTRAÇÃO SINTÉTICA DO CONTRATO DE CAPTURA. O arquivo não existe e não sustenta nenhum resultado.",
     "id": "fixture-evidence-example",
     "caseId": "case-1",
     "attemptId": "fixture-attempt-example",

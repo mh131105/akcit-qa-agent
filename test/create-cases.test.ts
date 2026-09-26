@@ -203,13 +203,12 @@ test('T6.1: espera humana não conta, consumo anterior permanece e orçamento es
   assert.deepEqual(await exhausted.store.read(exhausted.id), before); assert.equal(exhausted.calls.length, 4);
 });
 
-for (const defect of ['new_curation', 'no_approval', 'changes_requested', 'missing_original', 'new_answer'] as const) {
+for (const defect of ['new_curation', 'no_approval', 'missing_original', 'new_answer'] as const) {
   test(`T6.1: ${defect} recusa antes de inferência e preserva registro`, async t => {
     const h = await setup(t);
     await h.store.update(h.id, ({ run }) => {
       if (defect === 'new_curation') run.outputs.push({ ...run.outputs[0]!, revision: 2 });
       if (defect === 'no_approval') run.approvals = [];
-      if (defect === 'changes_requested') run.approvals = run.approvals.map(decision => ({ ...decision, decision: 'changes_requested', comment: 'Rever escopo.' }));
       if (defect === 'missing_original') run.artifacts = [];
       if (defect === 'new_answer') {
         const curation = run.outputs[0]!;

@@ -1,6 +1,6 @@
 ---
 name: validate-output
-description: Revisar independentemente curadoria, plano ou casos lógicos contra originais, respostas e dependências exatas, distinguindo defeitos materiais de diferenças de redação e emitindo parecer localizado.
+description: Revisar independentemente curadoria, plano, casos, percursos, análise de alterações e relatório contra fontes e dependências exatas, emitindo parecer localizado.
 ---
 
 # Validação independente
@@ -145,3 +145,42 @@ não significa que os casos foram executados. Use `changes_requested` para
 associação inadequada ou omissão corrigível e `blocked` para impedimento real
 que exige informação externa. Localize os achados pelo caseId e campo afetado.
 Não invente caminhos nem reescreva a entrega do projetista.
+
+## Análise de alterações (`feedback`)
+
+Receba comentário/respostas, revisão comentada, originais e todas as dependências
+disponíveis. Confira se a classificação considera o significado no contexto,
+sem se limitar a palavras isoladas. Regra ou escopo exige `requirements` e novas
+aprovações; dados, preparo, técnica ou expectativa do caso exige `cases`; orientação
+puramente visual exige `navigation` e preserva aprovações lógicas. Ambiguidade
+material exige `clarification` com pergunta localizada, sem inventar uma decisão.
+
+Confira `restartFrom`, requisitos/casos afetados e orientações de revisão.
+Recuse impacto amplo sem fundamento, exclusão de dependentes realmente afetados
+ou orientação de navegação que altera implicitamente a lógica aprovada. Resposta
+corrigida deve ser comparada à anterior para localizar impacto, sem apagar histórico.
+Usuário afirmar que a funcionalidade não existe não comprova um defeito observado.
+Este parecer aprova a análise, não os documentos que ainda serão revisados nem uma
+execução. Use achados localizados como `caseIds`, `restartFrom` ou `question`.
+
+## Relatório (`report`)
+
+Compare `output.payload.snapshot` com `consolidated`, e a narrativa com todos os
+resultados e pareceres recebidos. As contagens, a cobertura e os vereditos são
+calculados pelo backend; o redator só os explica. Confira cada caso e cada critério,
+incluindo os sem cobertura, bloqueados, inconclusivos e não executados. Recuse
+conclusões de candidatos rejeitados ou de tentativas sem `validatedResult`.
+
+Confira identificação/revisão, referências, esperado/observado, tentativas,
+capturas vinculadas, pendências e distinção final/parcial. Uma falha sustentada
+permanece visível quando uma reprodução passa; não permita escolher apenas a
+última tentativa. Capturas do mapa não podem sustentar casos não executados.
+Erros técnicos e declarações humanas não são defeitos comprovados da aplicação.
+Não confunda aprovação do relatório com todos os testes aprovados ou transforme
+interrupção/erro em conclusão regular. Sem casos, não autorize cobertura inventada.
+
+Este perfil só verifica fidelidade textual às conclusões já validadas. Se for
+necessário reinterpretar capturas, devolva `blocked` com achado
+`VISUAL_REVALIDATION_REQUIRED` e caseId localizado; não afirme ter visto imagens.
+Rejeite narrativa materialmente contraditória mesmo se as tabelas estiverem certas.
+Não imponha floreios ou seções fora do contrato; a interface monta as tabelas.

@@ -1,7 +1,7 @@
 # Especialistas
 
-Esta pasta mantém tools e skills de cada papel. T4.1 implementa curadoria/plano;
-T6.1 acrescenta casos lógicos, com validações independentes. A sequência é coordenada pelo backend sem uma
+Esta pasta mantém tools e skills de cada papel. T9.1 acrescenta análise de alterações,
+execução e relatório ao fluxo anterior, com validações independentes. A sequência é coordenada pelo backend sem uma
 chamada adicional para escolher a próxima etapa. A implementação segue
 [PROTOTIPO.md](../docs/requisitos/PROTOTIPO.md) e os contratos na mesma pasta.
 
@@ -20,10 +20,12 @@ Consulte a matriz completa em [OPERACAO.md](../docs/OPERACAO.md#matriz-de-distri
 
 - `test-designer/` (T6.3): [detalhar percursos](test-designer/skills/detail-test-routes/SKILL.md), com `deepseek-v4-pro` / `high`. Devolve apenas associações; o backend copia os casos aprovados, registra pendências e preserva os campos lógicos. O `output-validator` textual revisa cada associação com Pro/high em sessão independente.
 
-### Agentes e etapas planejadas (futuras)
-- `report-writer/`: consolidação de resultados validados e referências a evidências em relatório textual, operando com `deepseek-flash` / `low`. Novas interpretações de comportamento não pertencem ao redator e devem retornar às etapas técnicas correspondentes.
+### Conclusão do fluxo — T9.1
+- `test-designer/`: [análise de alterações](test-designer/skills/analyze-feedback/SKILL.md), com Pro/high; classifica significado, casos, navegação ou pergunta localizada. O validador textual revisa a decisão antes de o backend invalidar dependentes e revisar documentos.
+- `test-executor/`: [execução visual por caso](test-executor/skills/execute-test-case/SKILL.md), com Flash/high. IDs, eventos, horários e arquivos pertencem ao backend; a conclusão candidata passa pela [validação visual do resultado](output-validator/skills/validate-test-result/SKILL.md) com imagens efetivas por tentativa.
+- `report-writer/`: [redação do relatório](report-writer/skills/write-report/SKILL.md), com Flash/low. O backend consolida contagens, cobertura, referências e resultados; o redator explica esse snapshot sem modificar vereditos. O validador textual Pro/high confere fidelidade antes da publicação.
 
-> **Ressalva factual:** A preparação textual e o mapeamento visual com validação independente estão implementados (T8.2); o ensaio com modelo real permanece restrito ao ambiente operado, e a qualidade da execução de testes e do relatório ainda não está comprovada.
+> A implementação candidata não comprova qualidade com modelos reais. O estado dos ensaios R1–R5 e do aceite está em [fechamento da sprint](../docs/evidencias/fechamento-sprint/README.md).
 
 Cada saída passa pelas verificações estruturais do backend e pela revisão do
 validador antes de alimentar uma etapa dependente. O validador usa contexto próprio,
@@ -41,9 +43,9 @@ execução deve manter contexto e evidências próprios. O executor terá um nav
 por sessão; especialistas não devem disputar o mesmo cursor.
 
 O backend seleciona uma única skill por tarefa em lista fechada: `artifact-curator`
-com `curate-artifacts`; `test-designer` com `create-test-plan`, `create-test-cases` ou `detail-test-routes`;
-`output-validator` com `validate-output` (textual) ou `validate-navigation` (visual);
-`test-executor` com `map-application`. Papel e tarefa incompatíveis são recusados;
+com `curate-artifacts`; `test-designer` com `create-test-plan`, `create-test-cases`, `detail-test-routes` ou `analyze-feedback`;
+`output-validator` com `validate-output` (textual), `validate-navigation` ou `validate-test-result` (visual);
+`test-executor` com `map-application` ou `execute-test-case`; `report-writer` com `write-report`. Papel e tarefa incompatíveis são recusados;
 caminhos não vêm do cliente. As tarefas do designer reutilizam o mesmo modelo.
 Cada produção/validação textual usa uma sessão Pi nova por
 tentativa, modelo configurado sem fallback e nenhuma tool de terminal, escrita ou
@@ -55,7 +57,7 @@ teste**; aprovar não chama os modelos. T6.1 entrega os casos em `awaiting_appro
 e T6.2 implementa a aprovação humana e a solicitação de alterações sobre o conjunto validado,
 mantendo a espera. T8.2 entrega o mapeamento validado: **Mapear aplicação** após as duas
 aprovações humanas e o acesso configurado; o mapa aprovado termina em `ready/mapping` e o
-T6.3 acrescenta `route_detail` validado; execução e relatório continuam pendentes. O ajuste de 24/09
+T6.3 acrescenta `route_detail` validado; T9.1 continua com execução, encerramento e relatório. O ajuste de 24/09
 acrescenta respostas rastreáveis e retomada explícita da preparação: originais
 permanecem intactos, respostas viram fontes, revisões e aprovações antigas ficam
 históricas. Pergunta pode bloquear uma regra sem bloquear toda a história; novas
@@ -66,7 +68,11 @@ Gherkin é opcional e não substitui o contrato interno. Exemplo recebido não d
 regra geral; proposta só sustenta expectativa após decisão explícita. Não há parser
 completo de `.feature` ou executor Cucumber. Casos usam PCE/AVL apenas quando
 aplicáveis e com dados coerentes; um exemplo pontual não autoriza inventar intervalo.
-Execução de testes e relatório aguardam as respectivas entregas.
+Cada caso permite uma tentativa original e até uma reprodução justificada. Uma
+correção textual da conclusão reutiliza as observações, sem nova interação física.
+Uma reprodução aprovada não apaga uma falha anterior sustentada. Só uma revisão
+aprovada do relatório substitui a publicação; durante correção a versão anterior
+permanece disponível. Cancelamento nunca dispara redação automática.
 A demonstração anterior permanece em [T4.1](../docs/evidencias/t4.1/README.md);
 a avaliação da versão atual está em
 [ajuste de entradas](../docs/evidencias/ajuste-entradas/README.md). A demonstração de

@@ -34,9 +34,12 @@ const PROFILES = {
   PI_VALIDATOR_PROVIDER: 'deepseek', PI_VALIDATOR_MODEL: 'deepseek-v4-pro', PI_VALIDATOR_THINKING_LEVEL: 'high',
   PI_EXECUTOR_PROVIDER: 'deepseek', PI_EXECUTOR_MODEL: 'deepseek-flash', PI_EXECUTOR_THINKING_LEVEL: 'high',
   PI_VALIDATOR_VISUAL_PROVIDER: 'deepseek', PI_VALIDATOR_VISUAL_MODEL: 'deepseek-flash', PI_VALIDATOR_VISUAL_THINKING_LEVEL: 'high',
+  PI_REPORT_PROVIDER: 'deepseek', PI_REPORT_MODEL: 'deepseek-flash', PI_REPORT_THINKING_LEVEL: 'low',
 };
 const env = { ...process.env, ...PROFILES };
-const withRouteDetail = process.argv.includes('--with-route-detail');
+const withExecutionReport = process.argv.includes('--with-execution-report');
+const withRouteDetail = withExecutionReport || process.argv.includes('--with-route-detail');
+const targetMode = withExecutionReport ? process.env.EVAL_TARGET_MODE ?? 'reference' : 'reference';
 function argumentValue(flag) {
   const index = process.argv.indexOf(flag);
   if (index < 0) return null;
@@ -56,12 +59,15 @@ const evidenceDir = resolvePath(process.env.EVAL_EVIDENCE_DIR ?? join(tmpdir(), 
 function resolvePath(path) { return path.startsWith('/') ? path : join(process.cwd(), path); }
 const TARGET_USER = process.env.DEMO_TARGET_USER ?? 'demo';
 const TARGET_PASSWORD = process.env.DEMO_TARGET_PASSWORD ?? 'demo1234';
-const MATERIAL = 'US-01: Criar reservas.\nCA-01: A quantidade de reserva aceita está entre 1 e 10.';
+const MATERIAL = withExecutionReport
+  ? await readFile(new URL('../docs/requisitos/exemplos/artefato-demo.md', import.meta.url), 'utf8') +
+    (targetMode === 'blocked-reservations' ? '\n\n## US-02\nComo usuário autenticado, quero registrar notas independentes das reservas.\n## CA-03\nAo salvar uma nota não vazia de até 200 caracteres, seu texto deve aparecer na lista de notas.\n' : '')
+  : 'US-01: Criar reservas.\nCA-01: A quantidade de reserva aceita está entre 1 e 10.';
 const ACCOUNT = { name: 'Avaliador Real', email: 'eval-mapping@example.test', password: 'senha ficticia longa 1!' };
 
 const report = {
   startedAt: new Date().toISOString(), sha: process.env.APP_REVISION ?? null,
-  image: process.env.EVAL_IMAGE ?? null, profiles: PROFILES, withRouteDetail,
+  image: process.env.EVAL_IMAGE ?? null, profiles: PROFILES, withRouteDetail, withExecutionReport, targetMode,
   implementer: process.env.EVAL_IMPLEMENTER ?? 'Codex', scenarios: [], failures: [],
 };
 const runs = new Map(); // runId -> { id, journey, review }
@@ -69,7 +75,7 @@ const runs = new Map(); // runId -> { id, journey, review }
 const dataDir = await createEvaluationDirectory();
 const store = new RunStore(dataDir);
 await store.initialize();
-const target = createDemoTarget({ port: 0, user: TARGET_USER, password: TARGET_PASSWORD, mode: 'reference' });
+const target = createDemoTarget({ port: 0, user: TARGET_USER, password: TARGET_PASSWORD, mode: targetMode });
 target.server.listen(0, '127.0.0.1');
 await once(target.server, 'listening');
 const targetOrigin = 'http://127.0.0.1:' + target.server.address().port;
@@ -418,7 +424,9 @@ console.error('[eval-A] ' + 'A10 salvar');
         // Revisão humana efetiva do plano (conteúdo real impresso e decidido pelo operador).
         let planReview = (await api('/api/runs/' + runId, undefined, sessionCookie, userId)).body;
         for (let attempt = 0; attempt < 10 && !planReview?.plan; attempt++) { await page.waitForTimeout(1000); planReview = (await api('/api/runs/' + runId, undefined, sessionCookie, userId)).body; }
-        if (humanDir) {
+        if (withExecutionReport) {
+          planReview = await humanStageReview(page, runId, sessionCookie, userId, 'plan', scenario);
+        } else if (humanDir) {
           await json(join(humanDir, 'awaiting-plan-' + runId + '.json'), { runId, input: MATERIAL, curation: planReview.curation, plan: planReview.plan });
           const decisionFile = join(humanDir, 'decision-plan-' + runId + '.json');
           const decision = await waitForHumanDecision(decisionFile);
@@ -436,7 +444,9 @@ console.error('[eval-A] ' + 'A10 salvar');
         // Revisão humana efetiva dos casos.
         let caseReview = (await api('/api/runs/' + runId, undefined, sessionCookie, userId)).body;
         for (let attempt = 0; attempt < 10 && !caseReview?.cases; attempt++) { await page.waitForTimeout(1000); caseReview = (await api('/api/runs/' + runId, undefined, sessionCookie, userId)).body; }
-        if (humanDir) {
+        if (withExecutionReport) {
+          caseReview = await humanStageReview(page, runId, sessionCookie, userId, 'cases', scenario);
+        } else if (humanDir) {
           await json(join(humanDir, 'awaiting-cases-' + runId + '.json'), { runId, curation: caseReview.curation, plan: caseReview.plan, cases: caseReview.cases });
           const decisionFile = join(humanDir, 'decision-cases-' + runId + '.json');
           const decision = await waitForHumanDecision(decisionFile);
@@ -488,6 +498,7 @@ console.error('[eval-A] ' + 'A10 salvar');
         assert.ok(!JSON.stringify(finalReview.mapping?.payload).includes('caseId'));
         assert.equal(target.reservations.length, 0);
         if (withRouteDetail) finalReview = await routeJourney(page, runId, sessionCookie, userId, scenario);
+        if (withExecutionReport) finalReview = await executionReportJourney(page, runId, sessionCookie, userId, scenario);
         scenario.finalStatus = finalReview.status; scenario.phase = finalReview.phase;
         recordRun(runId, scenario.name, finalReview);
         const exported = await exportRun(runId, sessionCookie, userId, 'jornada-interface');
@@ -576,6 +587,11 @@ async function routeJourney(page, runId, cookie, userId, scenario) {
   const casePanel = page.locator('section.panel').filter({ has: page.getByRole('heading', { name: 'Casos de teste', exact: true }) });
   await casePanel.locator('details').first().locator('summary').click();
   await page.screenshot({ path: join(evidenceDir, 'ui-percursos-' + runId + '.png'), fullPage: true });
+  if (withExecutionReport) {
+    scenario.routeCalls = calls;
+    scenario.steps.push('percursos-validados-sem-terceira-aprovacao-do-produto');
+    return review;
+  }
   const requestFile = join(humanDir, 'awaiting-routes-' + runId + '.json');
   await json(requestFile, { runId, cases: review.cases, mapping: review.mapping, routeDetail: review.routeDetail,
     instruction: 'Outro integrante deve conferir todas as associações e pendências. Registre human:true, reviewer e decision. Para o controle negativo, indique negativeControl:{caseId,pathId,reason} com um caminho EXISTENTE, porém inadequado. A justificativa não será enviada ao modelo.' });
@@ -637,6 +653,181 @@ async function routeValidatorControl(run, selection) {
     scenario.error = error.message;
     report.failures.push({ scenario: scenario.name, error: scenario.error });
     throw error;
+  } finally { report.scenarios.push(scenario); }
+}
+
+/** Aprovação humana vinculada à revisão, com alteração real pela própria interface. */
+async function humanStageReview(page, runId, cookie, userId, stage, scenario) {
+  for (;;) {
+    const review = (await api('/api/runs/' + runId, undefined, cookie, userId)).body;
+    const output = review[stage];
+    assert.ok(output, `Saída ${stage} disponível para revisão humana.`);
+    const tag = `${stage}-${runId}-r${output.revision}`;
+    const requestFile = join(humanDir, `awaiting-${tag}.json`);
+    await json(requestFile, { runId, outputId: output.id, outputRevision: output.revision, input: MATERIAL,
+      curation: review.curation, plan: review.plan, cases: review.cases,
+      instruction: 'Leia a versão inteira. Responda com human:true, reviewer, runId, outputId, outputRevision e decision:approved|changes_requested. Alterações exigem comment. A decisão nunca será fabricada pelo roteiro.' });
+    console.log(JSON.stringify({ event: 'human-review-required', file: requestFile }));
+    const decision = await waitForHumanDecision(join(humanDir, `decision-${tag}.json`));
+    assert.equal(decision.runId, runId); assert.equal(decision.outputId, output.id);
+    assert.equal(decision.outputRevision, output.revision);
+    scenario.humanDecisions ??= []; scenario.humanDecisions.push(decision);
+    await page.getByRole('tab', { name: stage === 'plan' ? 'Plano' : 'Casos', exact: true }).click();
+    if (decision.decision === 'approved') return review;
+    assert.equal(decision.decision, 'changes_requested');
+    assert.ok(typeof decision.comment === 'string' && decision.comment.trim());
+    await page.locator(stage === 'plan' ? '#comment' : '#case-comment').fill(decision.comment);
+    const requested = page.waitForResponse(response => response.url().endsWith(`/api/runs/${runId}/request-changes`));
+    await page.getByRole('button', { name: stage === 'plan' ? 'Solicitar alterações' : 'Solicitar alterações nos casos', exact: true }).click();
+    assert.equal((await requested).status(), 200);
+    const continued = page.waitForResponse(response => response.url().endsWith(`/api/runs/${runId}/continue`));
+    await page.getByRole('button', { name: 'Aplicar alterações solicitadas', exact: true }).click();
+    assert.equal((await continued).status(), 202);
+    const next = await waitFor(runId, cookie, userId, item => item.status !== 'running', 'revisão após alteração');
+    assert.ok(stage === 'cases' && next.phase === 'planning' || next[stage].revision > output.revision, 'A alteração humana precisa produzir uma revisão nova.');
+    scenario.steps.push(`alteracao-real-${stage}-r${output.revision}-r${next[stage].revision}`);
+    await page.reload();
+    if (stage === 'cases' && next.phase === 'planning') {
+      await humanStageReview(page, runId, cookie, userId, 'plan', scenario);
+      await page.getByRole('button', { name: 'Aprovar plano', exact: true }).click();
+      await page.getByRole('button', { name: 'Gerar casos de teste', exact: true }).click();
+      const revisedCases = await waitFor(runId, cookie, userId, item => item.status !== 'running', 'casos após reaprovação do plano');
+      assert.ok(revisedCases.cases.revision > output.revision, 'Casos revisados após nova aprovação do plano.');
+      await page.reload();
+    }
+  }
+}
+
+/** R1/R2: execução e relatório reais pela interface; R3 pode encerrar com pendências. */
+async function executionReportJourney(page, runId, cookie, userId, scenario) {
+  const before = await store.read(runId);
+  const testCases = before.run.outputs.findLast(output => output.phase === 'case_design').payload.testCases;
+  const values = testCases.flatMap(testCase => Object.values(testCase.data));
+  for (const boundary of [0, 1, 10, 11]) assert.ok(values.some(value => Number(value) === boundary), `Cobertura real de ${boundary}.`);
+  assert.ok(values.some(value => Number.isInteger(Number(value)) && Number(value) > 1 && Number(value) < 10), 'Cobertura de valor interno.');
+  assert.ok(values.some(value => Number.isFinite(Number(value)) && !Number.isInteger(Number(value))), 'Cobertura de valor não inteiro.');
+  assert.ok(testCases.some(testCase => Object.entries(testCase.data).some(([key, value]) => /coment|comment/i.test(key) && typeof value === 'string' && value.trim())), 'Cobertura do comentário informado.');
+  const executionPost = page.waitForResponse(response => response.url().endsWith(`/api/runs/${runId}/continue`));
+  await page.getByRole('button', { name: 'Executar testes', exact: true }).click();
+  assert.equal((await executionPost).status(), 202);
+  let review = await waitFor(runId, cookie, userId, item => item.status !== 'running', 'resultados validados', 45 * 60_000);
+  assert.ok(['ready', 'awaiting_input'].includes(review.status), JSON.stringify(review.stopReason));
+  assert.equal(review.phase, 'execution');
+  const executed = await store.read(runId);
+  const attempts = executed.run.executionAttempts ?? [];
+  assert.ok(attempts.length > 0, 'Houve tentativas reais.');
+  assert.ok(attempts.every(attempt => attempt.events.length <= 50 && attempt.evidenceIds.length > 0));
+  assert.ok(testCases.every(testCase => attempts.filter(attempt => attempt.caseId === testCase.id).length <= 2));
+  for (const attempt of attempts) {
+    const result = executed.run.outputs.findLast(output => output.phase === 'execution' && output.payload.attemptId === attempt.id);
+    assert.ok(result && executed.run.validations.some(item => item.outputId === result.id && item.outputRevision === result.revision && item.status === 'approved'));
+  }
+  scenario.steps.push('casos-executados-e-validados-com-imagens-reais');
+  if (targetMode === 'blocked-reservations') {
+    assert.ok(scenario.humanDecisions.some(item => item.decision === 'changes_requested' && item.outputId === before.run.outputs.findLast(output => output.phase === 'planning').id), 'R3 exige alteração real no plano.');
+    assert.ok(scenario.humanDecisions.some(item => item.decision === 'changes_requested' && item.outputId === before.run.outputs.findLast(output => output.phase === 'case_design').id), 'R3 exige alteração real nos casos.');
+    assert.ok(attempts.some(attempt => attempt.verdict === 'passed'), 'R3 executa uma funcionalidade independente.');
+    assert.equal(review.status, 'awaiting_input', 'R3 preserva pendência localizada.');
+    scenario.steps.push('bloqueio-local-com-independente-executado');
+  }
+  await page.reload();
+  const reportOperation = review.status === 'awaiting_input' ? 'finish-with-pending' : 'report';
+  const reportPost = page.waitForResponse(response => response.url().endsWith(`/api/runs/${runId}/${reportOperation}`));
+  await page.getByRole('button', { name: reportOperation === 'report' ? 'Gerar relatório' : 'Encerrar com pendências', exact: true }).click();
+  assert.equal((await reportPost).status(), 202);
+  review = await waitFor(runId, cookie, userId, item => item.status !== 'running', 'relatório validado');
+  assert.equal(review.status, 'completed', JSON.stringify(review.stopReason)); assert.equal(review.phase, 'done');
+  const snapshot = review.report.payload.snapshot;
+  if (targetMode === 'reference') assert.equal(snapshot.counts.passed, snapshot.counts.total, 'R1: nenhum defeito falso, bloqueio ou inconclusivo.');
+  if (targetMode === 'known-defect') {
+    const quantity = testCase => Number(Object.entries(testCase.data).find(([key]) => /quant|qty|quantity/i.test(key))?.[1]);
+    const atTen = snapshot.cases.filter(item => quantity(item) === 10);
+    assert.ok(atTen.length > 0 && atTen.every(item => item.verdict === 'failed'), 'R2: divergência da quantidade 10 detectada.');
+    assert.ok(snapshot.cases.filter(item => quantity(item) !== 10).every(item => item.verdict === 'passed'), 'R2: outros comportamentos corretos preservados.');
+  }
+  // O avaliador conhece o estado controlado; nada disso entra no prompt dos agentes.
+  const confirmed = snapshot.cases.flatMap(item => item.attempts).filter(attempt => attempt.validatedResult?.verdict === 'passed');
+  scenario.independentCheck = { targetMode, reservations: structuredClone(target.reservations), notes: structuredClone(target.notes),
+    counts: snapshot.counts, confirmedAttemptIds: confirmed.map(attempt => attempt.id) };
+  await page.reload();
+  await page.getByRole('tab', { name: 'Resultados', exact: true }).click();
+  await page.locator('#published-report').waitFor();
+  await page.evaluate(() => { window.print = () => { window.__printedRevision = document.querySelector('#published-report').dataset.reportRevision; }; });
+  await page.getByRole('button', { name: 'Salvar em PDF', exact: true }).click();
+  await page.waitForFunction(() => !!window.__printedRevision);
+  assert.equal(Number(await page.evaluate(() => window.__printedRevision)), review.report.revision);
+  await page.evaluate(() => {
+    document.body.classList.add('printing-report');
+    document.querySelectorAll('#published-report details').forEach(item => { item.open = true; });
+  });
+  await page.waitForFunction(() => [...document.querySelectorAll('#published-report img')].every(image => image.complete && image.naturalWidth > 0 && image.src.startsWith('blob:')));
+  const pdfFile = join(evidenceDir, `relatorio-${runId}-r${review.report.revision}.pdf`);
+  await page.pdf({ path: pdfFile, format: 'A4', printBackground: true, preferCSSPageSize: true });
+  await page.evaluate(() => document.body.classList.remove('printing-report'));
+  await page.screenshot({ path: join(evidenceDir, `ui-relatorio-${runId}.png`), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: join(evidenceDir, `ui-relatorio-390-${runId}.png`), fullPage: true });
+  await page.setViewportSize({ width: 1366, height: 900 });
+  const exported = await exportRun(runId, cookie, userId, 'jornada-completa');
+  await resultValidatorControls(exported.stored.run);
+  const requestFile = join(humanDir, `awaiting-final-${runId}.json`);
+  await json(requestFile, { runId, outputId: review.report.id, outputRevision: review.report.revision, pdfFile,
+    evidenceDirectory: exported.directory, independentCheck: scenario.independentCheck,
+    instruction: 'Outro integrante deve conferir clareza de todas as capturas, dados/expectativas/resultados, cobertura, layout desktop/390px e PDF com a mesma revisão. Registre human:true, reviewer, runId, outputId, outputRevision, decision e observações. Aprovação do processo não significa todos os testes passed.' });
+  console.log(JSON.stringify({ event: 'human-final-review-required', file: requestFile }));
+  const human = await waitForHumanDecision(join(humanDir, `decision-final-${runId}.json`));
+  assert.equal(human.runId, runId); assert.equal(human.outputId, review.report.id); assert.equal(human.outputRevision, review.report.revision);
+  assert.equal(human.decision, 'approved'); assert.notEqual(human.reviewer.trim(), report.implementer);
+  scenario.humanFinal = human; scenario.pdfFile = pdfFile; scenario.reportRevision = review.report.revision;
+  scenario.steps.push('relatorio-validado-publicado', 'pdf-mesma-revisao-imagens-autenticadas', 'revisao-humana-final');
+  return review;
+}
+
+/** R5: cópias isoladas, referências válidas e imagens reais. Contradição exige olhar a captura. */
+async function resultValidatorControls(run) {
+  const scenario = { name: 'R5-controles-resultados-e-relatorio', controlledExperiment: true, controls: [], error: null };
+  try {
+    const cases = run.outputs.findLast(output => output.phase === 'case_design').payload.testCases;
+    const routeDetail = run.outputs.findLast(output => output.phase === 'route_detail');
+    const output = run.outputs.findLast(output => output.phase === 'execution' && ['passed', 'failed'].includes(output.payload.verdict) &&
+      cases.some(item => item.id === output.payload.caseId && Object.entries(item.data).some(([key, value]) => /quant|qty|quantity/i.test(key) && Number(value) >= 1 && Number(value) <= 10 && Number.isInteger(Number(value)))));
+    assert.ok(output, 'R5 precisa de um resultado real de quantidade válida com captura verificável.');
+    const attempt = run.executionAttempts.find(item => item.id === output.payload.attemptId);
+    const approvedCase = routeDetail.payload.testCases.find(item => item.id === attempt.caseId);
+    const observations = output.payload.evidenceIds.map((id, imageIndex) => ({ imageIndex, ...run.observations.find(item => item.id === id) }));
+    const images = await Promise.all(observations.map(async item => ({ mimeType: 'image/png',
+      data: (await readFile(join(dataDir, 'media', run.id, item.assetId + '.png'))).toString('base64') })));
+    for (const control of ['positivo', 'negativo']) {
+      const candidate = structuredClone(output);
+      if (control === 'negativo') Object.assign(candidate.payload, output.payload.verdict === 'passed'
+        ? { verdict: 'failed', observed: 'Quantidade inválida; nenhuma reserva foi criada.', reason: 'A quantidade válida foi rejeitada.', reproduce: false }
+        : { verdict: 'passed', observed: 'Reserva criada; quantidade válida aceita.', reason: 'A criação esperada foi observada.', reproduce: false });
+      const input = { task: 'validate-test-result', approvedCase, routeDetail,
+        attempt: { ...attempt, observed: candidate.payload.observed, reason: candidate.payload.reason, verdict: candidate.payload.verdict },
+        output: candidate, events: attempt.events, manifest: { observations }, missingImages: [] };
+      const result = await executeVisualTask({ role: 'output-validator', kind: 'validate-test-result', model: resolvedVisual['validator-visual'],
+        ...(config.piAuthPath ? { authPath: config.piAuthPath } : {}), prompt: JSON.stringify(input), images,
+        signal: new AbortController().signal, perCallTimeoutMs: 120000, callMeta: { attempt: 1, outputRevision: candidate.revision } });
+      const verdict = parseVerdict(result.payload);
+      scenario.controls.push({ kind: 'visual', control, verdict, metadata: result.metadata });
+      await json(join(evidenceDir, `controle-${control}-resultado.json`), { controlledExperiment: true, input, verdict, metadata: result.metadata });
+      assert.equal(verdict.status === 'approved', control === 'positivo', 'R5 visual precisa distinguir conclusão fiel de captura contraditória.');
+    }
+    const published = run.outputs.find(output => output.id === run.publishedReport.outputId && output.revision === run.publishedReport.revision);
+    for (const control of ['positivo', 'negativo']) {
+      const candidate = structuredClone(published);
+      if (control === 'negativo') candidate.payload.narrative.conclusion = candidate.payload.snapshot.counts.failed
+        ? 'Nenhuma falha foi encontrada e todos os testes passaram.' : 'Todos os testes falharam e nenhum caso passou.';
+      const input = { task: 'validation', consolidated: published.payload.snapshot, output: candidate, previousOutput: null, previousVerdicts: [] };
+      const result = await executeSpecialistTask({ role: 'output-validator', task: 'validate-output', model: resolvedText['output-validator'],
+        ...(config.piAuthPath ? { authPath: config.piAuthPath } : {}), prompt: JSON.stringify(input), signal: new AbortController().signal, timeoutMs: 120000 });
+      const verdict = parseVerdict(result.payload);
+      scenario.controls.push({ kind: 'textual', control, verdict, metadata: result.metadata });
+      await json(join(evidenceDir, `controle-${control}-relatorio.json`), { controlledExperiment: true, input, verdict, metadata: result.metadata });
+      assert.equal(verdict.status === 'approved', control === 'positivo', 'R5 textual precisa rejeitar conclusão contrária aos resultados validados.');
+    }
+  } catch (error) {
+    scenario.error = error.message; report.failures.push({ scenario: scenario.name, error: scenario.error }); throw error;
   } finally { report.scenarios.push(scenario); }
 }
 

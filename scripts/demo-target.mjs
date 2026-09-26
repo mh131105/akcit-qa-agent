@@ -1,6 +1,6 @@
 // T7 — Aplicação controlada de reservas para demonstração.
 // Servidor independente, node:http, sessões e reservas em memória.
-// Modos: reference (cumpre requisitos) e known-defect (rejeita qty 10).
+// Modos: reference, known-defect (rejeita qty 10) e blocked-reservations (R3).
 // ponytail: single-file server, stdlib only, no router lib.
 
 import { createServer } from 'node:http';
@@ -97,7 +97,7 @@ ${error ? `<p class="msg-error">${esc(error)}</p>` : ''}
 }
 
 function navHtml() {
-  return `<nav><a href="/">Início</a><a href="/reservas">Reservas</a><a href="/logout">Sair</a></nav>`;
+  return `<nav><a href="/">Início</a><a href="/reservas">Reservas</a><a href="/notas">Notas</a><a href="/logout">Sair</a></nav>`;
 }
 
 function homePage() {
@@ -137,13 +137,15 @@ export function createDemoTarget(overrides = {}) {
   const password = overrides.password ?? ENV_PASSWORD;
   const mode = overrides.mode ?? ENV_MODE;
 
-  if (mode !== 'reference' && mode !== 'known-defect') {
-    throw new Error(`Modo inválido: "${mode}". Use "reference" ou "known-defect".`);
+  if (!['reference', 'known-defect', 'blocked-reservations'].includes(mode)) {
+    throw new Error(`Modo inválido: "${mode}". Use "reference", "known-defect" ou "blocked-reservations".`);
   }
 
   // Per-instance state
   const sessions = new Map();
   const reservations = [];
+  const notes = [];
+  let reservationsAvailable = mode !== 'blocked-reservations';
 
   function getSession(req) {
     const sid = parseCookies(req.headers.cookie).sid;
@@ -185,6 +187,22 @@ export function createDemoTarget(overrides = {}) {
       return send(res, 200, homePage());
     }
 
+    // Fluxo independente para R3; indisponibilidade não afeta notas.
+    if (path === '/notas' && method === 'GET') {
+      return send(res, 200, layout('Notas', `${navHtml()}<h1>Notas</h1>
+${notes.length ? `<ul>${notes.map(note => `<li>${esc(note.text)}</li>`).join('')}</ul>` : '<p>Nenhuma nota registrada.</p>'}
+<form method="POST" action="/notas"><p><label>Nota<br><textarea name="text" rows="3" required maxlength="200"></textarea></label></p>
+<button type="submit">Salvar nota</button></form>`));
+    }
+    if (path === '/notas' && method === 'POST') {
+      const body = parseForm(await readBody(req));
+      if (typeof body.text === 'string' && body.text.trim() && body.text.length <= 200) notes.push({ id: randomUUID(), text: body.text, createdAt: new Date().toISOString() });
+      return redirect(res, '/notas', undefined, 303);
+    }
+    if (path.startsWith('/reservas') && !reservationsAvailable) {
+      return send(res, 503, layout('Reservas indisponíveis', `${navHtml()}<h1>Reservas indisponíveis</h1><p>Esta funcionalidade está temporariamente indisponível. As notas continuam disponíveis.</p>`));
+    }
+
     // --- Reservations list ---
     if (path === '/reservas' && method === 'GET') {
       const flash = session.flash;
@@ -216,7 +234,11 @@ export function createDemoTarget(overrides = {}) {
     send(res, 404, layout('Não encontrado', `${navHtml()}<h1>Página não encontrada</h1>`));
   });
 
-  return { server, port, sessions, reservations };
+  // Controle exclusivamente do avaliador; não há endpoint que permita ao agente alterar a variante.
+  return { server, port, sessions, reservations, notes, setReservationsAvailable(value) {
+    if (typeof value !== 'boolean') throw new TypeError('Informe disponibilidade booleana.');
+    reservationsAvailable = value;
+  } };
 }
 
 // --- CLI entry ------------------------------------------------------------ //
@@ -227,8 +249,8 @@ const isMain = process.argv[1] && (
 );
 
 if (isMain) {
-  if (ENV_MODE !== 'reference' && ENV_MODE !== 'known-defect') {
-    console.error(`Modo inválido: "${ENV_MODE}". Use "reference" ou "known-defect".`);
+  if (!['reference', 'known-defect', 'blocked-reservations'].includes(ENV_MODE)) {
+    console.error(`Modo inválido: "${ENV_MODE}". Use "reference", "known-defect" ou "blocked-reservations".`);
     process.exit(1);
   }
   const { server, port } = createDemoTarget();

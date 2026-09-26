@@ -4,10 +4,11 @@ import { join } from 'node:path';
 import { MAP_LIMITS, parseNavigation, type NavigationPayload } from '../domain/navigation.js';
 import { InvalidNavigationOutput } from '../domain/navigation.js';
 import { parseVerdict, type Artifact, type TestCasesPayload, type Verdict } from '../domain/preparation.js';
-import { caseDependencies, preparationAnswers, PreparationError, latestOutput } from './prepare-plan.js';
+import { caseDependencies, answersCurrent, preparationAnswers, effectiveAnswers, PreparationError, latestOutput } from './prepare-plan.js';
 import { resolveTargetCredential } from './target-access.js';
 import { StorageError, type RunOutput, type RunRecord, type StoredRun } from '../storage/runs.js';
-import { executeVisualTask, preflightVisualModels, type VisualCallUpdate, type VisualResult, type VisualTask } from '../runtime/pi-visual.js';
+import { preflightVisualModels, type VisualResult, type VisualTask } from '../runtime/pi-visual.js';
+import { runVisual } from './visual-call.js';
 import { SpecialistError } from '../runtime/pi.js';
 import { resolveVisualModels, type readConfig, type ResolvedVisualModels } from '../config.js';
 
@@ -95,7 +96,7 @@ export function mappingEligibility(
   }
   const validDeps = cases.dependsOn.length === 2 &&
     [curation, plan].every(output => cases.dependsOn.some(ref => ref.outputId === output.id && ref.revision === output.revision)) &&
-    JSON.stringify(cases.answerRefs ?? []) === JSON.stringify(plan.answerRefs ?? []);
+    answersCurrent(run, cases);
   if (!validDeps) return refuse('STALE_VERSION', 'As dependências dos casos de teste foram alteradas.');
   const caseVerdicts = run.validations.filter(validation =>
     validation.outputId === cases.id && validation.outputRevision === cases.revision &&
@@ -155,104 +156,6 @@ export type MappingServices = {
   visualCall?: (task: VisualTask) => Promise<VisualResult>;
 };
 
-/** Executa a sessão visual persistindo início e término de cada inferência
- * reutilizando `PreparationCall`: o histórico fica registrado mesmo quando a
- * sessão inteira falha com JSON inválido, erro, timeout ou cancelamento. */
-async function runVisual(services: MappingServices, task: Omit<VisualTask, 'signal' | 'authPath' | 'onCall'>): Promise<VisualResult> {
-  const call = services.visualCall ?? executeVisualTask;
-  const running = new Set<string>();
-  const onCall = async (event: VisualCallUpdate) => {
-    if (event.kind === 'start') {
-      await services.update(record => {
-        const preparation = record.run.preparation;
-        if (!preparation) return undefined;
-        preparation.calls.push({
-          id: event.callId, role: task.role, ...task.model,
-          phase: task.role === 'test-executor' ? 'mapping' : 'mapping_validation',
-          attempt: task.callMeta.attempt, outputRevision: task.callMeta.outputRevision,
-          startedAt: event.at, status: 'running', budgetCycleId: preparation.budgetCycleId,
-        });
-        return undefined;
-      });
-      running.add(event.callId);
-    } else {
-      await services.update(record => {
-        const found = record.run.preparation?.calls.find(item => item.id === event.callId);
-        if (!found || found.status !== 'running') return undefined;
-        found.finishedAt = event.at;
-        found.durationMs = event.durationMs ?? 0;
-        found.status = 'completed';
-        if (event.usage) found.usage = event.usage;
-        return undefined;
-      });
-      running.delete(event.callId);
-    }
-  };
-  let result: VisualResult;
-  try {
-    result = await call({
-      ...task,
-      signal: services.signal, onCall,
-      ...(services.config.piAuthPath ? { authPath: services.config.piAuthPath } : {}),
-    });
-  } catch (error) {
-    // A falha atual também fica registrada; chamadas anteriores foram preservadas.
-    const failure = services.failure(error);
-    const aborted = services.signal.aborted;
-    try {
-      await services.update(record => {
-        const preparation = record.run.preparation;
-        if (!preparation) return undefined;
-        for (const callId of running) {
-          const found = preparation.calls.find(item => item.id === callId);
-          if (found && found.status === 'running') {
-            found.finishedAt = services.time();
-            found.durationMs = Math.max(0, services.now() - Date.parse(found.startedAt));
-            found.status = aborted ? 'cancelled'
-              : ['INVALID_OUTPUT', 'INVALID_MODEL_OUTPUT'].includes(failure.code) ? 'invalid' : 'error';
-            found.errorCode = failure.code;
-          }
-        }
-        return undefined;
-      });
-    } catch {
-      // Cancelamento já finalizou as chamadas em andamento; nada a salvar.
-    }
-    throw error;
-  }
-  // Eventos já foram persistidos; resultados substitutos legados (sem callId)
-  // são registrados como concluídos na chegada.
-  for (const callEvent of result.calls) {
-    await services.update(record => {
-      const preparation = record.run.preparation;
-      if (!preparation) return undefined;
-      if (callEvent.callId) {
-        const found = preparation.calls.find(item => item.id === callEvent.callId);
-        if (found) {
-          if (found.status === 'running') {
-            found.finishedAt = callEvent.at;
-            found.durationMs = callEvent.durationMs;
-            found.status = 'completed';
-            if (callEvent.usage) found.usage = callEvent.usage;
-          }
-          return undefined;
-        }
-      }
-      preparation.calls.push({
-        id: randomUUID(), role: task.role, ...task.model,
-        phase: task.role === 'test-executor' ? 'mapping' : 'mapping_validation',
-        attempt: task.callMeta.attempt, outputRevision: task.callMeta.outputRevision,
-        budgetCycleId: preparation.budgetCycleId,
-        startedAt: new Date(Math.max(0, Date.parse(callEvent.at) - callEvent.durationMs)).toISOString(),
-        finishedAt: callEvent.at, durationMs: callEvent.durationMs, status: 'completed',
-        ...(callEvent.usage ? { usage: callEvent.usage } : {}),
-      });
-      return undefined;
-    });
-  }
-  return result;
-}
-
 /** Rotina de mapeamento e validação: executor visual produz o mapa com ferramentas
  * reais; o validador examina o mapa e as imagens referenciadas em sessão independente.
  * Limites: três produções/revisões, duas tentativas técnicas de validação por revisão,
@@ -301,7 +204,7 @@ export async function produceMapping(services: MappingServices, request: Mapping
         prompt: JSON.stringify({ task: 'map-application', artifacts, curation, plan, approvedCases: cases, access: {
           startUrl, accessProfile: current.run.input?.accessProfile ?? null,
           dataPreparation: current.run.input?.dataPreparation ?? null, hasCredential: true },
-        previousOutput: previous, feedback }),
+        previousOutput: previous, feedback, answers: preparationAnswers(current.run), validatedFeedback: latestOutput(current.run, 'feedback') }),
         perCallTimeoutMs: limits.timeoutMs,
         callMeta: { attempt, outputRevision: revision },
         browser: {
@@ -385,7 +288,7 @@ export async function produceMapping(services: MappingServices, request: Mapping
       const saved: RunOutput = { id: outputId, phase: 'mapping', revision, producer: 'test-executor',
         createdAt: services.time(), budgetCycleId: run.preparation!.budgetCycleId,
         dependsOn: [curation, plan, cases].map(output => ({ outputId: output.id, revision: output.revision })),
-        answerRefs: preparationAnswers(run).map(answer => ({ answerId: answer.id, questionId: answer.questionId, revision: answer.revision })),
+        answerRefs: effectiveAnswers(run).map(answer => ({ answerId: answer.id, questionId: answer.questionId, revision: answer.revision })),
         payload: { phase: 'mapping', producer: 'test-executor', accessRevision: accessRevision(run), ...payload },
       };
       run.outputs.push(saved);

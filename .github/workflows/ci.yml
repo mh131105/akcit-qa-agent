@@ -67,6 +67,17 @@ jobs:
             --tmpfs /data:rw,size=128m,uid=1000,gid=1000,mode=0700 \
             -e SMOKE_ARTIFACT_DIR=/evidence -v "$PWD/artifacts/mapping:/evidence" \
             akcit-qa:ci node scripts/smoke-mapping.mjs
+      - name: Execução visual por caso com navegador/tools reais e modelos substituídos
+        run: |
+          mkdir -p artifacts/execution
+          chmod 777 artifacts/execution
+          docker run --rm --cpus=1 --memory=2g --shm-size=512m \
+            --cap-drop=ALL --security-opt=no-new-privileges --read-only \
+            --tmpfs /tmp:rw,size=512m,mode=1777 \
+            --tmpfs /home/node:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+            --tmpfs /data:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+            -e SMOKE_ARTIFACT_DIR=/evidence -v "$PWD/artifacts/execution:/evidence" \
+            akcit-qa:ci node scripts/smoke-execution.mjs
       - name: Evidências sintéticas da interface
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -89,5 +100,13 @@ jobs:
         with:
           name: mapping-smoke
           path: artifacts/mapping/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Evidências da execução visual
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: execution-smoke
+          path: artifacts/execution/
           if-no-files-found: ignore
           retention-days: 14
