@@ -35,6 +35,14 @@ let holdPreparation = false;
 let holdCaseValidation = false;
 let holdRouteValidation = false;
 let releasePreparation = () => {};
+let preparationHeld = false;
+async function waitForPreparationHeld() {
+  const deadline = Date.now() + 10_000;
+  while (!preparationHeld) {
+    assert.ok(Date.now() < deadline, 'O modelo simulado deve iniciar antes de conferir/liberar sua chamada.');
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+}
 
 async function modelCall(task) {
   const input = JSON.parse(task.prompt);
@@ -43,7 +51,8 @@ async function modelCall(task) {
   preparationCalls.push(task.role);
   if ((holdRouteValidation && task.role === 'output-validator' && input.output?.phase === 'route_detail') || holdPreparation || (holdCaseValidation && task.role === 'output-validator' && input.output.phase === 'case_design')) {
     await new Promise(resolve => {
-      releasePreparation = resolve;
+      preparationHeld = true;
+      releasePreparation = () => { preparationHeld = false; resolve(); };
       if (task.signal.aborted) resolve();
       else task.signal.addEventListener('abort', resolve, { once: true });
     });
@@ -534,6 +543,7 @@ async function preparationJourney(context, store, owner) {
     assert.deepEqual(accepted.request().postDataJSON(), {});
     await visible(page.getByRole('button', { name: 'Cancelar preparação', exact: true }));
     await bodyIncludes('Curador');
+    await waitForPreparationHeld();
   };
 
   const id = await createDraft('Preparação do plano pelo site');
@@ -623,6 +633,7 @@ async function preparationJourney(context, store, owner) {
   assert.deepEqual(resumedResponse.request().postDataJSON(), {});
   assert.equal(resumedResponse.request().headers()['x-expected-user-id'], owner.id);
   await visible(page.getByRole('button', { name: 'Cancelar preparação', exact: true }));
+  await waitForPreparationHeld();
   holdPreparation = false; releasePreparation();
   await visible(page.getByRole('button', { name: 'Aprovar plano', exact: true }));
   await bodyIncludes('Plano de testes / Revisão 2');
@@ -648,12 +659,14 @@ async function preparationJourney(context, store, owner) {
   assert.equal(acceptedCases.request().headers()['x-expected-user-id'], owner.id);
   assert.deepEqual(acceptedCases.request().postDataJSON(), { outputId: approved.plan.id, outputRevision: 2 });
   await bodyIncludes('Gerando casos de teste');
+  await waitForPreparationHeld();
   const repeatedCases = await context.request.post(`/api/runs/${id}/continue`, { headers,
     data: { outputId: approved.plan.id, outputRevision: 2 } });
   assert.equal(repeatedCases.status(), 200);
   assert.equal(preparationCalls.length, 9, 'Repetir a continuidade não duplica geração.');
   holdPreparation = false; releasePreparation();
   await bodyIncludes('Validando os casos de teste');
+  await waitForPreparationHeld();
   await bodyIncludes('Conteúdo provisório — a validação desta revisão ainda não foi aprovada.');
   holdCaseValidation = false; releasePreparation();
   await bodyIncludes('Conjunto validado. Disponível para revisão humana');
@@ -1336,6 +1349,7 @@ try {
   await page.getByRole('button', { name: 'Detalhar percursos', exact: true }).click();
   assert.equal((await detailPost).status(), 202);
   await bodyIncludes('Validando as associações de percursos');
+  await waitForPreparationHeld();
   const provisionalRoutes = await api(context, `/api/runs/${mappingId}`, owner.id);
   assert.equal(provisionalRoutes.routeDetail.ready, false);
   assert.equal(await page.getByText('Percursos validados — aguardando execução dos testes', { exact: true }).count(), 0);
