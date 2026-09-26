@@ -35,7 +35,7 @@ async function evidenceUrl(runId, assetId, accountId) {
 // Dados da API entram somente como texto. Nenhum conteúdo recebido vira HTML.
 function el(tag, text, className) {
   const node = document.createElement(tag);
-  if (text !== undefined && text !== null) node.textContent = text;
+  if (text !== undefined && text !== null) node.textContent = /^(h[1-6]|summary)$/.test(tag) ? String(text).replace(/^\p{L}/u, letter => letter.toLocaleUpperCase('pt-BR')) : text;
   if (className) node.className = className;
   return node;
 }
@@ -299,12 +299,61 @@ let currentTab = null;
 let tabPhase = null;
 let currentArtifacts = [];
 let currentAnswerSources = [];
+// Rótulos de apresentação: os identificadores originais continuam nas operações e referências.
+const referenceNames = new Map();
+const referenceCounts = new Map();
+function referenceLabel(id, kind = 'Referência') {
+  if (referenceNames.has(id)) return referenceNames.get(id);
+  const value = String(id || '');
+  if (!/[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}|[a-f\d]{24,}/i.test(value)) return value || kind;
+  const ordinal = (referenceCounts.get(kind) || 0) + 1; referenceCounts.set(kind, ordinal);
+  const label = `${kind} ${ordinal}`; referenceNames.set(id, label); return label;
+}
+const referenceList = (ids = [], kind) => ids.map(id => referenceLabel(id, kind)).join(', ');
+function prepareReferenceNames(run) {
+  referenceNames.clear(); referenceCounts.clear();
+  const name = (items, kind, getId = item => item.id, getName) => (items || []).forEach((item, index) => {
+    const id = getId(item); if (!id) return;
+    referenceNames.set(id, getName ? getName(item, index) : `${kind} ${index + 1}`);
+    referenceCounts.set(kind, Math.max(referenceCounts.get(kind) || 0, index + 1));
+  });
+  name(run.artifacts, 'Fonte', item => item.id, (item, index) => item.name || `Fonte ${index + 1}`);
+  name(run.observations, 'Captura');
+  for (const item of run.observations || []) if (item.assetId) referenceNames.set(item.assetId, referenceNames.get(item.id));
+  name(run.attempts, 'Tentativa');
+  name(run.mappingActions, 'Ação');
+  const map = run.mapping?.payload.map;
+  name(map?.screens, 'Tela', item => item.id, (item, index) => item.name || `Tela ${index + 1}`);
+  name(map?.transitions, 'Transição');
+  name(map?.paths, 'Percurso');
+  const nameOutput = (id, phase) => {
+    if (referenceNames.has(id)) return;
+    const ordinal = (referenceCounts.get('Resultado') || 0) + 1;
+    if (phase === 'execution') referenceCounts.set('Resultado', ordinal);
+    referenceNames.set(id, phase === 'execution' ? `Resultado ${ordinal}` : phases[phase] || 'Saída');
+  };
+  for (const item of run.versions || []) nameOutput(item.id, item.phase);
+  for (const [key, label] of [['curation', 'Curadoria'], ['plan', 'Plano de testes'], ['cases', 'Casos de teste'], ['mapping', 'Mapa de navegação'], ['routeDetail', 'Detalhamento dos percursos'], ['report', 'Relatório']]) {
+    if (run[key]?.id) referenceNames.set(run[key].id, label);
+  }
+  const snapshot = run.report?.payload.snapshot;
+  for (const item of snapshot?.references || []) nameOutput(item.outputId, item.phase);
+  for (const output of run.executionResults || []) referenceNames.set(output.id, `Resultado · ${referenceLabel(output.payload.caseId, 'Caso')}`);
+  for (const item of [...(run.questions || []), ...(snapshot?.questions || [])]) referenceLabel(item.id, 'Pergunta');
+  for (const item of [...(run.cases?.payload.testCases || []), ...(snapshot?.cases || [])]) {
+    referenceLabel(item.id || item.caseId, 'Caso');
+    for (const attempt of item.attempts || []) {
+      if (!referenceNames.has(attempt.id)) referenceLabel(attempt.id, 'Tentativa');
+      if (attempt.resultRef?.outputId) referenceNames.set(attempt.resultRef.outputId, `Resultado · ${referenceLabel(item.caseId, 'Caso')}`);
+    }
+  }
+}
 function sourceLabel(source) {
   const artifact = currentArtifacts.find(item => item.id === source.artifactId);
   const lines = /^L(\d+)(?:-L(\d+))?$/.exec(source.locator);
   const pages = lines && artifact?.pages?.filter(page => page.lastLine >= Number(lines[1]) && page.firstLine <= Number(lines[2] || lines[1]));
   const answer = currentAnswerSources.find(item => item.artifactId === source.artifactId);
-  return `${artifact?.name || (answer ? `Resposta ${answer.questionId} r${answer.revision}` : source.artifactId)} · ${source.locator}${pages?.length ? ` · PDF página${pages.length > 1 ? 's' : ''} ${pages.map(page => page.page).join(', ')}` : ''}`;
+  return `${artifact?.name || (answer ? `Resposta à ${referenceLabel(answer.questionId, 'Pergunta')} · Revisão ${answer.revision || 1}` : referenceLabel(source.artifactId, 'Fonte'))} · ${source.locator}${pages?.length ? ` · PDF página${pages.length > 1 ? 's' : ''} ${pages.map(page => page.page).join(', ')}` : ''}`;
 }
 function detailTabs(run) {
   const defaults = { planning: 'plan', case_design: 'cases', mapping: 'cases', route_detail: 'cases', execution: 'results', report: 'results', done: 'results' };
@@ -370,10 +419,10 @@ function runManagement(run, accountId) {
 const resultNames = { passed: 'Aprovado', failed: 'Reprovado', blocked: 'Bloqueado', inconclusive: 'Inconclusivo', not_run: 'Não executado' };
 function attemptPanel(run, attempt, accountId, observations = run.observations || []) {
   const detail = el('details', null, 'attempt');
-  detail.append(el('summary', `${attempt.reproducesAttemptId ? 'Reprodução' : 'Tentativa original'} · ${attempt.id} · ${resultNames[attempt.verdict] || attempt.status}`));
+  detail.append(el('summary', `${referenceLabel(attempt.id, 'Tentativa')} · ${attempt.reproducesAttemptId ? 'Reprodução' : 'Original'} · ${resultNames[attempt.verdict] || statuses[attempt.status] || attempt.status}`));
   detail.append(el('p', `${date(attempt.startedAt)}${attempt.finishedAt ? ` → ${date(attempt.finishedAt)}` : ' · Em andamento'}`, 'hint'));
   if (attempt.current === false) detail.append(message('Tentativa histórica; não compõe a cobertura da revisão atual.'));
-  if (attempt.reproducesAttemptId) detail.append(el('p', `Reproduz a tentativa ${attempt.reproducesAttemptId}`, 'hint'));
+  if (attempt.reproducesAttemptId) detail.append(el('p', `Reprodução de ${referenceLabel(attempt.reproducesAttemptId, 'Tentativa')}`, 'hint'));
   if (attempt.setupObservation) detail.append(el('h4', 'Preparo observado'), el('p', attempt.setupObservation, 'text-content'));
   if (attempt.events?.length) detail.append(planSection('Passos observados', attempt.events, event => `${event.at || ''} · ${event.note || event.action || event.tool || ''} · ${event.outcome || event.observation || ''}`));
   detail.append(el('h4', 'Resultado observado'), el('p', attempt.observed || 'Nenhuma observação registrada.', 'text-content'));
@@ -387,13 +436,13 @@ function attemptPanel(run, attempt, accountId, observations = run.observations |
 function coveragePanel(coverage) {
   const panel = el('section', null, 'panel coverage'); panel.append(el('h2', 'Cobertura por requisito e critério'));
   for (const requirement of coverage || []) {
-    const item = el('details', null, 'plan-section'); item.append(el('summary', `${requirement.requirementId || requirement.id} · ${requirement.statement}`));
-    for (const rule of requirement.rules || []) { const criterion = el('section', null, 'coverage-rule'); criterion.append(el('h3', rule.ruleId || rule.id), el('p', rule.statement, 'text-content'),
+    const item = el('details', null, 'plan-section'); item.append(el('summary', `${referenceLabel(requirement.requirementId || requirement.id, 'Requisito')} · ${requirement.statement}`));
+    for (const rule of requirement.rules || []) { const criterion = el('section', null, 'coverage-rule'); criterion.append(el('h3', referenceLabel(rule.ruleId || rule.id, 'Critério')), el('p', rule.statement, 'text-content'),
       el('p', rule.partial ? 'Cobertura parcial.' : rule.selected ? 'Critério selecionado.' : 'Fora do escopo selecionado.', 'hint'),
-      el('p', rule.attemptedCaseIds?.length ? `Casos tentados: ${rule.attemptedCaseIds.join(', ')}` : 'Nenhum caso tentado.', 'hint'),
-      el('p', rule.pendingCaseIds?.length ? `Casos pendentes: ${rule.pendingCaseIds.join(', ')}` : 'Sem casos pendentes.', 'hint'),
-      el('p', rule.caseIds?.length ? `Casos: ${rule.caseIds.join(', ')}` : 'Sem caso associado.', 'hint'),
-      el('p', rule.uncovered ? (rule.limitation || 'Sem cobertura de execução validada.') : `Casos com resultados validados: ${(rule.validatedCaseIds || []).join(', ') || 'Nenhum'}`, 'hint')); item.append(criterion); }
+      el('p', rule.attemptedCaseIds?.length ? `Casos tentados: ${referenceList(rule.attemptedCaseIds, 'Caso')}` : 'Nenhum caso tentado.', 'hint'),
+      el('p', rule.pendingCaseIds?.length ? `Casos pendentes: ${referenceList(rule.pendingCaseIds, 'Caso')}` : 'Sem casos pendentes.', 'hint'),
+      el('p', rule.caseIds?.length ? `Casos: ${referenceList(rule.caseIds, 'Caso')}` : 'Sem caso associado.', 'hint'),
+      el('p', rule.uncovered ? (rule.limitation || 'Sem cobertura de execução validada.') : `Casos com resultados validados: ${referenceList(rule.validatedCaseIds, 'Caso') || 'Nenhum'}`, 'hint')); item.append(criterion); }
     panel.append(item);
   }
   return panel;
@@ -404,15 +453,15 @@ function publishedReportPanel(run, accountId) {
   article.dataset.reportRevision = String(report.revision); article.id = 'published-report';
   const { snapshot, narrative } = report.payload;
   article.append(el('p', `Relatório publicado · Revisão ${report.revision} · ${snapshot.mode === 'partial' ? 'Parcial' : 'Final'}`, 'eyebrow'),
-    el('h2', snapshot.name), el('p', snapshot.applicationName, 'lead'), el('p', `${snapshot.runId} · ${date(snapshot.createdAt)}`, 'hint'), el('p', narrative.summary, 'text-content'),
+    el('h2', snapshot.name), el('p', snapshot.applicationName, 'lead'), el('p', `Criado em ${date(snapshot.createdAt)}`, 'hint'), el('p', narrative.summary, 'text-content'),
     el('h3', 'Escopo'), el('p', narrative.scope, 'text-content'), el('p', snapshot.scope.objective, 'text-content'));
   const totals = el('dl', null, 'metadata report-totals');
   for (const [key, value] of Object.entries(snapshot.counts)) { const item = el('div'); item.append(el('dt', key === 'total' ? 'Total de casos' : resultNames[key] || key), el('dd', String(value))); totals.append(item); }
   if (snapshot.scope.current === false) article.append(message('Escopo histórico: última versão validada; revisão posterior pendente.'));
   article.append(totals, coveragePanel(snapshot.coverage), planSection('Fontes do escopo', snapshot.scope.sources || [], source => `${sourceLabel(source)} — ${source.quote}`), planSection('Exclusões', snapshot.scope.exclusions || [], item => `${item.description} — ${item.reason}`));
   for (const item of snapshot.cases) {
-    const section = el('section', null, 'report-case'); section.append(el('h3', `${item.caseId} · ${resultNames[item.verdict] || item.verdict}`),
-      el('p', `${item.requirementIds.join(', ')} / ${item.ruleIds.join(', ')}`, 'hint'), el('h4', 'Resultado esperado'), el('p', item.expected, 'text-content'),
+    const section = el('section', null, 'report-case'); section.append(el('h3', `${referenceLabel(item.caseId, 'Caso')} · ${resultNames[item.verdict] || item.verdict}`),
+      el('p', `${referenceList(item.requirementIds, 'Requisito')} / ${referenceList(item.ruleIds, 'Critério')}`, 'hint'), el('h4', 'Resultado esperado'), el('p', item.expected, 'text-content'),
       el('h4', 'Resultado observado'), el('p', item.observed || 'Sem tentativa.', 'text-content'), el('p', item.reason, 'text-content'));
     if (item.current === false) section.append(message('Caso histórico: última versão validada; revisão posterior pendente.'));
     if (item.variation) section.append(message(typeof item.variation === 'string' ? item.variation : 'As tentativas apresentaram resultados diferentes; consulte seu histórico.'));
@@ -421,12 +470,12 @@ function publishedReportPanel(run, accountId) {
     for (const attempt of item.attempts) section.append(attemptPanel(run, attempt, accountId, []));
     article.append(section);
   }
-  article.append(planSection('Pendências', snapshot.pending || [], item => `${item.caseId}: ${item.reason}`),
-    planSection('Perguntas', snapshot.questions || [], item => `${item.id}: ${item.description}`),
-    planSection('Respostas registradas', snapshot.answers || [], item => `${item.questionId}: ${item.text}`),
+  article.append(planSection('Pendências', snapshot.pending || [], item => `${referenceLabel(item.caseId, 'Caso')}: ${item.reason}`),
+    planSection('Perguntas', snapshot.questions || [], item => `${referenceLabel(item.id, 'Pergunta')}: ${item.description}`),
+    planSection('Respostas registradas', snapshot.answers || [], item => `${referenceLabel(item.questionId, 'Pergunta')}: ${item.text}`),
     planSection('Limitações', [...new Set([...(snapshot.limitations || []), ...(narrative.limitations || [])])]),
-    planSection('Pareceres utilizados', snapshot.validations || [], item => `${item.outputId} · Revisão ${item.outputRevision} · ${validations[item.status] || item.status}${item.reason ? ` — ${item.reason}` : ''}`),
-    planSection('Referências às versões', snapshot.references || [], item => `${phases[item.phase] || item.phase}: ${item.outputId} · Revisão ${item.revision}${item.current === false ? ' · Histórica' : ''}`),
+    planSection('Pareceres utilizados', snapshot.validations || [], item => `${referenceLabel(item.outputId, 'Saída')} · Revisão ${item.outputRevision} · ${validations[item.status] || item.status}${item.reason ? ` — ${item.reason}` : ''}`),
+    planSection('Referências às versões', snapshot.references || [], item => `${referenceLabel(item.outputId, 'Saída')} · Revisão ${item.revision}${item.current === false ? ' · Histórica' : ''}`),
     el('h3', 'Conclusão'), el('p', narrative.conclusion, 'text-content'));
   return article;
 }
@@ -460,7 +509,7 @@ function resultsPanel(run, accountId) {
     const interim = el('details', null, 'plan-section'); interim.open = !run.report; interim.append(el('summary', 'Resultados e tentativas atuais'));
     for (const output of results) {
       const item = output.payload; const detail = el('details', null, 'plan-section');
-      detail.append(el('summary', `${item.caseId} · ${resultNames[item.verdict] || item.verdict} · Revisão ${output.revision}`), el('p', item.observed, 'text-content'), el('p', item.reason, 'text-content'));
+      detail.append(el('summary', `${referenceLabel(item.caseId, 'Caso')} · ${resultNames[item.verdict] || item.verdict} · Revisão ${output.revision}`), el('p', item.observed, 'text-content'), el('p', item.reason, 'text-content'));
       const verdict = output.validations?.findLast(value => value.status !== 'error');
       detail.append(message(verdict?.status === 'approved' ? 'Resultado validado.' : 'Resultado candidato, aguardando validação.'));
       for (const attempt of (run.attempts || []).filter(attempt => attempt.caseId === item.caseId)) detail.append(attemptPanel(run, attempt, accountId));
@@ -621,14 +670,14 @@ function curationPanel(curation, run) {
   const panel = el('details', null, 'panel'); panel.append(el('summary', `Entendimento do material · Revisão ${curation.revision}`));
   for (const requirement of curation.payload.requirements) {
     const requirementPanel = el('details', null, 'plan-section');
-    requirementPanel.append(el('summary', `${requirement.id} · ${requirement.statement}`));
+    requirementPanel.append(el('summary', `${referenceLabel(requirement.id, 'Requisito')} · ${requirement.statement}`));
     for (const rule of requirement.rules) {
       const associated = (run.cases?.payload.testCases || []).filter(item => item.ruleIds.includes(rule.id));
-      requirementPanel.append(el('p', associated.length ? `Casos de ${rule.id}: ${associated.map(item => item.id).join(', ')}` : `${rule.id}: sem caso associado.`, 'hint'));
+      requirementPanel.append(el('p', associated.length ? `Casos de ${referenceLabel(rule.id, 'Critério')}: ${referenceList(associated.map(item => item.id), 'Caso')}` : `${referenceLabel(rule.id, 'Critério')}: sem caso associado.`, 'hint'));
       const pending = run.questions.filter(item => item.ruleIds?.includes(rule.id) || item.requirementIds?.includes(requirement.id));
       if (pending.length) requirementPanel.append(planSection('Pendências', pending, item => item.description));
-      requirementPanel.append(el('p', `${rule.id}${rule.kind === 'example' ? ' · Exemplo recebido' : ''} — ${rule.statement}`, 'text-content'));
-      for (const example of rule.examples || []) requirementPanel.append(planSection(`Exemplo ${example.id}`, [
+      requirementPanel.append(el('p', `${referenceLabel(rule.id, 'Critério')}${rule.kind === 'example' ? ' · Exemplo recebido' : ''} — ${rule.statement}`, 'text-content'));
+      for (const example of rule.examples || []) requirementPanel.append(planSection(`Exemplo · ${referenceLabel(example.id, 'Exemplo')}`, [
         ...example.given.map(value => `Dado: ${value}`), ...example.when.map(value => `Quando: ${value}`), ...example.then.map(value => `Então: ${value}`),
       ]));
       for (const source of rule.sources) requirementPanel.append(el('p', sourceLabel(source), 'hint'), el('blockquote', source.quote, 'text-content'));
@@ -856,8 +905,8 @@ function casesPanel(run, accountId, pending) {
       : 'Casos lógicos — percurso ainda não mapeado.', 'lead'),
     message(statusText));
   for (const item of cases.payload.testCases) {
-    const detail = el('details', null, 'plan-section'); detail.append(el('summary', `${item.id} · ${item.ruleIds.join(', ')}`));
-    detail.append(planSection('Requisitos referenciados', item.requirementIds), planSection('Regras referenciadas', item.ruleIds),
+    const detail = el('details', null, 'plan-section'); detail.append(el('summary', `${referenceLabel(item.id, 'Caso')} · ${referenceList(item.ruleIds, 'Critério')}`));
+    detail.append(planSection('Requisitos referenciados', item.requirementIds, id => referenceLabel(id, 'Requisito')), planSection('Regras referenciadas', item.ruleIds, id => referenceLabel(id, 'Critério')),
       planSection('Pré-condições', item.preconditions), el('h3', 'Preparação'), el('p', item.setup, 'text-content'),
       planSection('Dados', Object.entries(item.data), ([key, value]) => `${key}: ${JSON.stringify(value)}`),
       planSection('Técnicas', item.techniques, value => `${value.name} — ${value.description}\nValores: ${value.values.map(item => JSON.stringify(item)).join(', ')}`),
@@ -867,7 +916,7 @@ function casesPanel(run, accountId, pending) {
     panel.append(detail);
   }
   panel.append(planSection('Situação da validação', cases.validations,
-    value => `${validations[value.status] || value.status} · Revisão ${value.outputRevision} · ${value.validator}${value.reason ? ` — ${value.reason}` : ''}`));
+    value => `${validations[value.status] || value.status} · Revisão ${value.outputRevision} · ${roles[value.validator] || value.validator}${value.reason ? ` — ${value.reason}` : ''}`));
   for (const verdict of cases.validations) {
     if (verdict.findings?.length) panel.append(planSection('Achados da validação', verdict.findings, value => `${value.location} — ${value.message}`));
   }
@@ -963,7 +1012,7 @@ function captureFigure(run, observation, accountId) {
   const img = el('img');
   img.alt = 'Captura da tela observada'; img.loading = 'lazy';
   if (observation.width && observation.height) { img.width = observation.width; img.height = observation.height; }
-  const caption = el('figcaption', [observation.at ? date(observation.at) : '', observation.width && observation.height ? `${observation.width}×${observation.height}` : '', observation.caseId ? `Caso ${observation.caseId} · tentativa ${observation.attemptId}` : ''].filter(Boolean).join(' · '));
+  const caption = el('figcaption', [referenceLabel(observation.id || observation.assetId, 'Captura'), observation.at ? date(observation.at) : '', observation.width && observation.height ? `${observation.width}×${observation.height}` : '', observation.caseId ? `${referenceLabel(observation.caseId, 'Caso')} · ${referenceLabel(observation.attemptId, 'Tentativa')}` : ''].filter(Boolean).join(' · '));
   figure.append(img, caption);
   img._evidenceReady = evidenceUrl(run.id, observation.assetId, accountId).then(url => {
     if (user?.id !== accountId || evidenceRunId !== run.id || !img.isConnected) { URL.revokeObjectURL(url); evidenceUrls.delete(url); throw new Error('Conta alterada.'); }
@@ -981,21 +1030,21 @@ function caseRoute(run, caseId) {
   const quality = routes.validations.filter(value => value.validator === 'output-validator' && value.status !== 'error');
   const approved = routes.current && quality.length === 1 && quality[0].status === 'approved';
   panel.append(message(!routes.current ? 'Associação desatualizada.' : approved ? 'Associação validada.' : 'Associação provisória — sem aprovação do validador.'));
-  panel.append(el('p', `Casos aprovados: ${item.approvedCaseRevision.outputId} · Revisão ${item.approvedCaseRevision.revision}`, 'hint'));
+  panel.append(el('p', `Casos aprovados · Revisão ${item.approvedCaseRevision.revision}`, 'hint'));
   if (item.pathId === null) {
     panel.append(el('p', routes.payload.pending.find(value => value.caseId === caseId)?.reason || 'Percurso pendente.', 'text-content'));
   } else {
     const map = run.mapping;
     const sameMap = map && routes.dependsOn.some(ref => ref.outputId === map.id && ref.revision === map.revision);
     const path = sameMap && map.payload.map.paths.find(path => path.id === item.pathId);
-    panel.append(el('p', `Caminho: ${item.pathId}`));
+    panel.append(el('p', `Caminho: ${referenceLabel(item.pathId, 'Percurso')}`));
     if (path) {
       const screens = new Map(map.payload.map.screens.map(screen => [screen.id, screen.name]));
       const transitions = new Map(map.payload.map.transitions.map(transition => [transition.id, transition]));
-      const steps = [screens.get(path.startScreenId) || path.startScreenId];
+      const steps = [screens.get(path.startScreenId) || referenceLabel(path.startScreenId, 'Tela')];
       for (const id of path.transitionIds) {
         const transition = transitions.get(id);
-        steps.push(`${id} → ${screens.get(transition.to) || transition.to}`);
+        steps.push(`${screens.get(transition.to) || referenceLabel(transition.to, 'Tela')}`);
       }
       panel.append(planSection('Sequência observada', steps));
     } else panel.append(el('p', 'O mapa desta associação é histórico; consulte a revisão referenciada.', 'hint'));
@@ -1033,7 +1082,7 @@ function routeDetailPanel(run, accountId) {
       value => `${validations[value.status] || value.status} · Revisão ${value.outputRevision} · ${value.reason}`));
     for (const verdict of routes.validations) if (verdict.findings.length) panel.append(planSection('Achados do detalhamento', verdict.findings,
       value => `${value.location || 'Geral'} — ${value.message}`));
-    if (routes.payload.pending.length) panel.append(planSection('Casos com percurso pendente', routes.payload.pending, value => `${value.caseId} — ${value.reason}`));
+    if (routes.payload.pending.length) panel.append(planSection('Casos com percurso pendente', routes.payload.pending, value => `${referenceLabel(value.caseId, 'Caso')} — ${value.reason}`));
     panel.append(el('p', 'Os percursos de cada caso estão no painel Casos de teste. Nenhum teste foi executado nesta etapa.', 'hint'));
   }
   return panel;
@@ -1053,7 +1102,7 @@ function mappingPanel(run, accountId) {
     message(statusText));
   const auth = mapping.payload.authentication;
   panel.append(el('p', auth.status === 'authenticated'
-    ? `Acesso autenticado observado (observação ${auth.observationId}).`
+    ? `Acesso autenticado observado · ${referenceLabel(auth.observationId, 'Captura')}.`
     : 'Acesso autenticado ainda não observado.', 'hint'));
 
   const screens = el('details', null, 'plan-section'); screens.open = true;
@@ -1061,12 +1110,12 @@ function mappingPanel(run, accountId) {
   if (!mapping.payload.map.screens.length) screens.append(el('p', 'Nenhuma tela registrada.', 'hint'));
   for (const screen of mapping.payload.map.screens) {
     const item = el('div', null, 'plan-section');
-    item.append(el('h3', screen.id), el('p', screen.name, 'text-content'), el('p', screen.recognition, 'text-content'));
+    item.append(el('h3', screen.name || referenceLabel(screen.id, 'Tela')), el('p', screen.recognition, 'text-content'));
     const captures = el('div', null, 'evidence-grid');
     for (const observationId of screen.observationIds) {
       const observation = run.observations.find(value => value.id === observationId);
       if (observation) captures.append(captureFigure(run, observation, accountId));
-      else captures.append(el('p', `Observação ${observationId} indisponível.`, 'hint'));
+      else captures.append(el('p', `${referenceLabel(observationId, 'Captura')} indisponível.`, 'hint'));
     }
     item.append(captures); screens.append(item);
   }
@@ -1076,8 +1125,8 @@ function mappingPanel(run, accountId) {
   transitions.append(el('summary', `Transições (${mapping.payload.map.transitions.length})`));
   if (!mapping.payload.map.transitions.length) transitions.append(el('p', 'Nenhuma transição registrada.', 'hint'));
   for (const transition of mapping.payload.map.transitions) {
-    transitions.append(el('p', `${transition.id}: ${transition.from} → ${transition.to} · ação ${transition.actionId}`, 'text-content'),
-      el('p', `Observações: ${transition.observationIds.join(', ')}`, 'hint'));
+    transitions.append(el('p', `${referenceLabel(transition.id, 'Transição')}: ${referenceLabel(transition.from, 'Tela')} → ${referenceLabel(transition.to, 'Tela')} · ${referenceLabel(transition.actionId, 'Ação')}`, 'text-content'),
+      el('p', `Capturas: ${referenceList(transition.observationIds, 'Captura')}`, 'hint'));
   }
   panel.append(transitions);
 
@@ -1085,7 +1134,7 @@ function mappingPanel(run, accountId) {
   paths.append(el('summary', `Caminhos (${mapping.payload.map.paths.length})`));
   if (!mapping.payload.map.paths.length) paths.append(el('p', 'Nenhum caminho registrado.', 'hint'));
   for (const path of mapping.payload.map.paths) {
-    paths.append(el('p', `${path.id}: ${path.startScreenId}${path.transitionIds.length ? ' → ' + path.transitionIds.join(' → ') : ''}`, 'text-content'));
+    paths.append(el('p', `${referenceLabel(path.id, 'Percurso')}: ${[path.startScreenId, ...path.transitionIds.map(id => mapping.payload.map.transitions.find(item => item.id === id)?.to).filter(Boolean)].map(id => referenceLabel(id, 'Tela')).join(' → ')}`, 'text-content'));
   }
   panel.append(paths);
 
@@ -1093,24 +1142,24 @@ function mappingPanel(run, accountId) {
   pendings.append(el('summary', `Pendências (${mapping.payload.pending.length})`));
   if (!mapping.payload.pending.length) pendings.append(el('p', 'Nenhuma pendência registrada.', 'hint'));
   for (const item of mapping.payload.pending) {
-    pendings.append(el('p', `${item.id} — ${item.description}`, 'text-content'),
-      el('p', `Casos afetados: ${item.affectedCaseIds.join(', ') || 'nenhum'}`, 'hint'));
+    pendings.append(el('p', `${referenceLabel(item.id, 'Pendência')} — ${item.description}`, 'text-content'),
+      el('p', `Casos afetados: ${referenceList(item.affectedCaseIds, 'Caso') || 'Nenhum'}`, 'hint'));
   }
   panel.append(pendings);
 
   if (mapping.payload.limitations.length) panel.append(planSection('Limitações do mapa', mapping.payload.limitations));
   panel.append(planSection('Situação da validação', mapping.validations,
-    value => `${validations[value.status] || value.status} · Revisão ${value.outputRevision} · ${value.validator}${value.reason ? ' — ' + value.reason : ''}`));
+    value => `${validations[value.status] || value.status} · Revisão ${value.outputRevision} · ${roles[value.validator] || value.validator}${value.reason ? ' — ' + value.reason : ''}`));
   for (const verdict of mapping.validations) {
     if (verdict.findings?.length) panel.append(planSection('Achados da validação', verdict.findings,
-      value => `${value.location || 'geral'} — ${value.message}`));
+      value => `${value.location || 'Geral'} — ${value.message}`));
   }
 
   if (run.mappingActions.length) {
     const actions = el('details', null, 'plan-section');
     actions.append(el('summary', `Ações registradas (${run.mappingActions.length})`));
     for (const action of run.mappingActions) {
-      actions.append(el('p', `${action.tool} · ${date(action.at)}${action.observationId ? ' · observação ' + action.observationId : ''}${action.note ? ' — ' + action.note : ''}`, 'hint'));
+      actions.append(el('p', `${action.tool} · ${date(action.at)}${action.observationId ? ' · ' + referenceLabel(action.observationId, 'Captura') : ''}${action.note ? ' — ' + action.note : ''}`, 'hint'));
     }
     panel.append(actions);
   }
@@ -1151,8 +1200,8 @@ function questionPanel(run, accountId, pending) {
   const editable = canAnswer(run);
   for (const [index, question] of run.questions.entries()) {
     const item = el('section', null, 'plan-section');
-    const scope = question.caseIds?.length ? `Casos afetados: ${question.caseIds.join(', ')}` : question.ruleIds?.length ? `Critérios afetados: ${question.ruleIds.join(', ')}` : question.requirementIds.length ? `Requisitos afetados: ${question.requirementIds.join(', ')}` : 'Afeta todo o material';
-    item.append(el('h3', question.id), el('p', question.description, 'text-content'),
+    const scope = question.caseIds?.length ? `Casos afetados: ${referenceList(question.caseIds, 'Caso')}` : question.ruleIds?.length ? `Critérios afetados: ${referenceList(question.ruleIds, 'Critério')}` : question.requirementIds.length ? `Requisitos afetados: ${referenceList(question.requirementIds, 'Requisito')}` : 'Afeta todo o material';
+    item.append(el('h3', referenceLabel(question.id, 'Pergunta')), el('p', question.description, 'text-content'),
       el('p', `${scope}. ${question.blocking ? 'Bloqueia apenas esse escopo.' : 'Não bloqueia o planejamento.'}`, 'hint'));
     for (const source of question.sources) item.append(el('p', sourceLabel(source), 'hint'), el('blockquote', source.quote, 'text-content'));
     const key = `${accountId}:${run.id}:${question.outputId}:${question.outputRevision}:${question.id}`;
@@ -1165,7 +1214,7 @@ function questionPanel(run, accountId, pending) {
       const correction = answer ? el('details', null, 'plan-section') : null;
       if (correction) { correction.append(el('summary', 'Corrigir resposta')); item.append(correction); }
       const form = el('form'); form.noValidate = true;
-      const response = field(form, `answer-${index}`, `Resposta para ${question.id}`, { textarea: true, hint: 'Até 4.000 caracteres. Confirme o comportamento esperado; não inclua senhas.' });
+      const response = field(form, `answer-${index}`, `Resposta para ${referenceLabel(question.id, 'Pergunta')}`, { textarea: true, hint: 'Até 4.000 caracteres. Confirme o comportamento esperado; não inclua senhas.' });
       response.input.value = answerDrafts.get(key)?.text ?? answer?.text ?? '';
       const remember = () => answerDrafts.set(key, { text: response.input.value, questionId: question.id, outputRevision: question.outputRevision });
       response.input.addEventListener('input', remember);
@@ -1213,16 +1262,16 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
     main.setAttribute('aria-busy', 'false'); return;
   }
   main.setAttribute('aria-busy', 'false'); revokeEvidence(); main.replaceChildren(link('← Minhas execuções', '/execucoes', 'back-link'));
-  currentArtifacts = run.artifacts || []; currentAnswerSources = run.answers || [];
+  currentArtifacts = run.artifacts || []; currentAnswerSources = run.answers || []; prepareReferenceNames(run);
   heading(run.name, run.applicationName); if (noticeText) main.append(message(noticeText, isError));
   const metadata = el('dl', null, 'metadata');
   for (const [title, value] of [['Criada em', date(run.createdAt)], ['Etapa', phases[run.phase] || run.phase], ['Situação', statuses[run.status] || run.status]]) { const item = el('div'); item.append(el('dt', title), el('dd', value)); metadata.append(item); }
-  const summary = el('section', null, 'panel'); summary.append(metadata, el('p', `Identificação: ${run.id}`, 'run-id')); main.append(summary);
+  const summary = el('section', null, 'panel'); summary.append(metadata); main.append(summary);
   summary.append(runManagement(run, accountId));
   const views = detailTabs(run);
   views.results.append(resultsPanel(run, accountId));
-  if (run.versions?.length) views.overview.append(planSection('Revisões preservadas', run.versions, item => `${phases[item.phase] || item.phase} · ${item.id} · Revisão ${item.revision}`));
-  if (run.invalidations?.length) views.overview.append(planSection('Revisões invalidadas', run.invalidations, item => `${item.outputId} · Revisão ${item.outputRevision} — ${item.reason}`));
+  if (run.versions?.length) views.overview.append(planSection('Revisões preservadas', run.versions, item => `${referenceLabel(item.id, 'Saída')} · Revisão ${item.revision}`));
+  if (run.invalidations?.length) views.overview.append(planSection('Revisões invalidadas', run.invalidations, item => `${referenceLabel(item.outputId, 'Saída')} · Revisão ${item.outputRevision} — ${item.reason}`));
   if (currentArtifacts.length) views.overview.append(planSection('Fontes recebidas', currentArtifacts, item => `${item.name} · ${item.pages?.length ? `${item.pages.length} páginas · ` : ''}Revisão ${item.version}`));
   if (run.progress?.activeRole || run.progress?.activity) {
     summary.append(message([roles[run.progress.activeRole] || run.progress.activeRole, activities[run.progress.activity] || run.progress.activity].filter(Boolean).join(' · ')));
@@ -1237,13 +1286,13 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   for (const [key, draft] of answerDrafts) {
     if (!key.startsWith(`${accountId}:${id}:`) || !draft.text.trim()) continue;
     if (canAnswer(run) && run.questions.some(question => question.outputId && !question.answerId && key === `${accountId}:${id}:${question.outputId}:${question.outputRevision}:${question.id}`)) continue;
-    const copy = el('section', null, 'panel'); copy.append(el('h3', `Texto não enviado · ${draft.questionId} · Revisão ${draft.outputRevision}`),
+    const copy = el('section', null, 'panel'); copy.append(el('h3', `Texto não enviado · ${referenceLabel(draft.questionId, 'Pergunta')} · Revisão ${draft.outputRevision}`),
       el('p', 'A pergunta ou sua resposta mudou. Este texto foi preservado para consulta e cópia; não será reaplicado.'), el('blockquote', draft.text, 'text-content'),
       button('Descartar este texto não enviado', () => { answerDrafts.delete(key); copy.remove(); }, 'secondary'));
     main.append(copy);
   }
   if (run.answers?.length) views.overview.append(planSection('Histórico de esclarecimentos', run.answers,
-    value => `${value.questionId} · Resposta r${value.revision || 1} · Revisão da saída ${value.outputRevision} · ${date(value.at)} — ${value.text}`));
+    value => `${referenceLabel(value.questionId, 'Pergunta')} · Resposta r${value.revision || 1} · Revisão da saída ${value.outputRevision} · ${date(value.at)} — ${value.text}`));
   if (run.canResume) {
     const notice = message(); const resume = button(['curation', 'planning'].includes(run.phase) ? 'Retomar preparação com as respostas' : 'Retomar com as respostas', async () => {
       if ([...answerDrafts].some(([key, draft]) => key.startsWith(`${accountId}:${id}:`) && draft.text.trim())) {
@@ -1322,11 +1371,11 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   if (!run.plan) { main.append(message(run.status === 'draft' ? 'Material recebido. O processamento ainda não foi iniciado.' : 'Ainda não há plano disponível para consulta.')); return; }
   const plan = run.plan; const content = plan.payload.testPlan; const panel = el('section', null, 'panel');
   panel.append(el('p', `Plano de testes / Revisão ${plan.revision}`, 'eyebrow'), el('h2', 'Revisão do plano'), el('h3', 'Objetivo'), el('p', content.objective, 'text-content'));
-  panel.append(planSection('Requisitos referenciados', content.requirementIds), planSection('Critérios referenciados', content.ruleIds), planSection('Prioridades', content.priorities, item => `${item.ruleId} — ${item.reason}`), planSection('Exclusões', content.exclusions, item => `${item.description} — ${item.reason}`), planSection('Abordagem', content.approach), planSection('Pré-condições', content.preconditions));
+  panel.append(planSection('Requisitos referenciados', content.requirementIds, id => referenceLabel(id, 'Requisito')), planSection('Critérios referenciados', content.ruleIds, id => referenceLabel(id, 'Critério')), planSection('Prioridades', content.priorities, item => `${referenceLabel(item.ruleId, 'Critério')} — ${item.reason}`), planSection('Exclusões', content.exclusions, item => `${item.description} — ${item.reason}`), planSection('Abordagem', content.approach), planSection('Pré-condições', content.preconditions));
   const sources = el('section', null, 'plan-section'); sources.append(el('h3', 'Fontes'));
   if (!content.sources.length) sources.append(el('p', 'Nenhuma fonte informada.', 'hint'));
   for (const source of content.sources) { sources.append(el('p', sourceLabel(source), 'text-content'), el('blockquote', source.quote, 'text-content')); }
-  panel.append(sources, planSection('Situação da validação', plan.validations, value => `${validations[value.status] || value.status} · Revisão ${value.outputRevision} · ${value.validator}`));
+  panel.append(sources, planSection('Situação da validação', plan.validations, value => `${validations[value.status] || value.status} · Revisão ${value.outputRevision} · ${roles[value.validator] || value.validator}`));
   const planDecisions = run.approvals.filter(value => value.outputId === plan.id);
   const decisions = el('section', null, 'plan-section'); decisions.append(el('h3', 'Decisões registradas'));
   if (!planDecisions.length) decisions.append(el('p', 'Nenhuma decisão registrada.', 'hint'));

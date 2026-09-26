@@ -252,7 +252,7 @@ async function screenshot(filename, width) {
   await page.evaluate(() => document.fonts.ready);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
     `A página não deve transbordar horizontalmente em ${width}px.`);
-  if (artifactDir) await page.screenshot({ path: join(artifactDir, filename), fullPage: true });
+  if (artifactDir) await page.screenshot({ path: join(artifactDir, filename), fullPage: true, animations: 'disabled' });
 }
 
 const attemptFor = accountId => page.evaluate(id => JSON.parse(sessionStorage.getItem(`akcit.intake.v1:${id}`)), accountId);
@@ -1464,7 +1464,8 @@ try {
   assert.deepEqual(afterRoutes.run.approvals, beforeRoutes.run.approvals);
   const casePanel = page.locator('section.panel').filter({ has: page.getByRole('heading', { name: 'Casos de teste', exact: true }) });
   await casePanel.locator('details').first().locator('summary').click();
-  await bodyIncludes('entrar → Início'); await bodyIncludes('abrir-reservas → Reservas');
+  const observedRoute = casePanel.getByRole('heading', { name: 'Sequência observada', exact: true }).locator('..');
+  assert.deepEqual(await observedRoute.getByRole('listitem').allTextContents(), ['Login', 'Início', 'Reservas']);
   const pendingCaseIndex = detailed.cases.payload.testCases.findIndex(item => item.id === detailed.routeDetail.payload.pending[0].caseId);
   await casePanel.locator('details').nth(pendingCaseIndex).locator('summary').click();
   await bodyIncludes('O mapa não identifica o percurso de consulta da observação.');
