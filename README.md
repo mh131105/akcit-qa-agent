@@ -1,5 +1,7 @@
 # QAtron
 
+LINK DEMONSTRAÇÃO: https://drive.google.com/file/d/1njZJOCjh0ErBU8ssKVqBqWXJu2xxs-7K/view?usp=sharing
+
 QAtron é o nome do produto. O repositório e os identificadores de infraestrutura
 continuam como `akcit-qa-agent`. A [identidade visual](docs/brand/README.md) inclui
 a logo e o símbolo em SVG.
