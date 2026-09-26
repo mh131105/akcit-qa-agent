@@ -15,7 +15,7 @@ export type RunOutput = JsonObject & {
 export type PreparationCall = {
   id: string; role: 'artifact-curator' | 'test-designer' | 'output-validator' | 'test-executor';
   provider: string; model: string; thinkingLevel?: 'off' | 'low' | 'high';
-  phase: 'curation' | 'planning' | 'case_design' | 'mapping' | 'mapping_validation'; attempt: number;
+  phase: 'curation' | 'planning' | 'case_design' | 'mapping' | 'mapping_validation' | 'route_detail'; attempt: number;
   outputRevision: number; startedAt: string; finishedAt?: string; durationMs?: number;
   status: 'running' | 'completed' | 'invalid' | 'error' | 'cancelled' | 'interrupted';
   budgetCycleId?: string; errorCode?: string; usage?: Record<string, number>; estimatedCost?: number;
@@ -56,7 +56,7 @@ export type RunRecord = JsonObject & {
   mappingActions?: MappingActionRecord[];
 };
 export type WorkIntent = {
-  id: string; type: 'create_cases' | 'analyze_feedback' | 'create_map';
+  id: string; type: 'create_cases' | 'analyze_feedback' | 'create_map' | 'detail_routes';
   outputId: string; outputRevision: number; createdAt: string;
   status: 'pending' | 'completed' | 'interrupted' | 'cancelled'; interruption?: Interruption;
   processingId?: string; finishedAt?: string; reason?: { code: string; message: string };
@@ -141,7 +141,7 @@ function validPreparation(value: unknown): boolean {
   return new Set(value.calls.map(call => call.id)).size === value.calls.length && value.calls.every(call =>
     strings(call, ['id', 'provider', 'model']) && !!call.id && !!call.provider && !!call.model &&
     ['artifact-curator', 'test-designer', 'output-validator', 'test-executor'].includes(call.role as string) &&
-    ['curation', 'planning', 'case_design', 'mapping', 'mapping_validation'].includes(call.phase as string) && positive(call.attempt) && positive(call.outputRevision) &&
+    ['curation', 'planning', 'case_design', 'mapping', 'mapping_validation', 'route_detail'].includes(call.phase as string) && positive(call.attempt) && positive(call.outputRevision) &&
     (call.thinkingLevel === undefined || ['off', 'low', 'high'].includes(call.thinkingLevel as string)) &&
     utc(call.startedAt) && (call.finishedAt === undefined || utc(call.finishedAt)) &&
     (call.durationMs === undefined || nonnegative(call.durationMs)) &&
@@ -228,7 +228,7 @@ function validate(record: unknown, runId: string): asserts record is StoredRun {
     !objects(record.workIntents) || !record.workIntents.every(work =>
       strings(work, ['id', 'outputId']) && !!work.id && !!work.outputId &&
       Number.isSafeInteger(work.outputRevision) && (work.outputRevision as number) > 0 && utc(work.createdAt) &&
-      ['create_cases', 'analyze_feedback', 'create_map'].includes(work.type as string) &&
+      ['create_cases', 'analyze_feedback', 'create_map', 'detail_routes'].includes(work.type as string) &&
       (work.accessRevision === undefined || positive(work.accessRevision)) &&
       (work.processingId === undefined || (typeof work.processingId === 'string' && !!work.processingId)) &&
       (work.finishedAt === undefined || utc(work.finishedAt)) &&

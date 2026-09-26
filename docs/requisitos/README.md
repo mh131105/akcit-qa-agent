@@ -38,11 +38,17 @@ Estão implementadas e integradas na base as etapas fundamentais de preparação
 - **Aplicação controlada de reservas:** alvo sintético de demonstração com login, reservas, regras de limite, defeito conhecido e reset (T7).
 - **Configuração de acesso ao alvo:** configuração da URL inicial autorizada (`TARGET_ALLOWED_ORIGINS`), credencial privada em envelope seguro e controle de revisão (T8.1).
 
-As etapas seguintes continuam pendentes de implementação:
-- Mapeamento autônomo da aplicação pelo executor no navegador (T8).
-- Detalhamento de percursos a partir dos casos aprovados e do mapa validado (T6).
-- Execução autônoma dos casos no navegador real com captura de tela e gravação de vídeo (T8).
-- Redação e validação independente do relatório final (T6, T10).
+- **Mapeamento visual validado (T8.2):** navegador real, capturas e revisão visual independente; termina em `ready / mapping`.
+- **Detalhamento de percursos (T6.3):** associação pelo projetista e revisão independente; preserva casos/aprovações, mantém pendências locais e termina em `ready / route_detail` quando há caminho elegível. O estado das verificações deste candidato está em [T6.3](../evidencias/t6.3/README.md).
 
-Documentos de clientes, credenciais, sessões e vídeos ficam no armazenamento da
+As etapas seguintes continuam pendentes:
+- Execução dos casos na interface, tentativas, capturas e validação dos resultados (T8/T10).
+- Retomada de dúvidas de navegação/detalhamento e tratamento completo de bloqueios.
+- Redação/validação do relatório final e impressão/PDF (T6/T10).
+
+**Decisão de 26/09/2026:** capturas por caso/tentativa são as evidências do relatório;
+vídeos curtos são evolução futura, fora do aceite do protótipo. Capturas do mapa
+não comprovam execução dos casos. T6.3 não entrega execução nem relatório.
+
+Documentos de clientes, credenciais, sessões e evidências ficam no armazenamento da
 aplicação, fora do Git. No repositório, manter apenas exemplos sintéticos e metodologia.

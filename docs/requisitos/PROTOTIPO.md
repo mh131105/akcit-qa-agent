@@ -1,6 +1,6 @@
 # Especificação do protótipo
 
-Versão 1.1 · 24/09/2026 · Entrega: 26/09 às 17h, horário de Manaus.
+Versão 1.2 · 26/09/2026 · Entrega: 26/09 às 17h, horário de Manaus.
 
 Este documento define o que implementar e como aceitar a entrega. O fluxo e os seis
 agentes refletem as decisões da equipe. As telas, os limites operacionais e os critérios
@@ -11,7 +11,7 @@ abaixo formam a base técnica proposta pelo CTO. Ainda não são funcionalidades
 O usuário envia comportamentos esperados em histórias de usuário (US), critérios
 de aceite (CA), requisitos funcionais, prosa ou Gherkin, aprova o plano e os casos,
 acompanha testes pela interface da aplicação e recebe resultados com
-vídeos e exportação para PDF. O público inicial são times com documentação organizada.
+capturas de tela e exportação para PDF. O público inicial são times com documentação organizada.
 
 A unidade de trabalho é uma **execução**. Ela tem nome, aplicação, entradas, versões,
 aprovações, tentativas e relatório próprios. O histórico pertence à conta do usuário.
@@ -20,10 +20,10 @@ projetos nem memória automática entre execuções.
 
 **Dentro da entrega:** cadastro/login simples, histórico, criação de execução, board de
 US/CA, duas aprovações humanas, seis agentes, navegação visual, dúvidas localizadas,
-vídeos e capturas, relatório web e PDF, cancelamento e recuperação do material salvo.
+capturas de tela, relatório web e PDF, cancelamento e recuperação do material salvo.
 
 **Fora desta sprint:** organizações com membros e permissões, convites, SSO, cobrança,
-integração com Jira/GitHub, OCR, planilhas, aplicativo móvel, editor de fluxogramas,
+vídeos curtos por tentativa (evolução futura), integração com Jira/GitHub, OCR, planilhas, aplicativo móvel, editor de fluxogramas,
 chat geral, testes de carga, de segurança e de usabilidade, concorrência de navegadores e memória
 entre sprints. Recuperação de conta será assistida pelo operador no piloto. O cadastro
 será restrito aos participantes habilitados pela equipe; a liberação pública fica fora.
@@ -33,9 +33,8 @@ será restrito aos participantes habilitados pela equipe; a liberação pública
 ### Mapa validado e estado `ready` · T8.2
 
 T8.2 implementa o RF-03 até o **mapa validado**: o executor observa a aplicação e o
-validador visual examina o mapa e suas capturas em sessão independente. O
-detalhamento dos percursos, a execução com entradas válidas/inválidas, os vídeos por
-tentativa e o relatório continuam nas próximas etapas.
+validador visual examina o mapa e suas capturas em sessão independente. A execução com entradas válidas/inválidas e o relatório continuam nas próximas etapas.
+T6.3 acrescenta o detalhamento validado descrito abaixo; este trecho registra o limite da entrega T8.2.
 
 O estado `ready` é introduzido para "etapa concluída, aguardando continuidade".
 Um mapa aprovado termina em `ready / mapping`, exibido como *"Mapa validado —
@@ -45,13 +44,41 @@ nesta entrega.
 
 
 
+### Decisão de negócio · 26/09/2026 · Capturas no relatório
+
+O protótipo apresentará capturas de tela (prints) como evidências no relatório
+final. Cada captura deverá estar vinculada ao caso e à tentativa correspondente,
+acompanhada dos passos relevantes, resultado esperado e resultado observado.
+Vídeos curtos por tentativa permanecem como evolução futura e deixam de ser
+requisito de aceite do protótipo. Esta decisão substitui a exigência anterior de
+vídeos; os relatos históricos de ensaios permanecem preservados. A infraestrutura
+compartilhada de captura e FFmpeg permanece disponível.
+
+Uma captura do mapa, por si só, não comprova execução de caso. As evidências de
+execução devem permitir compreender o resultado; evidência insuficiente não
+sustenta aprovação. Credenciais e informações sensíveis não devem aparecer nas
+capturas. Interface e PDF devem apresentar evidências e conclusões consistentes.
+
+### Detalhamento validado · T6.3
+
+Após `ready / mapping`, **Detalhar percursos** solicita associações ao projetista
+com Pro/high, seguido do validador textual independente, também com Pro/high.
+O backend copia os casos aprovados; acrescenta somente `pathId` e
+`approvedCaseRevision`, mantendo pendências por caso quando faltar caminho.
+
+Com ao menos um percurso e parecer aprovado, encerra em `ready / route_detail`:
+**Percursos validados — aguardando execução dos testes**. Sem nenhum percurso,
+ou com parecer bloqueado, encerra em `awaiting_input / route_detail`, explicando
+os impedimentos. Não há terceira aprovação humana, retomada desta etapa, execução
+de testes nem relatório neste card. Casos lógicos e aprovações permanecem intactos.
+
 ### Decisão de entrada e curadoria · 24/09/2026
 
 Esta revisão substitui a exigência anterior de uma US formal com CA. O formato
 canônico continua sendo o contrato interno de requisitos, regras, exemplos e
 perguntas; Gherkin é uma entrada opcional. A ausência de Gherkin não transfere a
 criação dos cenários ao usuário: o `test-designer` os elaborará na etapa de casos,
-após a aprovação do plano. Essa etapa ainda depende de implementação.
+após a aprovação do plano. A geração de casos foi implementada em T6.1 e sua aprovação humana em T6.2.
 
 | Material recebido | Tratamento |
 | --- | --- |
@@ -91,7 +118,7 @@ flowchart TD
     H --> I[Validar mapa e detalhar percursos]
     I --> J[Validar casos com percursos]
     J --> K[Executar e validar resultados]
-    K --> L[Relatório validado com vídeos e PDF]
+    K --> L[Relatório validado com capturas e PDF]
     E -->|Solicitar alterações| D
     G -->|Solicitar alterações| F
     J -->|Mudança de escopo ou cobertura| D
@@ -124,7 +151,7 @@ fazem parte da entrega; os critérios são verificações a realizar na implemen
 | RF-03 | Confirmar acesso e mapear telas e transições relevantes depois da aprovação dos casos lógicos. | Registrar percurso observado desde a entrada, incluindo ações de navegação. Caminho não localizado gera pedido de orientação e bloqueio dos casos afetados. |
 | RF-04 | Elaborar casos usando plano aprovado e requisitos originais; depois acrescentar os percursos observados. | Cada caso contém referência ao comportamento normalizado, fonte, pré-condições, dados, técnica e expectativa. PCE/AVL têm justificativa. Antes do mapa, percurso pode estar pendente; antes de executar, deve estar definido e validado. |
 | RF-05 | Executar casos pela interface, conferindo o estado inicial e usando visão, cursor, teclado, rolagem e arrastes reais. | Repetir o percurso natural; registrar ações, observações e tentativas. Sem execução direta de lógica do aplicativo por API, banco ou JavaScript para substituir a interação. |
-| RF-06 | Gravar a execução e associar vídeos curtos e capturas a cada caso/tentativa. | Mostrar ação e resultado, incluindo sucessos. Vídeo reproduz no relatório e captura serve ao PDF. Falha de gravação aparece; reprodução posterior ganha outra tentativa. |
+| RF-06 | Capturar telas da execução e associá-las a cada caso/tentativa. | Mostrar passos relevantes, esperado e observado, incluindo sucessos. Evidências devem permitir compreender a conclusão; lacunas ficam explícitas e não sustentam aprovação. Nova reprodução ganha outra tentativa. Vídeos são evolução futura. |
 | RF-07 | Apresentar relatório padronizado com esperado, observado, veredito, US/CA, fontes, evidências, cobertura e limitações. | Incluir aprovados, reprovados, bloqueados, inconclusivos e não executados. Conclusões publicadas vêm de saídas validadas; relatório parcial mantém a indicação de interrupção. |
 | RF-08 | Salvar entradas, versões, decisões, perguntas, tentativas e mídias ao longo da execução. | Atualizar a página mantém o estado. Reiniciar o serviço preserva registros confirmados e marca trabalho ativo como interrompido; não retoma uma ação de navegador automaticamente. |
 | RF-09 | Submeter curadoria, plano, casos, mapa, detalhamento, resultados e relatório ao validador independente. | Parecer identifica versão e motivo. Aprovação libera dependentes; correção volta ao autor; bloqueio/erro não liberam avanço. Orquestrador não sobrepõe o parecer. |
@@ -135,7 +162,7 @@ fazem parte da entrega; os critérios são verificações a realizar na implemen
 | RF-14 | Permitir aprovar ou pedir alterações no plano e no conjunto de casos. | Aprovação registra usuário, data e versão exata. Alteração exige comentário. O próximo passo aguarda parecer válido e aprovação correspondente; clique repetido não duplica a decisão. |
 | RF-15 | Mostrar questões com motivo, itens afetados e campo de resposta; retomar trabalho após esclarecimento. | Usuário pode indicar percurso, confirmar ausência ou complementar regra. Preservar pergunta/resposta e autor; revisar os itens afetados e retomar no início do caso. Independentes continuam. |
 | RF-16 | Mostrar progresso real, próxima ação, cancelamento, encerramento com pendências e criação de nova execução a partir das entradas anteriores. | Cancelar impede novas ações e preserva registros. Sem casos independentes elegíveis, usuário pode encerrar com pendências e receber relatório revisado. Duplicar copia entradas selecionadas, confirma acesso e cria novos IDs/aprovações, sem herdar conclusões. |
-| RF-17 | Exportar a versão publicada do relatório em PDF. | A ação “Salvar em PDF” abre uma versão de impressão com capturas no lugar dos vídeos, fontes, resultados e limitações. O PDF salvo é legível, paginado e corresponde à versão exibida. |
+| RF-17 | Exportar a versão publicada do relatório em PDF. | A ação “Salvar em PDF” abre uma versão de impressão com as mesmas capturas e conclusões da versão web, fontes, resultados e limitações. O PDF salvo é legível, paginado e corresponde à versão exibida. |
 
 ## 4. Regras de negócio
 
@@ -166,13 +193,13 @@ nem promessas de capacidade comprovada. São conferidos no ambiente de demonstra
 | --- | --- |
 | RNF-01 | **Uso claro.** Cada etapa mostra situação e uma ação principal. Campos têm rótulo, obrigatoriedade e erro junto ao campo; mensagens indicam como resolver. Ações indisponíveis explicam o motivo. Sem percentual de progresso estimado pelo modelo. |
 | RNF-02 | **Acessibilidade e apresentação.** Fluxo principal utilizável por teclado, com foco visível, rótulos e estados compreensíveis sem depender só de cor. Conferir em desktop de 1366 px e leitura em 390 px; tabelas podem rolar horizontalmente em áreas delimitadas. |
-| RNF-03 | **Resposta da interface.** Mostrar retorno visual ao envio em até 1 s e progresso persistido em até 5 s durante conexão normal. Consultas de histórico/metadados respondem em até 2 s em 20 consultas no ambiente de demonstração. Tempo de modelo, upload e vídeo é indicado separadamente. |
-| RNF-04 | **Acesso e segredos.** Conferir autorização no servidor para cada execução, arquivo e mídia; senha protegida por hash próprio para senhas, sessão protegida e invalidada no logout. Credencial do alvo fica em armazenamento privado, fora de logs, respostas, fontes e prompts gerais; vídeos começam após autenticação. Testar com duas contas e um segredo fictício identificável. |
+| RNF-03 | **Resposta da interface.** Mostrar retorno visual ao envio em até 1 s e progresso persistido em até 5 s durante conexão normal. Consultas de histórico/metadados respondem em até 2 s em 20 consultas no ambiente de demonstração. Tempo de modelo, upload e captura é indicado separadamente. |
+| RNF-04 | **Acesso e segredos.** Conferir autorização no servidor para cada execução, arquivo e mídia; senha protegida por hash próprio para senhas, sessão protegida e invalidada no logout. Credencial do alvo fica em armazenamento privado, fora de logs, respostas, fontes e prompts gerais; capturas dos casos começam após autenticação e excluem credenciais e informações sensíveis. Testar com duas contas e um segredo fictício identificável. |
 | RNF-05 | **Isolamento do piloto.** Navegar somente em destinos habilitados pela equipe, incluindo redirecionamentos e destinos privados autorizados para desenvolvimento. Bloquear acesso a serviços internos não autorizados. Conteúdo de páginas/arquivos não amplia tools ou permissões. Exposição pública exige HTTPS; acesso local pode usar o túnel existente. |
 | RNF-06 | **Integridade e recuperação.** Validar contratos e referências no servidor e salvar decisões/resultados antes de avançar. Envios repetidos não duplicam execuções, decisões ou tentativas. Queda mantém os registros confirmados; trabalho incompleto aparece como interrompido, nunca concluído. |
 | RNF-07 | **Limites de entrada e execução.** Até 5 arquivos de 10 MiB cada, 10 histórias/requisitos selecionados e 30 casos por execução. Excesso pede redução de escopo, sem truncar conteúdo silenciosamente. Uma tarefa ativa por ambiente; segunda solicitação recebe “ambiente ocupado” e pode tentar depois. |
 | RNF-08 | **Limites do agente.** Até 3 revisões automáticas por saída, 2 tentativas técnicas de validação por revisão, 120 s por chamada de modelo, 100 ações na exploração e 50 por tentativa de caso. Orçamento ativo de 45 min por execução, sem contar espera humana. Ao atingir limite, salvar motivo e interromper dependentes; sem aprovação por padrão. Resposta humana seguida de retomada explícita pode abrir novo ciclo limitado de produção para os itens afetados; o tempo ativo acumulado continua limitado a 45 min na execução, sem zerar o consumo anterior. |
-| RNF-09 | **Evidência utilizável.** Vídeos e capturas identificam caso/tentativa; vídeo de demonstração mostra preparação imediata, ação e resultado em até 60 s por trecho. Caso mais longo pode ter vários trechos. Falta de captura aparece. PDF inclui texto selecionável, paginação, capturas legíveis e nenhum controle de reprodução sem função. |
+| RNF-09 | **Evidência utilizável.** Capturas identificam caso/tentativa e apresentam preparo, passos relevantes e resultado com legibilidade. Falta de captura ou suporte insuficiente aparece explicitamente. PDF inclui texto selecionável, paginação e capturas legíveis, consistentes com a versão web. Vídeos curtos por tentativa são evolução futura. |
 | RNF-10 | **Observação e reprodutibilidade.** Registrar horário, versão do app, papel/modelo usado, duração, chamadas, ações e consumo/custo quando disponível, sem inventar valores ausentes. Erros têm identificação que permita localizar a execução. Modelos configurados por papel no backend, sem tela avançada de configuração. |
 | RNF-11 | **Operação simples.** Reutilizar Node, Pi, navegador e publicação existentes. Persistência por execução e arquivos de mídia bastam; não introduzir microserviços ou fila distribuída. Após validação em dev, promover a mesma imagem para prod. Realizar backup e recuperação de uma execução sintética antes da entrega. |
 | RNF-12 | **Ciclo dos dados no piloto.** Manter entradas, decisões e evidências até exclusão explícita; nenhuma limpeza automática silenciosa. O proprietário pode excluir uma execução encerrada com confirmação, apagando também sua credencial e mídias locais. Informar que backups existentes exigem limpeza operacional separada. |
@@ -190,7 +217,7 @@ compartilham uma página de execução com abas, sem quatro aplicações ou flux
 | TELA-04 · Execução / Visão geral | Cabeçalho com etapa, situação e próxima ação. Board de US/CA; perguntas e respostas; resumo do acesso; cancelar. Sem trabalho independente elegível, oferecer “Encerrar com pendências”. | Curando, revisando, aguardando usuário, acesso bloqueado, ambiente ocupado e execução interrompida. Mostrar próxima ação útil. |
 | TELA-05 · Execução / Plano | Objetivo, CA incluídos/excluídos, prioridades, abordagem, pré-condições, origens e versão. “Aprovar plano” ou “Solicitar alterações”. | Em elaboração, em validação, correção, versão antiga e aguardando aprovação. Mostrar mudanças solicitadas e resultado da revisão. |
 | TELA-06 · Execução / Casos | Lista e detalhe lateral com CA, pré-condições, dados, técnica e expectativa; após mapa, percurso observado no mesmo detalhe. Aprovar conjunto ou pedir alterações. | Caso lógico, percurso pendente, versão aprovada, reaprovação necessária, bloqueado e em execução. Pendência liga à pergunta correspondente. |
-| TELA-07 · Execução / Resultados | Contagens reais, cobertura por CA, limitações e lista de casos; detalhe com esperado/observado, tentativas, vídeo e captura. “Salvar em PDF”. | Relatório em revisão, parcial, final, mídia indisponível e ausência de testes executados. Sem conclusão não validada apresentada como definitiva. |
+| TELA-07 · Execução / Resultados | Contagens reais, cobertura por CA, limitações e lista de casos; detalhe com esperado/observado, tentativas, capturas e passos relevantes. “Salvar em PDF”. | Relatório em revisão, parcial, final, mídia indisponível e ausência de testes executados. Sem conclusão não validada apresentada como definitiva. |
 
 Endereços sugeridos: `/acesso`, `/execucoes`, `/execucoes/nova` e `/execucoes/:id`.
 As abas conservam contexto e podem ser reabertas por link. A navegação de entrada é:
@@ -212,11 +239,11 @@ reais. Resultados simulados ajudam a construir as telas, mas não encerram a ent
 | --- | --- | --- |
 | A-01 · Entrar, enviar e organizar | Conta criada/entrada; execução salva; US/CA e origens no board; rejeição de arquivo sem suporte preserva formulário | RF-01, RF-02, RF-10, RF-11, RF-12; RNF-01, RNF-02, RNF-07 |
 | A-02 · Revisar planejamento | Plano e casos separados; pedido de alteração, nova versão e duas aprovações; tentativa com decisão antiga recusada | RF-04, RF-09, RF-13, RF-14; RN-02 a RN-06 |
-| A-03 · Explorar e testar | Mapa observado; caminho anexado; casos válidos/inválidos e limites justificados; caso correto e defeito conhecido com vídeos | RF-03, RF-04, RF-05, RF-06; RN-03, RN-09 a RN-11; RNF-09 |
+| A-03 · Explorar e testar | Mapa observado; caminho anexado; casos válidos/inválidos e limites justificados; caso correto e defeito conhecido com capturas por tentativa e passos relevantes | RF-03, RF-04, RF-05, RF-06; RN-03, RN-09 a RN-11; RNF-09 |
 | A-04 · Esclarecer bloqueio | Uma rota bloqueada, outra independente executada, resposta registrada e retomada após revisão; em outro cenário, encerramento com pendências gera relatório | RF-15, RF-16; RN-07, RN-08, RN-12 |
 | A-05 · Recusar saída ruim | Condição perdida ou veredito sem suporte devolvido pelo validador; erro/timeout e limites sem avanço indevido | RF-09; RN-05, RN-10; RNF-08 |
 | A-06 · Encerrar e recuperar | Cancelamento sem novas ações; reinício sem perda dos resultados confirmados; duplicação sem herdar aprovações; exclusão completa | RF-08, RF-16; RN-13, RN-15; RNF-06, RNF-12 |
-| A-07 · Conferir relatório | Web e PDF com mesma versão; vídeos/capturas; cinco vereditos; relatório parcial; CA sem cobertura identificado | RF-07, RF-17; RN-01, RN-14; RNF-09 |
+| A-07 · Conferir relatório | Web e PDF com mesma versão; capturas e conclusões consistentes; cinco vereditos; relatório parcial; CA sem cobertura identificado | RF-07, RF-17; RN-01, RN-14; RNF-09 |
 | A-08 · Verificar operação | Segunda conta sem acesso aos dados da primeira; segredo ausente de logs/mídia; destino não autorizado bloqueado; medições de resposta; logs e backup restaurado | RNF-03, RNF-04, RNF-05, RNF-10, RNF-11 |
 
 Registrar a versão testada, evidências e limitações nas tarefas. Todos os critérios

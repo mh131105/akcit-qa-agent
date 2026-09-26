@@ -192,13 +192,14 @@ export async function handleApi(
       return;
     }
     if (run![2] === 'continue') {
-      const mapping = body.expectedAccessRevision !== undefined;
-      fields(body, mapping ? ['outputId', 'outputRevision', 'expectedAccessRevision'] : ['outputId', 'outputRevision']);
+      // O coordenador resolve a etapa pela fase da saída referenciada.
+      const withAccessRevision = body.expectedAccessRevision !== undefined;
+      fields(body, withAccessRevision ? ['outputId', 'outputRevision', 'expectedAccessRevision'] : ['outputId', 'outputRevision']);
       if (url.search || !Number.isSafeInteger(body.outputRevision) || (body.outputRevision as number) < 1 ||
-        (mapping && (!Number.isSafeInteger(body.expectedAccessRevision) || (body.expectedAccessRevision as number) < 1))) throw invalid();
+        (withAccessRevision && (!Number.isSafeInteger(body.expectedAccessRevision) || (body.expectedAccessRevision as number) < 1))) throw invalid();
       const { accepted } = await preparation.continue(runId, session.userId, {
         outputId: string(body, 'outputId', 1, 128), outputRevision: body.outputRevision as number,
-        ...(mapping ? { expectedAccessRevision: body.expectedAccessRevision as number } : {}),
+        ...(withAccessRevision ? { expectedAccessRevision: body.expectedAccessRevision as number } : {}),
       });
       const result = await getPlanReview(runs, runId, { userId: session.userId }, config);
       if (!result.ok) serviceError(result.error);

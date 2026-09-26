@@ -8,7 +8,7 @@ const statuses = { draft: 'Rascunho', running: 'Em andamento', awaiting_approval
 const phases = { intake: 'Recebimento do material', curation: 'Curadoria', planning: 'Planejamento', case_design: 'Criação dos casos', mapping: 'Mapeamento', route_detail: 'Detalhamento dos percursos', execution: 'Execução dos testes', report: 'Relatório' };
 const validations = { approved: 'Aprovado pelo validador', changes_requested: 'Validador solicitou alterações', blocked: 'Validação bloqueada', error: 'Erro de validação' };
 const roles = { 'artifact-curator': 'Curador', 'test-designer': 'Designer de testes', 'output-validator': 'Validador independente', 'test-executor': 'Executor de testes' };
-const activities = { curating: 'Organizando requisitos e fontes', planning: 'Elaborando o plano de testes', validating_curation: 'Revisando a curadoria', validating_planning: 'Revisando o plano de testes', case_design: 'Gerando casos de teste', validating_case_design: 'Validando os casos de teste', mapping: 'Mapeando a aplicação', validating_mapping: 'Validando o mapa de navegação' };
+const activities = { curating: 'Organizando requisitos e fontes', planning: 'Elaborando o plano de testes', validating_curation: 'Revisando a curadoria', validating_planning: 'Revisando o plano de testes', case_design: 'Gerando casos de teste', validating_case_design: 'Validando os casos de teste', mapping: 'Mapeando a aplicação', validating_mapping: 'Validando o mapa de navegação', route_detail: 'Associando percursos aos casos aprovados', validating_route_detail: 'Validando as associações de percursos' };
 let user = null;
 let rememberForm = null;
 let sessionTimer;
@@ -604,7 +604,9 @@ function casesPanel(run, accountId, pending) {
     ? 'Casos desatualizados — as dependências desta revisão foram alteradas.'
     : currentDecision
     ? (currentDecision.decision === 'approved'
-      ? (run.canMap ? 'Casos aprovados. Pronto para mapear a aplicação.'
+      ? (run.routeDetail ? 'Casos aprovados. Consulte o detalhamento e suas pendências abaixo.'
+        : run.mapping ? 'Casos aprovados. O mapa está disponível; a associação de percursos é uma etapa separada.'
+        : run.canMap ? 'Casos aprovados. Pronto para mapear a aplicação.'
         : run.targetAccess?.revision > 0 ? 'Casos aprovados. O mapeamento ainda não foi iniciado.'
         : 'Casos aprovados. Configure o acesso à aplicação antes do mapeamento.')
       : 'Alterações solicitadas. Os casos aguardam revisão.')
@@ -613,7 +615,9 @@ function casesPanel(run, accountId, pending) {
       : 'Conteúdo provisório — a validação desta revisão ainda não foi aprovada.');
 
   panel.append(el('p', `Casos de teste / Revisão ${cases.revision}`, 'eyebrow'), el('h2', 'Casos de teste'),
-    el('p', run.mapping ? 'Casos aprovados — percurso observado no mapa de navegação.' : 'Casos lógicos — percurso ainda não mapeado.', 'lead'),
+    el('p', run.routeDetail ? 'Casos lógicos aprovados — consulte a associação de percursos de cada caso abaixo.'
+      : run.mapping ? 'Casos lógicos — mapa disponível, aguardando associação dos percursos.'
+      : 'Casos lógicos — percurso ainda não mapeado.', 'lead'),
     message(statusText));
   for (const item of cases.payload.testCases) {
     const detail = el('details', null, 'plan-section'); detail.append(el('summary', `${item.id} · ${item.ruleIds.join(', ')}`));
@@ -623,6 +627,7 @@ function casesPanel(run, accountId, pending) {
       planSection('Técnicas', item.techniques, value => `${value.name} — ${value.description}\nValores: ${value.values.map(item => JSON.stringify(item)).join(', ')}`),
       el('h3', 'Resultado esperado'), el('p', item.expected, 'text-content'), el('h3', 'Fontes'));
     for (const source of item.sources) detail.append(el('p', `${source.artifactId} · ${source.locator}`, 'hint'), el('blockquote', source.quote, 'text-content'));
+    if (run.routeDetail) detail.append(caseRoute(run, item.id));
     panel.append(detail);
   }
   panel.append(planSection('Situação da validação', cases.validations,
@@ -728,12 +733,80 @@ function captureFigure(run, observation, accountId) {
     .catch(() => { img.alt = 'Captura indisponível'; caption.textContent = 'Captura indisponível para esta observação.'; });
   return figure;
 }
+function caseRoute(run, caseId) {
+  const routes = run.routeDetail;
+  const panel = el('section', null, 'plan-section');
+  const item = routes.payload.testCases.find(item => item.id === caseId);
+  panel.append(el('h3', 'Percurso do caso'));
+  if (!item) { panel.append(message('Caso ausente desta revisão do detalhamento.')); return panel; }
+  const quality = routes.validations.filter(value => value.validator === 'output-validator' && value.status !== 'error');
+  const approved = routes.current && quality.length === 1 && quality[0].status === 'approved' &&
+    run.phase === 'route_detail' && ['ready', 'awaiting_input'].includes(run.status);
+  panel.append(message(!routes.current ? 'Associação desatualizada.' : approved ? 'Associação validada.' : 'Associação provisória — sem aprovação do validador.'));
+  panel.append(el('p', `Casos aprovados: ${item.approvedCaseRevision.outputId} · Revisão ${item.approvedCaseRevision.revision}`, 'hint'));
+  if (item.pathId === null) {
+    panel.append(el('p', routes.payload.pending.find(value => value.caseId === caseId)?.reason || 'Percurso pendente.', 'text-content'));
+  } else {
+    const map = run.mapping;
+    const sameMap = map && routes.dependsOn.some(ref => ref.outputId === map.id && ref.revision === map.revision);
+    const path = sameMap && map.payload.map.paths.find(path => path.id === item.pathId);
+    panel.append(el('p', `Caminho: ${item.pathId}`));
+    if (path) {
+      const screens = new Map(map.payload.map.screens.map(screen => [screen.id, screen.name]));
+      const transitions = new Map(map.payload.map.transitions.map(transition => [transition.id, transition]));
+      const steps = [screens.get(path.startScreenId) || path.startScreenId];
+      for (const id of path.transitionIds) {
+        const transition = transitions.get(id);
+        steps.push(`${id} → ${screens.get(transition.to) || transition.to}`);
+      }
+      panel.append(planSection('Sequência observada', steps));
+    } else panel.append(el('p', 'O mapa desta associação é histórico; consulte a revisão referenciada.', 'hint'));
+  }
+  return panel;
+}
+
+function routeDetailPanel(run, accountId) {
+  const panel = el('section', null, 'panel');
+  panel.append(el('h2', 'Detalhamento dos percursos'));
+  if (run.canDetailRoutes && run.mapping) {
+    panel.append(el('p', 'O projetista associará os casos aprovados aos caminhos do mapa. O validador revisará as associações em sessão independente.'));
+    const notice = message();
+    const start = button('Detalhar percursos', async () => {
+      start.disabled = true; tell(notice, 'Solicitando o detalhamento dos percursos…');
+      try {
+        await sameAccount(accountId); if (user?.id !== accountId) return;
+        await api(`/runs/${encodeURIComponent(run.id)}/continue`, { accountId, method: 'POST',
+          body: JSON.stringify({ outputId: run.mapping.id, outputRevision: run.mapping.revision }) });
+        await detailPage('Detalhamento aceito. Acompanhe a geração e a validação.');
+      } catch (error) { if (user?.id === accountId) await detailPage(errorText(error), true); }
+    });
+    panel.append(start, notice);
+  }
+  if (run.phase === 'route_detail' && run.status === 'running') panel.append(message(activities[run.progress.activity] || 'Preparando o detalhamento…'));
+  const routes = run.routeDetail;
+  if (routes) {
+    panel.append(el('p', `Revisão ${routes.revision}`, 'eyebrow'));
+    if (routes.ready) panel.append(message('Percursos validados — aguardando execução dos testes'));
+    else if (!routes.current) panel.append(message('Detalhamento desatualizado — as dependências foram alteradas.'));
+    else if (run.status === 'awaiting_input') panel.append(message('Detalhamento com impedimentos. Consulte as pendências e o parecer. A retomada desta etapa ainda não está disponível.'));
+    else panel.append(message('Detalhamento provisório — nenhuma prontidão para execução foi publicada.'));
+    panel.append(planSection('Pareceres sobre o detalhamento', routes.validations,
+      value => `${validations[value.status] || value.status} · Revisão ${value.outputRevision} · ${value.reason}`));
+    for (const verdict of routes.validations) if (verdict.findings.length) panel.append(planSection('Achados do detalhamento', verdict.findings,
+      value => `${value.location || 'Geral'} — ${value.message}`));
+    if (routes.payload.pending.length) panel.append(planSection('Casos com percurso pendente', routes.payload.pending, value => `${value.caseId} — ${value.reason}`));
+    panel.append(el('p', 'Os percursos de cada caso estão no painel Casos de teste. Nenhum teste foi executado nesta etapa.', 'hint'));
+  }
+  return panel;
+}
+
 function mappingPanel(run, accountId) {
   const mapping = run.mapping;
   const panel = el('section', null, 'panel');
   const last = mapping.validations.at(-1);
   let statusText = 'Mapa em elaboração — aguardando parecer do validador visual.';
-  if (run.status === 'ready') statusText = 'Mapa validado — aguardando detalhamento dos percursos.';
+  if (run.status === 'ready' && run.phase === 'mapping') statusText = 'Mapa validado — aguardando detalhamento dos percursos.';
+  else if (mapping.current && last?.status === 'approved') statusText = 'Mapa validado.';
   else if (last?.status === 'changes_requested') statusText = 'Validador solicitou alterações; o executor prepara uma nova revisão.';
   else if (last?.status === 'blocked') statusText = 'Validação bloqueada.';
   else if (last?.status === 'error') statusText = 'Falha técnica na validação visual desta revisão.';
@@ -909,6 +982,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   if (run.targetAccess) main.append(targetAccessPanel(run, accountId));
   if (run.cases) main.append(casesPanel(run, accountId, pending));
   if (run.mapping) main.append(mappingPanel(run, accountId));
+  if (run.canDetailRoutes || run.routeDetail || run.phase === 'route_detail') main.append(routeDetailPanel(run, accountId));
   if (run.curation) main.append(curationPanel(run.curation));
   if (run.questions?.length) main.append(questionPanel(run, accountId, pending));
   for (const [key, draft] of answerDrafts) {

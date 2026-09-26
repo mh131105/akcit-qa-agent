@@ -14,7 +14,8 @@
       ],
       "accessProfile": "Usuário de teste com permissão para reservar itens.",
       "dataPreparation": "Restaurar dados do alvo controlado entre casos e confirmar o estado inicial pela interface.",
-      "authorizedTarget": true
+      "authorizedTarget": true,
+      "accessRevision": 1
     },
     "artifacts": [
       {
@@ -561,36 +562,58 @@
           }
         ],
         "payload": {
-          "navigation": {
+          "phase": "mapping",
+          "producer": "test-executor",
+          "accessRevision": 1,
+          "authentication": {
+            "status": "authenticated",
+            "observationId": "fixture-observation-home"
+          },
+          "map": {
             "screens": [
               {
                 "id": "home",
                 "name": "Início após autenticação",
-                "recognition": "Página com opção Reservas."
+                "recognition": "Página com opção Reservas.",
+                "observationIds": [
+                  "fixture-observation-home"
+                ]
               },
               {
                 "id": "reservations",
                 "name": "Reservas",
-                "recognition": "Lista de reservas e opção Nova reserva."
+                "recognition": "Lista de reservas e opção Nova reserva.",
+                "observationIds": [
+                  "fixture-observation-reservations"
+                ]
               },
               {
                 "id": "form",
                 "name": "Nova reserva",
-                "recognition": "Campos Quantidade e Comentário e botão Confirmar."
+                "recognition": "Campos Quantidade e Comentário e botão Confirmar.",
+                "observationIds": [
+                  "fixture-observation-form"
+                ]
               }
             ],
             "transitions": [
               {
                 "id": "t-home-list",
                 "from": "home",
-                "action": "Clicar em Reservas.",
-                "to": "reservations"
+                "to": "reservations",
+                "actionId": "fixture-action-t-home-list",
+                "observationIds": [
+                  "fixture-observation-reservations"
+                ]
               },
               {
                 "id": "t-list-form",
                 "from": "reservations",
-                "action": "Clicar em Nova reserva.",
-                "to": "form"
+                "to": "form",
+                "actionId": "fixture-action-t-list-form",
+                "observationIds": [
+                  "fixture-observation-form"
+                ]
               }
             ],
             "paths": [
@@ -601,9 +624,28 @@
                   "t-home-list",
                   "t-list-form"
                 ]
+              },
+              {
+                "id": "path-reservations",
+                "startScreenId": "home",
+                "transitionIds": [
+                  "t-home-list"
+                ]
               }
             ]
-          }
+          },
+          "pending": [
+            {
+              "id": "pending-comment",
+              "description": "Local de consulta do comentário não observado.",
+              "affectedCaseIds": [
+                "case-8"
+              ]
+            }
+          ],
+          "limitations": [
+            "Mapa e identificadores sintéticos; nenhuma mídia real acompanha este exemplo."
+          ]
         },
         "answerRefs": [],
         "budgetCycleId": "budget-1"
@@ -1010,7 +1052,7 @@
                 "Conta de teste válida e autenticada.",
                 "Alvo disponível, dados restaurados conforme procedimento do ambiente."
               ],
-              "pathId": "path-create-reservation",
+              "pathId": null,
               "data": {
                 "quantity": 5,
                 "comment": "Reserva de demonstração"
@@ -1043,10 +1085,17 @@
                 "revision": 1
               }
             }
+          ],
+          "pending": [
+            {
+              "caseId": "case-8",
+              "reason": "O mapa não identifica onde conferir a persistência do comentário."
+            }
           ]
         },
         "answerRefs": [],
-        "budgetCycleId": "budget-1"
+        "budgetCycleId": "budget-1",
+        "accessRevision": 1
       },
       {
         "id": "out-execution",
@@ -1384,7 +1433,7 @@
             ],
             "limitations": [
               "Não houve interação com navegador, chamada de modelo ou revisão real de IA.",
-              "Não há vídeos ou imagens. Este exemplo não atende ao critério de pronto da demonstração.",
+              "Não há capturas reais. Este exemplo não atende ao critério de pronto da demonstração. Vídeos são evolução futura, conforme decisão de 26/09/2026.",
               "O validador pede correção da revisão 1 por falta de evidência; o executor documenta a incerteza na revisão 2.",
               "Os vereditos anteriores permanecem no snapshot rejeitado e não entram como conclusões no relatório.",
               "A execução ilustrativa foi interrompida; validar o relatório parcial não transforma a execução em concluída."
@@ -1522,6 +1571,64 @@
           "maxActiveTimeMs": 2700000
         }
       }
+    ],
+    "observations": [
+      {
+        "id": "fixture-observation-home",
+        "assetId": "fixture-asset-home",
+        "at": "2026-09-23T12:00:00Z",
+        "width": 1366,
+        "height": 768
+      },
+      {
+        "id": "fixture-observation-reservations",
+        "assetId": "fixture-asset-reservations",
+        "at": "2026-09-23T12:00:00Z",
+        "width": 1366,
+        "height": 768
+      },
+      {
+        "id": "fixture-observation-form",
+        "assetId": "fixture-asset-form",
+        "at": "2026-09-23T12:00:00Z",
+        "width": 1366,
+        "height": 768
+      }
+    ],
+    "mappingActions": [
+      {
+        "id": "fixture-action-t-home-list",
+        "at": "2026-09-23T12:00:00Z",
+        "tool": "pointer",
+        "params": {
+          "action": "click",
+          "x": 100,
+          "y": 100
+        },
+        "outcome": "ok",
+        "note": "Clicar em Reservas."
+      },
+      {
+        "id": "fixture-action-t-list-form",
+        "at": "2026-09-23T12:00:00Z",
+        "tool": "pointer",
+        "params": {
+          "action": "click",
+          "x": 100,
+          "y": 100
+        },
+        "outcome": "ok",
+        "note": "Clicar em Nova reserva."
+      }
     ]
+  },
+  "screenshotContractExample": {
+    "notice": "ILUSTRAÇÃO SINTÉTICA DO CONTRATO FUTURO. Não existe mídia e esta entrada não sustenta nenhum resultado.",
+    "id": "fixture-evidence-example",
+    "caseId": "case-1",
+    "attemptId": "fixture-attempt-example",
+    "kind": "screenshot",
+    "capture": "original",
+    "assetId": "fixture-no-media"
   }
 }

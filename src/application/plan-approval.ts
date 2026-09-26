@@ -1,3 +1,6 @@
+import { canDetailRoutes, currentRouteDetail } from './route-detail.js';
+import { validateRouteDetail, type RouteDetailPayload } from '../domain/route-detail.js';
+import type { NavigationPayload } from '../domain/navigation.js';
 import { randomUUID } from 'node:crypto';
 import {
   canCreateCases, canResumePreparation, caseDependencies, preparationAnswers,
@@ -67,6 +70,10 @@ export type PlanReview = {
   approvals: PlanDecision[];
   targetAccess: TargetAccessReview;
   canMap: boolean;
+  canDetailRoutes: boolean;
+  routeDetail: { id: string; revision: number; current: boolean; ready: boolean;
+    dependsOn: RunOutput['dependsOn']; payload: RouteDetailPayload;
+    validations: NonNullable<PlanReview['cases']>['validations'] } | null;
   mapping: {
     id: string; revision: number; current: boolean;
     dependsOn: RunOutput['dependsOn'];
@@ -204,6 +211,19 @@ export async function getPlanReview(
     const curation = current(run.outputs, 'curation');
     const cases = current(run.outputs, 'case_design');
     const mapping = current(run.outputs, 'mapping');
+    const routes = current(run.outputs, 'route_detail');
+    let routePayload: RouteDetailPayload | null = null;
+    if (routes) {
+      // Histórico usa seus snapshots exatos, mesmo quando já não são vigentes.
+      const dependency = (phase: string) => run.outputs.find(output => output.phase === phase && routes.dependsOn.some(ref => ref.outputId === output.id && ref.revision === output.revision));
+      const approvedCases = dependency('case_design'), approvedMap = dependency('mapping');
+      if (!approvedCases || !approvedMap) throw new StorageError('INVALID_RECORD');
+      routePayload = validateRouteDetail(routes.payload, { testCases: publicTestCases(approvedCases.payload) },
+        approvedMap.payload as NavigationPayload, { outputId: approvedCases.id, revision: approvedCases.revision });
+    }
+    const routesCurrent = !!routes && currentRouteDetail(run, routes, config);
+    const routeVerdicts = routes ? run.validations.filter(item => item.outputId === routes.id && item.outputRevision === routes.revision) : [];
+    const routeQuality = routeVerdicts.filter(item => item.validator === 'output-validator' && item.status !== 'error');
     let currentCases = false;
     let currentMapping = false;
     if (mapping && cases && plan) {
@@ -240,6 +260,15 @@ export async function getPlanReview(
         : run.status === 'cancelled' ? { code: 'CANCELLED', message: 'Execução cancelada pelo usuário.' } : null,
       canResume: canResumePreparation(run), canCreateCases: canCreateCases(run), canDecideCases: canDecideCases(run),
       canMap: canMap(record, { targetAllowedOrigins: config.targetAllowedOrigins }),
+      canDetailRoutes: canDetailRoutes(run, config),
+      routeDetail: routes && routePayload ? { id: routes.id, revision: routes.revision, current: routesCurrent,
+        ready: routesCurrent && routeQuality.length === 1 && routeQuality[0]?.status === 'approved' &&
+          run.status === 'ready' && run.phase === 'route_detail' && routePayload.testCases.some(item => item.pathId !== null),
+        dependsOn: routes.dependsOn.map(ref => ({ outputId: ref.outputId, revision: ref.revision })),
+        payload: routePayload, validations: routeVerdicts.map(item => ({ outputId: item.outputId, outputRevision: item.outputRevision,
+          validator: item.validator, status: item.status, reason: item.reason ?? '',
+          findings: (item.findings ?? []).map(finding => ({ code: finding.code, message: finding.message, location: finding.location })) })),
+      } : null,
       mapping: mapping ? { id: mapping.id, revision: mapping.revision, current: currentMapping,
         dependsOn: mapping.dependsOn.map(ref => ({ outputId: ref.outputId, revision: ref.revision })),
         payload: publicNavigation(mapping.payload),

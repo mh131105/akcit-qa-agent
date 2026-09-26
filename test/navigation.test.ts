@@ -744,10 +744,12 @@ test('após cancelamento, outra execução consegue reservar o ambiente', async 
   let release = () => {};
   const gate = new Promise<void>(resolve => { release = resolve; });
   let executions = 0;
+  let entered = () => {};
+  const started = new Promise<void>(resolve => { entered = resolve; });
   const fake = fakeVisual({
     executor: async (attempt) => {
       executions += 1;
-      if (executions === 1) { await gate; throw new Error('liberado'); }
+      if (executions === 1) { entered(); await gate; throw new Error('liberado'); }
       return { authentication: { status: 'authenticated', observationId: 'obs-' + attempt },
         map: { screens: [{ id: 'tela-' + executions, name: 'Início', recognition: 'x', observationIds: ['obs-' + attempt] }], transitions: [], paths: [] },
         pending: [], limitations: [] };
@@ -759,7 +761,7 @@ test('após cancelamento, outra execução consegue reservar o ambiente', async 
   await seedApproved(h, first.id, owner.user.id);
   await configureAccess(h, first.id, owner.cookie, 0);
   await h.request('/api/runs/' + first.id + '/continue', { outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1 }, owner.cookie);
-  await new Promise(resolve => setTimeout(resolve, 50));
+  await started;
   await h.request('/api/runs/' + first.id + '/cancel', {}, owner.cookie);
   release();
   await new Promise(resolve => setTimeout(resolve, 100));

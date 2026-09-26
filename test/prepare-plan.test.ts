@@ -195,7 +195,9 @@ test('T4.1: timeout aborta chamada de validação e falha técnica não autoriza
 
 test('T4.1: orçamento ativo e limite de dez US interrompem sem truncar', async t => {
   let time = Date.now();
-  const h = await setup(t, { now: () => time, limits: { activeMs: 100 }, modelCall: async task => { time += 101; return normal(task); } });
+  // O relógio injetado cruza o orçamento; o watchdog real não deve vencer
+  // durante a preparação em máquinas lentas (ele tem teste separado).
+  const h = await setup(t, { now: () => time, limits: { activeMs: 60_000 }, modelCall: async task => { time += 60_001; return normal(task); } });
   await h.coordinator.start(h.id, 'owner'); await h.coordinator.settled();
   assert.equal((await h.read()).preparation!.stopReason!.code, 'ACTIVE_LIMIT');
   assert.equal((await h.read()).status, 'interrupted'); assert.equal(h.calls.length, 1);

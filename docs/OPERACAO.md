@@ -1014,6 +1014,99 @@ não entra no contexto dos agentes; ele serve apenas à avaliação externa.
   anteriores, ações com erro e aprovação contraditória de autenticação não
   liberam `ready`.
 
+## Detalhar percursos dos casos — T6.3
+
+Pré-condições: mapa validado em `ready / mapping`, casos/duas aprovações vigentes,
+acesso sem alterações desde o mapa e orçamento restante. Use **Detalhar percursos**
+na página da execução. O projetista existente e o validador textual usam os perfis
+`PI_PLANNER_*` e `PI_VALIDATOR_*` documentados: `deepseek-v4-pro` / `high`.
+
+A interface mostra geração e validação reais. Abra cada caso para consultar a
+sequência de telas/transições, referência à revisão aprovada e pendências. Um
+parecer aprovado com ao menos um caminho termina em **Percursos validados —
+aguardando execução dos testes**; todos pendentes ou parecer bloqueado aguardam
+entrada. A retomada dessa etapa ainda não está disponível. Não editar JSON para
+forçar avanço. Conteúdo provisório/rejeitado/desatualizado não autoriza execução.
+
+Decisão de 26/09/2026: relatório do protótipo com capturas por caso/tentativa,
+passos, esperado e observado; vídeos são evolução futura. A infraestrutura
+compartilhada permanece. T6.3 não executa testes nem gera relatório.
+
+### Verificação e ensaio real
+
+Com Node 24 e dependências do lockfile:
+
+```sh
+npm run check
+npm test
+npm run build
+npm run eval:routes:real -- --run
+```
+
+O último comando equivale a `node scripts/eval-mapping-real.mjs --with-route-detail --run`,
+com chamadas reais e pagas aos perfis existentes. Execute na imagem candidata com
+Chromium/Xvfb e credenciais privadas, como no ensaio de mapeamento. Informe
+`EVAL_HUMAN_DIR`, `EVAL_EVIDENCE_DIR`, `APP_REVISION`, `EVAL_IMAGE` e, opcionalmente,
+`EVAL_IMPLEMENTER` (padrão: Codex). Nenhuma chave ou decisão humana vai no Git.
+
+O ensaio cria seu próprio diretório privado com `mkdtemp`. **Ignora `DATA_DIR` para
+armazenamento de teste e nunca apaga o diretório da instância.** A limpeza só remove
+o diretório criado pelo próprio ensaio. Evidências exportadas ficam no diretório
+indicado e exigem revisão/sanitização antes de compartilhamento. O teste de
+isolamento confirma que um arquivo na instância permanece intacto.
+Em falha, os dados temporários privados são preservados para diagnóstico e seu
+caminho é registrado no relatório; a limpeza automática ocorre somente no sucesso.
+Esse diretório privado não deve ser publicado.
+
+1. A jornada pela interface salva `awaiting-plan-<runId>.json` e
+   `awaiting-cases-<runId>.json`. Uma pessoa lê os conteúdos e grava os respectivos
+   `decision-plan-<runId>.json` e `decision-cases-<runId>.json` com
+   `{"decision":"approved","human":true,"reviewer":"nome da pessoa"}` ou recusa
+   com `changes_requested`. O implementador não fabrica essas decisões.
+2. Após **Detalhar percursos**, o roteiro confere chamadas reais Pro/high,
+   preservação de casos/aprovações e resultado após recarga; exporta a interface.
+3. Outro integrante confere `awaiting-routes-<runId>.json` contra casos/mapa e
+   grava `decision-routes-<runId>.json`, com os mesmos campos e
+   `negativeControl: {caseId, pathId, reason}`. Selecione um caminho que **já existe
+   no mapa**, mas é inadequado para um caso que já tenha percurso associado. A justificativa humana fica fora do
+   contexto do validador. Se só houver um caminho completo, uma pessoa pode autorizar
+   `observedPrefix: {sourcePathId, transitionCount}` nessa seleção. O roteiro cria
+   uma fixture separada, copiando o mapa e acrescentando um novo `pathId` com as
+   primeiras transições já observadas. Exige ao menos uma transição e um prefixo
+   menor que o caminho completo; não inventa tela, transição ou ação. A decisão deve
+   identificar `runId`, `outputId` e `outputRevision` dos percursos revisados.
+4. Os controles usam o mesmo mapa de avaliação, sem alterar a execução persistida.
+   Primeiro, uma sessão independente deve aprovar as associações originais;
+   depois, outra sessão deve recusar e localizar a única associação trocada.
+   A origem derivada da fixture, a justificativa e o gabarito ficam nas evidências,
+   fora do prompt. Aprovação incorreta ou revisão ausente falha o ensaio.
+
+`--skip-journey-a` não é aceito no ensaio de percursos. `eval:mapping:real` conserva
+seu escopo original e passa a usar o mesmo isolamento seguro. Os smokes continuam
+com modelos simulados explicitamente e não demonstram a qualidade semântica real.
+
+### Reexecutar somente os controles sobre uma jornada exportada
+
+Quando a jornada e a revisão humana já ocorreram, não repita inferências e
+aprovações para complementar seus controles. Use o `record.json` exportado e a
+decisão humana que identifica exatamente a saída/revisão aprovada:
+
+```sh
+EVAL_EVIDENCE_DIR=/diretorio/privado/controles-complementares \
+npm run eval:routes:real -- --run \
+  --route-controls-from /diretorio/privado/jornada-percursos/record.json \
+  --route-decision-from /diretorio/privado/decision-routes.json
+```
+
+Configure os perfis/credenciais e `APP_REVISION`/`EVAL_IMAGE` como no ensaio normal;
+`EVAL_SOURCE_REVISION` pode identificar o commit da jornada original. Este modo
+não abre o navegador, não cria aprovações e não modifica a execução original.
+O relatório declara `mode: standalone-route-controls`, `journeyReplayed: false`,
+execução e saída de origem, decisões, fixture e resultados reais. Use outro
+`EVAL_EVIDENCE_DIR`: preserve o relatório original, inclusive controles anteriores
+incompletos ou com falha. Um controle complementar aprovado não reclassifica
+retroativamente a jornada anterior como aprovada.
+
 ## Referências
 
 - [SDK do Pi](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md)

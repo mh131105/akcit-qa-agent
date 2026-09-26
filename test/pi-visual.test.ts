@@ -137,8 +137,10 @@ test('cancelamento com sessão aberta encerra chamada, sessão e navegador antes
   let closed = 0;
   let release = () => {};
   const gate = new Promise<void>(resolve => { release = resolve; });
+  let started!: () => void;
+  const entered = new Promise<void>(resolve => { started = resolve; });
   const session = makeFakeSession('{"status":"approved"}', {
-    prompt: async () => { await gate; throw new Error('chamada interrompida'); },
+    prompt: async () => { started(); await gate; throw new Error('chamada interrompida'); },
   });
   const promise = executeVisualTask(baseTask({
     signal: controller.signal,
@@ -150,7 +152,7 @@ test('cancelamento com sessão aberta encerra chamada, sessão e navegador antes
     prepareModel: async () => fakeModel(),
     
   });
-  await new Promise(resolve => setTimeout(resolve, 20));
+  await entered;
   controller.abort(new Error('cancelamento externo'));
   release();
   await assert.rejects(promise, error => error.code === 'CANCELLED');
