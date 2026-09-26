@@ -15,8 +15,8 @@ ensaios manuais concluídos antes de registrar seus resultados e divergências.
 | Identificação | Registro |
 | --- | --- |
 | Base | `8c93bc6`, merge do PR #30 |
-| SHA candidato | Usar o SHA final do PR e seu check de CI; o código estava em integração na criação deste registro. |
-| Imagem/digest | A registrar após o build/smoke da imagem candidata. Não confundir imagem local com imagem publicada. |
+| SHA do código candidato | `171c47f758b68ee73d88f6fd0b342a385160e2e5`; o commit posterior registra somente estas evidências. Conferir também o CI do HEAD final do PR. |
+| Imagem local | `akcit-qa:t91-candidate`; ID `sha256:1d4bfaa5787535b0e725701d96d2d9bdf22703a997ab317d4a84c369e085c74a`. Sem digest de publicação: a imagem não foi enviada a um registry. |
 | Ambiente automatizado | Worktree isolado; Node.js 24, lockfile do repositório; fixtures sintéticas. |
 | Publicação dev / promoção | A conferir no release efetivo; este documento não afirma publicação ou promoção ainda não realizadas. |
 | Revisão manual | Matheus; pendente de execução/registro por ele. |
@@ -47,17 +47,50 @@ npm run build
 python3 -m unittest discover -s deploy -p 'test_*.py'
 ```
 
-Executar também os smokes da imagem, incluindo `smoke:execution`. O CI final é a
-referência para a suíte completa. Verificações já realizadas durante a frente C:
+Verificação local concluída em 26/09/2026, com Node 24:
 
-- TypeScript (`npm run check`): aprovado antes da integração final.
-- Feedback/relatório e regressão do exemplo/aprovações: 64 testes aprovados, zero
-  falhas, incluindo histórico de revisão rejeitada e invalidação localizada.
-- O teste de integração da frente B cobre preparação → aprovações → execução →
-  relatório, revisão de plano/casos, bloqueio com retomada e cancelamento em `ready`.
+- `npm run check` e `npm run build`: aprovados.
+- `npm test`: **268 testes aprovados**, nenhuma falha ou teste ignorado.
+- Testes Python de deploy: **6 aprovados**.
+- Cinco smokes passaram na imagem acima, sem montar código do host: runtime
+  (**7 verificações**), web (**38**), alvo controlado (**15**), mapeamento e execução
+  (**9 verificações** na execução). Navegador, ferramentas e persistência reais;
+  chamadas de modelo substituídas explicitamente.
+- Integração cobre preparação → aprovações → execução → relatório, revisão de
+  plano/casos, bloqueio com retomada, cancelamento em `ready`, interrupção durante
+  tentativa, resposta tardia, relatório parcial idempotente e preservação dos
+  resultados independentes após alteração localizada.
 
-Esses resultados não antecipam o resultado final do CI nem os smokes de container.
-Registrar no PR os comandos/contagens finais e quaisquer limitações encontradas.
+Os modelos são substituídos explicitamente nos testes; esses resultados não
+representam aceite da qualidade dos modelos. O CI do HEAD final permanece como
+referência remota da suíte e dos smokes.
+
+Comandos de smoke: `node scripts/smoke-{runtime,web,target,mapping,execution}.mjs`
+dentro da imagem, com os mesmos limites/capabilities/tmpfs definidos no CI.
+O smoke web usou Node **24.21.0**, Chromium **153.0.8010.52** e terminou em
+**41,452 s**; gerou capturas a 1366/390 px e PDF do snapshot publicado. As saídas
+locais estão em `artifacts/t91/candidate-*` (ignoradas pelo Git); o CI publica
+os artefatos sintéticos correspondentes por 14 dias. A leitura humana do PDF
+continua pendente. Limitação operacional observada: o Xvfb emite um aviso de
+permissão para `/tmp/.X11-unix` ao iniciar sem root; os cinco smokes passaram.
+
+## Instância local para revisão
+
+A candidata está disponível em `http://127.0.0.1:3103`, container
+`akcit-qa-t91-manual`, com volume independente `akcit-qa-t91-manual-data`.
+A instância anterior na porta 3100 foi preservada. O health check e a resposta
+HTTP do alvo controlado foram conferidos; nenhuma execução com LLM foi iniciada.
+
+Cadastre uma conta com um e-mail já autorizado no ambiente local. Crie a execução
+com `docs/requisitos/exemplos/artefato-demo.md`; no acesso à aplicação testada,
+informe `http://127.0.0.1:4000`, usuário sintético `demo` e senha `demo1234`.
+Esse endereço do alvo é interno ao container. O alvo está no modo `reference`;
+seus registros sintéticos em memória reiniciam com o container, enquanto as
+execuções do produto permanecem no volume. Os perfis usam as credenciais privadas
+já configuradas localmente e o redator `deepseek-flash/low`.
+
+Iniciar a preparação pela interface faz chamadas reais. O [roteiro manual](roteiro-manual.md)
+detalha R1–R5; registre os resultados antes de solicitar merge e promoção.
 
 ## Ensaios manuais com modelos reais
 
