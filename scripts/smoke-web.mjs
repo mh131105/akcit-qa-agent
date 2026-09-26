@@ -1014,6 +1014,8 @@ try {
   const sent = [];
   let lost = true;
   const heldResponse = new Promise(resolve => { releaseResponse = resolve; });
+  let persisted;
+  const persistedResponse = new Promise(resolve => { persisted = resolve; });
   await page.route('**/api/runs', async route => {
     const request = route.request();
     if (request.method() !== 'POST') return route.continue();
@@ -1022,14 +1024,19 @@ try {
     lost = false;
     const response = await route.fetch(); // A API persiste antes de perdermos só a resposta.
     assert.equal(response.status(), 201);
+    persisted();
     await heldResponse;
     await route.abort('connectionreset');
   });
   const savingButton = page.getByRole('button', { name: /Salvar rascunho|Tentar confirmar salvamento/ });
   await savingButton.dblclick({ delay: 30 });
   assert.equal(await savingButton.isDisabled(), true, 'Botão desabilitado enquanto a resposta não chega.');
+  await persistedResponse;
   releaseResponse();
-  await visible(page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }));
+  // Esse rótulo já aparece durante o envio; aguardar a falha ser processada
+  // antes de consultar o registro e testar sua recuperação.
+  await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button =>
+    button.textContent === 'Tentar confirmar salvamento' && !button.disabled));
   assert.equal((await api(context, '/api/runs', owner.id)).items.length, 2);
   const storedAttempt = await page.evaluate(id => JSON.parse(sessionStorage.getItem(`akcit.intake.v1:${id}`)), owner.id);
   assert.deepEqual(storedAttempt, { accountId: owner.id, key: sent[0].key, body: sent[0].body });
