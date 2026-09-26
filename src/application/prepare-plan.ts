@@ -1,3 +1,6 @@
+import { isDeepStrictEqual } from 'node:util';
+import { buildRouteDetail, type RouteDetailPayload } from '../domain/route-detail.js';
+import { routeDependencies, routeEligibility, type RouteDetailRequest, type RouteDependencies } from './route-detail.js';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { resolvePreparationModels, type readConfig, type ResolvedVisualModels } from '../config.js';
@@ -112,7 +115,7 @@ export function canCreateCases(run: RunRecord): boolean {
   } catch { return false; }
 }
 type Active = { runId: string; id: string; controller: AbortController; done: Promise<void>;
-  cases?: ContinueRequest; mapping?: MappingRequest; workId?: string };
+  cases?: ContinueRequest; mapping?: MappingRequest; routes?: { request: RouteDetailRequest; dependencies: RouteDependencies }; workId?: string };
 
 /** ponytail: um coordenador por aplicação/processo, sem fila de trabalhos;
  * múltiplos processos escritores exigiriam uma reserva externa compartilhada. */
@@ -148,11 +151,67 @@ export class PreparationCoordinator {
     return result;
   }
   continue(runId: string, userId: string, request: ContinueRequest): Promise<{ accepted: boolean }> {
-    const result = this.starts.then(() => request.expectedAccessRevision === undefined
-      ? this.acceptCases(runId, userId, request)
-      : this.acceptMapping(runId, userId, request as Required<ContinueRequest>));
+    const result = this.starts.then(async () => {
+      const { run } = await this.store.read(runId);
+      authorize(run, userId);
+      const referenced = run.outputs.find(output => output.id === request.outputId && output.revision === request.outputRevision);
+      if (referenced?.phase === 'mapping') {
+        if (request.expectedAccessRevision !== undefined) throw new PreparationError('INVALID_INPUT', 'O detalhamento recebe somente a referência do mapa.', 400);
+        return this.acceptRoutes(runId, userId, request);
+      }
+      if (referenced?.phase === 'planning' && request.expectedAccessRevision === undefined) return this.acceptCases(runId, userId, request);
+      if (referenced?.phase === 'case_design' && request.expectedAccessRevision !== undefined) return this.acceptMapping(runId, userId, request as Required<ContinueRequest>);
+      throw new PreparationError('STALE_VERSION', 'Informe a saída e a revisão correspondentes à continuidade solicitada.');
+    });
     this.starts = result.catch(() => {});
     return result;
+  }
+  private async acceptRoutes(runId: string, userId: string, request: RouteDetailRequest): Promise<{ accepted: boolean }> {
+    const record = await this.store.read(runId);
+    authorize(record.run, userId);
+    if (record.workIntents.some(work => work.type === 'detail_routes' && work.outputId === request.outputId &&
+      work.outputRevision === request.outputRevision && work.processingId)) return { accepted: false };
+    const dependencies = routeEligibility(record.run, request, this.config);
+    if (this.active) throw new PreparationError('RESOURCE_UNAVAILABLE', 'Ambiente ocupado. O mapa validado foi preservado; tente novamente após o término.');
+    const models = await this.models();
+    const active: Active = { runId, id: randomUUID(), workId: randomUUID(), routes: { request: { ...request }, dependencies },
+      controller: new AbortController(), done: Promise.resolve() };
+    this.active = active;
+    try {
+      await this.store.update(runId, ({ run, workIntents }) => {
+        authorize(run, userId);
+        if (!isDeepStrictEqual(routeEligibility(run, request, this.config), dependencies)) {
+          throw new PreparationError('STALE_VERSION', 'As dependências mudaram antes do início do detalhamento.');
+        }
+        freezeActiveTime(run.preparation!, this.now());
+        run.status = 'running'; run.phase = 'route_detail';
+        run.preparation = { ...run.preparation!, id: active.id, startedAt: this.time(), finishedAt: null,
+          activeRole: 'test-designer', activity: 'route_detail', stopReason: null };
+        workIntents.push({ id: active.workId!, type: 'detail_routes', ...request, createdAt: this.time(),
+          processingId: active.id, accessRevision: dependencies.accessRevision, status: 'pending' });
+        return { save: true, value: undefined };
+      });
+      this.dispatch(active, models);
+      return { accepted: true };
+    } catch (error) {
+      try {
+        const saved = await this.store.read(runId);
+        if (saved.run.status === 'running' && saved.run.preparation?.id === active.id) {
+          await this.finish(active, 'interrupted', { code: 'START_FAILED', message: 'Não foi possível confirmar o início do detalhamento.' });
+        }
+      } finally { if (this.active === active) this.active = null; }
+      throw error;
+    }
+  }
+  private checkRoutes(run: RunRecord, active: Active) {
+    if (!active.routes) return;
+    try {
+      if (isDeepStrictEqual(routeDependencies(run, active.routes.request, this.config), active.routes.dependencies)) return;
+    } catch (error) {
+      if (error instanceof StorageError) throw error;
+      // Uma cadeia que perdeu aprovação durante o trabalho também ficou desatualizada.
+    }
+    throw new PreparationError('STALE_VERSION', 'As dependências utilizadas no detalhamento foram alteradas.');
   }
   /** Continuidade dos casos aprovados: mapeamento visual, com a mesma reserva,
    * o mesmo orçamento ativo e intenção persistida antes do 202. */
@@ -424,7 +483,8 @@ export class PreparationCoordinator {
   private async finish(active: Active, status: string, reason: { code: string; message: string } | null) {
     await this.store.update(active.runId, ({ run, workIntents }) => {
       if (run.status !== 'running' || run.preparation?.id !== active.id) return { save: false, value: undefined };
-      if (status === 'awaiting_approval') this.check(run, active);
+      if (status === 'awaiting_approval' || (active.routes && ['ready', 'awaiting_input'].includes(status))) this.check(run, active);
+      if (active.routes && ['ready', 'awaiting_input'].includes(status)) this.checkRoutes(run, active);
       if (status === 'awaiting_approval' && active.cases) caseDependencies(run, active.cases, false);
       run.status = status;
       freezeActiveTime(run.preparation, this.now());
@@ -432,7 +492,7 @@ export class PreparationCoordinator {
       run.preparation.stopReason = reason;
       const work = workIntents.find(work => work.id === active.workId && work.status === 'pending');
       if (work) {
-        work.status = status === 'awaiting_approval' || status === 'ready' ? 'completed' : status === 'cancelled' ? 'cancelled' : 'interrupted';
+        work.status = status === 'awaiting_approval' || status === 'ready' || (active.routes && reason?.code === 'ROUTES_PENDING') ? 'completed' : status === 'cancelled' ? 'cancelled' : 'interrupted';
         work.finishedAt = this.time();
         if (reason) work.reason = reason;
       }
@@ -466,7 +526,7 @@ export class PreparationCoordinator {
     try {
       if (controller.signal.aborted) throw controller.signal.reason;
       result = await this.modelCall({ role, task: role === 'output-validator' ? 'validate-output' :
-        phase === 'curation' ? 'curate-artifacts' : phase === 'planning' ? 'create-test-plan' : 'create-test-cases',
+        phase === 'curation' ? 'curate-artifacts' : phase === 'planning' ? 'create-test-plan' : phase === 'route_detail' ? 'detail-test-routes' : 'create-test-cases',
         model: models[role], prompt: JSON.stringify(input),
         ...(this.config.piAuthPath ? { authPath: this.config.piAuthPath } : {}),
         signal: controller.signal, timeoutMs });
@@ -543,6 +603,20 @@ export class PreparationCoordinator {
           ?.payload as CurationPayload | undefined)?.questions.find(question => question.id === answer.questionId),
       }));
       const common = { artifacts, answers, objective: typeof initial.input.objective === 'string' ? initial.input.objective : '' };
+      if (active.routes) {
+        this.checkRoutes(initial, active);
+        const { curation, plan, cases, mapping, navigation, caseApproval } = active.routes.dependencies;
+        const output = await this.produce(active, models as ReturnType<typeof resolvePreparationModels>, 'route_detail', {
+          ...common, approvedCuration: curation, approvedPlan: plan, approvedCases: cases,
+          caseApproval, approvedMapping: mapping, pending: navigation.pending,
+        }, artifacts, curation, plan);
+        if (output) {
+          const anyRoute = (output.payload as RouteDetailPayload).testCases.some(item => item.pathId !== null);
+          await this.finish(active, anyRoute ? 'ready' : 'awaiting_input', anyRoute ? null : {
+            code: 'ROUTES_PENDING', message: 'Nenhum caso possui percurso observado. Consulte as pendências; a retomada desta etapa ainda não está disponível.' });
+        }
+        return;
+      }
       if (active.cases) {
         const textualModels = models as ReturnType<typeof resolvePreparationModels>;
         const { curation, plan } = caseDependencies(initial, active.cases, false);
@@ -574,6 +648,7 @@ export class PreparationCoordinator {
     common: Record<string, unknown>, artifacts: Artifact[], curation?: RunOutput, plan?: RunOutput): Promise<RunOutput | null> {
     const initial = (await this.store.read(active.runId)).run;
     const checkDependencies = (run: RunRecord) => {
+      if (active.routes) { this.checkRoutes(run, active); return; }
       if (!active.cases) return;
       const dependencies = caseDependencies(run, active.cases, false);
       if (dependencies.curation.id !== curation!.id || dependencies.curation.revision !== curation!.revision ||
@@ -591,7 +666,9 @@ export class PreparationCoordinator {
       try {
         payload = await this.call(active, models, phase === 'curation' ? 'artifact-curator' : 'test-designer',
           phase, attempt, revision, { task: phase, ...common, previousOutput: previous, feedback }, value => phase === 'curation'
-            ? parseCuration(value, artifacts) : phase === 'planning' ? parsePlan(value, artifacts, curation!.payload as CurationPayload)
+            ? parseCuration(value, artifacts) : phase === 'route_detail' ? buildRouteDetail(value, active.routes!.dependencies.logicalCases,
+              active.routes!.dependencies.navigation, { outputId: active.routes!.dependencies.cases.id, revision: active.routes!.dependencies.cases.revision })
+              : phase === 'planning' ? parsePlan(value, artifacts, curation!.payload as CurationPayload)
               : parseTestCases(value, artifacts, curation!.payload as CurationPayload, plan!.payload as PlanPayload)) as Record<string, unknown>;
       } catch (error) {
         if (error instanceof InvalidPreparationOutput && ['INPUT_LIMIT', 'CASE_LIMIT'].includes(error.code)) throw error;
@@ -613,7 +690,8 @@ export class PreparationCoordinator {
         }
         const output: RunOutput = { id, phase, revision, producer: phase === 'curation' ? 'artifact-curator' : 'test-designer',
           createdAt: this.time(), budgetCycleId: run.preparation!.budgetCycleId,
-          dependsOn: [curation, plan].filter((item): item is RunOutput => !!item)
+          ...(active.routes ? { accessRevision: active.routes.dependencies.accessRevision } : {}),
+          dependsOn: [curation, plan, ...(active.routes ? [active.routes.dependencies.cases, active.routes.dependencies.mapping] : [])].filter((item): item is RunOutput => !!item)
             .map(item => ({ outputId: item.id, revision: item.revision })),
           answerRefs: preparationAnswers(run).map(answer => ({ answerId: answer.id, questionId: answer.questionId, revision: answer.revision })), payload };
         run.outputs.push(output);
@@ -655,7 +733,7 @@ export class PreparationCoordinator {
       if (verdict?.status === 'blocked') {
         const insufficient = phase === 'curation' && !eligibleRequirements(payload as CurationPayload).length &&
           (payload as CurationPayload).questions.length > 0;
-        await this.finish(active, insufficient ? 'awaiting_input' : 'interrupted',
+        await this.finish(active, insufficient || active.routes ? 'awaiting_input' : 'interrupted',
           { code: 'VALIDATION_BLOCKED', message: verdict.reason });
         return null;
       }

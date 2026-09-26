@@ -4,6 +4,14 @@ Atualizado em 24/09/2026. Horário de Manaus. A equipe mantém quatro frentes, c
 responsáveis a escolher. A [especificação](requisitos/PROTOTIPO.md) define a entrega;
 as tarefas abaixo implementam seus requisitos, sem uma segunda sprint no plano.
 
+## Decisão de escopo — 26/09/2026
+
+O relatório do protótipo usará capturas por caso/tentativa, passos relevantes,
+esperado e observado. Vídeos curtos são evolução futura e deixam de ser requisito
+de pronto. A infraestrutura de captura/FFmpeg permanece. Os cards e ensaios
+anteriores abaixo são registros históricos do escopo existente na ocasião.
+O fluxo até o mapa validado permanece congelado; T6.3 acrescenta sua continuação.
+
 ## Quatro frentes
 
 | Frente | Responsabilidade | Primeiro trabalho |
@@ -714,6 +722,29 @@ execução completa foram repetidos no candidato corrigido.
 dos testes com entradas válidas/inválidas, vídeos por tentativa, retomada
 completa por esclarecimentos de navegação e relatório final validado. Revisão
 independente de outro integrante antes do merge em `develop`.
+
+### T6.3 — Associar percursos observados aos casos aprovados
+
+Continuidade de T6 (#9), T8 (#11) e T10 (#14), na branch
+`feat/validated-route-detail`, com PR para `develop`. Implementação deste candidato:
+
+- Saída pequena do projetista (`routes`); cópia dos casos e comparação estrutural
+  pelo backend, com `pathId` e `approvedCaseRevision`. Casos originais intactos.
+- Validação textual independente Pro/high, três produções, duas tentativas
+  técnicas por revisão, 120 s por chamada e tempo ativo acumulado preservado.
+- `/continue` despacha pela fase da saída: plano, casos ou mapa. Intenção
+  `detail_routes`, idempotência, reserva única e reconferência antes da publicação.
+- `ready / route_detail` quando aprovado com caminho; `awaiting_input / route_detail`
+  quando todos pendentes ou bloqueados. Sem terceira aprovação ou retomada fictícia.
+- Interface com **Detalhar percursos**, progresso, telas/transições, pendências
+  por caso, revisão aprovada e pareceres persistidos. Execução ainda indisponível.
+- Ensaio `--with-route-detail` com diretório temporário exclusivo. Aprovações
+  humanas reais e controle negativo independente são exigidos; não são substituídos
+  por aprovações automatizadas.
+
+Estado das verificações, revisão humana e limitações: [evidências T6.3](evidencias/t6.3/README.md).
+A implementação não encerra as issues amplas: execução dos casos, evidências de
+execução, retomadas completas e relatório final validado continuam pendentes.
 
 ## Como encerrar uma tarefa
 

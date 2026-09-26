@@ -33,6 +33,7 @@ const preparationText = 'US-01: Como pessoa, quero reservar itens.\nCA-01: Quant
 const preparationCalls = [];
 let holdPreparation = false;
 let holdCaseValidation = false;
+let holdRouteValidation = false;
 let releasePreparation = () => {};
 
 async function modelCall(task) {
@@ -40,7 +41,7 @@ async function modelCall(task) {
   assert.equal(input.artifacts[0].text, preparationText, 'Cada especialista recebe o material original.');
   if (task.role === 'output-validator') assert.ok(input.output, 'Validador recebe a revisão exata da saída.');
   preparationCalls.push(task.role);
-  if (holdPreparation || (holdCaseValidation && task.role === 'output-validator' && input.output.phase === 'case_design')) {
+  if ((holdRouteValidation && task.role === 'output-validator' && input.output?.phase === 'route_detail') || holdPreparation || (holdCaseValidation && task.role === 'output-validator' && input.output.phase === 'case_design')) {
     await new Promise(resolve => {
       releasePreparation = resolve;
       if (task.signal.aborted) resolve();
@@ -61,7 +62,9 @@ async function modelCall(task) {
     { id: 'Q-02', description: 'Onde consultar a observação persistida?', requirementIds: ['US-02'], ruleIds: ['CA-03'], caseIds: [], blocking: true, sources: [source(5)] },
   ].filter(item => !answer(item.id));
   const resolvedRules = ['Q-01', 'Q-02'].flatMap((id, index) => answer(id) ? [`CA-0${index + 2}`] : []);
-  const payload = task.role === 'artifact-curator' ? {
+  const payload = task.task === 'detail-test-routes' ? { routes: input.approvedCases.payload.testCases.map((item, index) => ({
+    caseId: item.id, pathId: index === 0 ? 'percurso-reservas' : null,
+    reason: index === 0 ? null : 'O mapa não identifica o percurso de consulta da observação.' })) } : task.role === 'artifact-curator' ? {
     requirements: [
       { id: 'US-01', statement: 'Reservar itens.', sources: [source(1)],
         rules: [{ id: 'CA-01', statement: 'Quantidade inteira de 1 a 10.', sources: [source(2)] }] },
@@ -225,8 +228,8 @@ async function api(context, path, accountId) {
   assert.equal(response.status(), 200, `Consulta real ${path}`);
   return response.json();
 }
-async function noMarkup() {
-  assert.equal(await page.locator('img, svg[data-smoke]').count(), 0, 'Conteúdo recebido deve ser texto.');
+async function noMarkup(scope = page) {
+  assert.equal(await scope.locator('img, svg[data-smoke]').count(), 0, 'Conteúdo recebido deve ser texto.');
   assert.equal(await page.evaluate(() => globalThis.smokeInjected), undefined);
 }
 async function screenshot(filename, width) {
@@ -1301,7 +1304,6 @@ try {
   assert.equal((await foreignLogin).status(), 200);
   const foreignEvidence = await foreignContext.request.get(`/api/runs/run-mapping-smoke/evidence/${mapping.observations[0].assetId}`, { headers: { 'X-Expected-User-Id': other.id } });
   assert.equal(foreignEvidence.status(), 404, 'evidência isolada de outras contas');
-  await foreignContext.close();
   // Persistência após recarregar, incluindo nova busca das capturas.
   await page.reload();
   await bodyIncludes('Mapa validado — aguardando detalhamento dos percursos.');
@@ -1316,9 +1318,57 @@ try {
   assert.ok(readyHistory.items.some(item => item.id === mappingId), 'ready/mapping no filtro de histórico');
   assert.equal(visualCalls, 2, 'uma produção e uma validação visual');
   checked.push('T8.2: mapear aplicação pelo site com sessões visuais substituídas → 202 → mapa validado em ready/mapping → telas, transições, caminhos, pendências, limitações, ações e capturas por blob → evidência isolada entre contas → persistência após recarregar');
+
+  // T6.3 — a associação é simulada; API, interface, persistência e isolamento são reais.
+  const beforeRoutes = await store.read(mappingId);
+  await page.goto('/execucoes/' + mappingId);
+  await bodyIncludes('a associação de percursos é uma etapa separada');
+  await bodyIncludes('Casos lógicos — mapa disponível, aguardando associação dos percursos.');
+  holdRouteValidation = true;
+  const detailPost = page.waitForResponse(response => response.url().endsWith(`/api/runs/${mappingId}/continue`));
+  await page.getByRole('button', { name: 'Detalhar percursos', exact: true }).click();
+  assert.equal((await detailPost).status(), 202);
+  await bodyIncludes('Validando as associações de percursos');
+  const provisionalRoutes = await api(context, `/api/runs/${mappingId}`, owner.id);
+  assert.equal(provisionalRoutes.routeDetail.ready, false);
+  assert.equal(await page.getByText('Percursos validados — aguardando execução dos testes', { exact: true }).count(), 0);
+  holdRouteValidation = false; releasePreparation();
+  await bodyIncludes('Percursos validados — aguardando execução dos testes');
+  await bodyIncludes('Casos aprovados. Consulte o detalhamento e suas pendências abaixo.');
+  const detailed = await api(context, `/api/runs/${mappingId}`, owner.id);
+  assert.equal(detailed.status, 'ready'); assert.equal(detailed.phase, 'route_detail');
+  assert.equal(detailed.canDetailRoutes, false); assert.equal(detailed.routeDetail.ready, true);
+  assert.equal(detailed.routeDetail.payload.testCases.length, detailed.cases.payload.testCases.length);
+  assert.ok(detailed.routeDetail.payload.pending.length > 0, 'pendências localizadas permanecem');
+  const afterRoutes = await store.read(mappingId);
+  assert.deepEqual(afterRoutes.run.outputs.slice(0, -1), beforeRoutes.run.outputs);
+  assert.deepEqual(afterRoutes.run.approvals, beforeRoutes.run.approvals);
+  const casePanel = page.locator('section.panel').filter({ has: page.getByRole('heading', { name: 'Casos de teste', exact: true }) });
+  await casePanel.locator('details').first().locator('summary').click();
+  await bodyIncludes('entrar → Início'); await bodyIncludes('abrir-reservas → Reservas');
+  const pendingCaseIndex = detailed.cases.payload.testCases.findIndex(item => item.id === detailed.routeDetail.payload.pending[0].caseId);
+  await casePanel.locator('details').nth(pendingCaseIndex).locator('summary').click();
+  await bodyIncludes('O mapa não identifica o percurso de consulta da observação.');
+  // Capturas legítimas do mapa continuam na página; os novos painéis são texto.
+  await noMarkup(casePanel);
+  await noMarkup(page.locator('section.panel').filter({ has: page.getByRole('heading', { name: 'Detalhamento dos percursos', exact: true }) }));
+  await screenshot('19-percursos-desktop.png', 1366);
+  await screenshot('20-percursos-mobile.png', 390);
+  await page.reload(); await bodyIncludes('Percursos validados — aguardando execução dos testes');
+  const persistedRoutes = await api(context, `/api/runs/${mappingId}`, owner.id);
+  assert.deepEqual(persistedRoutes.routeDetail, detailed.routeDetail);
+  const repeatRoutes = await context.request.post(`/api/runs/${mappingId}/continue`, {
+    headers: { Origin: origin, 'X-Expected-User-Id': owner.id },
+    data: { outputId: mapping.mapping.id, outputRevision: mapping.mapping.revision } });
+  assert.equal(repeatRoutes.status(), 200);
+  const foreignRoutes = await foreignContext.request.get(`/api/runs/${mappingId}`, { headers: { 'X-Expected-User-Id': other.id } });
+  assert.equal(foreignRoutes.status(), 404);
+  await foreignContext.close();
+  assert.equal(await page.getByRole('button', { name: 'Executar testes', exact: true }).count(), 0);
+  checked.push('T6.3: detalhar pela interface → andamento/provisório → percursos validados e pendências por caso → snapshots/aprovações preservados → recarga/idempotência/isolamento → desktop e mobile');
   }
   await regressions(origin, store, owner, other);
-  result = { status: 'passed', scope: 'T2.1/T4.1/T6.1/T6.2/T8.1 — navegador, API, coordenador e persistência reais; chamada de modelo substituída, sem inferência paga', checked,
+  result = { status: 'passed', scope: 'T2.1/T4.1/T6.1/T6.2/T8.1/T8.2/T6.3 — navegador, API, coordenador e persistência reais; chamada de modelo substituída, sem inferência paga', checked,
     node: process.versions.node, chromium: browser.version(), durationMs: Date.now() - started };
 } catch (error) {
   result = { status: 'failed', checked, error: error.message, pageUrl: page?.url(), durationMs: Date.now() - started };

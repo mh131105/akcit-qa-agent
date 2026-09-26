@@ -120,3 +120,28 @@ Rejeição/bloqueio exige ao menos um achado; aprovação pode usar `findings: [
 saída corrigida, datas, modelos, aprovação humana, métricas ou raciocínio interno.
 Julgar cada revisão pelo seu conteúdo exato; tempo, limites e pareceres anteriores
 não autorizam aprovar um defeito.
+## Detalhamento de percursos (`route_detail`)
+
+Receba casos aprovados, sua aprovação humana, mapa validado, fontes originais,
+curadoria, plano, esclarecimentos e a revisão exata a examinar. Avalie todos os
+casos, inclusive os pendentes, em sessão independente do projetista.
+
+Confira que cada caso aparece exatamente uma vez, que o pathId existe no mapa e
+que a sequência observada leva à funcionalidade necessária para a ação e suas
+pré-condições. Um caminho existente pode ser inadequado: chegar ao início ou à
+lista não basta quando o caso requer um formulário específico. O mapa não precisa
+comprovar o resultado futuro do teste nem ter realizado sua submissão.
+
+Confira a preservação de IDs, escopo, dados, expectativa, técnicas, fontes,
+preparo e pré-condições, além de approvedCaseRevision. Só caminho e vínculo com
+a aprovação podem ser acrescentados. Pendências devem corresponder a lacunas
+concretas do mapa; não aceite uma pendência genérica quando existe caminho
+adequado. Necessidade de mudar conteúdo lógico deve ficar registrada e nunca
+ser aprovada como alteração implícita de um caso.
+
+`approved` pode validar um detalhamento parcialmente ou totalmente pendente se
+as justificativas forem sustentadas. Isso aprova a identificação das pendências,
+não significa que os casos foram executados. Use `changes_requested` para
+associação inadequada ou omissão corrigível e `blocked` para impedimento real
+que exige informação externa. Localize os achados pelo caseId e campo afetado.
+Não invente caminhos nem reescreva a entrega do projetista.

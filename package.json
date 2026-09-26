@@ -18,6 +18,7 @@
     "smoke:target": "node scripts/smoke-target.mjs",
     "smoke:mapping": "node scripts/smoke-mapping.mjs",
     "eval:mapping:real": "node scripts/eval-mapping-real.mjs",
+    "eval:routes:real": "node scripts/eval-mapping-real.mjs --with-route-detail",
     "pi": "pi"
   },
   "dependencies": {

@@ -18,8 +18,9 @@ Consulte a matriz completa em [OPERACAO.md](../docs/OPERACAO.md#matriz-de-distri
 - `test-executor/` (T8.2): [mapeamento visual da aplicação](test-executor/skills/map-application/SKILL.md) com sessão Pi exclusiva do papel e ferramentas próprias ([browser.mjs](test-executor/tools/browser.mjs)): observar tela, mover/clicar, teclado/rolagem e preenchimento privado de credenciais. Opera com `deepseek-flash` / `high`. Sem shell, sem leitura de código, sem seletores DOM, sem chamadas à API do alvo: só visão, cursor e teclado.
 - `output-validator/` (perfil visual, T8.2): [validação do mapa de navegação](output-validator/skills/validate-navigation/SKILL.md) em sessão independente, recebendo as próprias imagens referenciadas. Opera com `deepseek-flash` / `high`; o perfil textual acima permanece em Pro/high.
 
+- `test-designer/` (T6.3): [detalhar percursos](test-designer/skills/detail-test-routes/SKILL.md), com `deepseek-v4-pro` / `high`. Devolve apenas associações; o backend copia os casos aprovados, registra pendências e preserva os campos lógicos. O `output-validator` textual revisa cada associação com Pro/high em sessão independente.
+
 ### Agentes e etapas planejadas (futuras)
-- `test-designer/` (em `route_detail`): associará percursos observados no mapa aos casos aprovados, operando com `deepseek-v4-pro` / `high`, preservando integralmente os campos já validados e aprovados.
 - `report-writer/`: consolidação de resultados validados e referências a evidências em relatório textual, operando com `deepseek-flash` / `low`. Novas interpretações de comportamento não pertencem ao redator e devem retornar às etapas técnicas correspondentes.
 
 > **Ressalva factual:** A preparação textual e o mapeamento visual com validação independente estão implementados (T8.2); o ensaio com modelo real permanece restrito ao ambiente operado, e a qualidade da execução de testes e do relatório ainda não está comprovada.
@@ -40,10 +41,10 @@ execução deve manter contexto e evidências próprios. O executor terá um nav
 por sessão; especialistas não devem disputar o mesmo cursor.
 
 O backend seleciona uma única skill por tarefa em lista fechada: `artifact-curator`
-com `curate-artifacts`; `test-designer` com `create-test-plan` ou `create-test-cases`;
+com `curate-artifacts`; `test-designer` com `create-test-plan`, `create-test-cases` ou `detail-test-routes`;
 `output-validator` com `validate-output` (textual) ou `validate-navigation` (visual);
 `test-executor` com `map-application`. Papel e tarefa incompatíveis são recusados;
-caminhos não vêm do cliente. As duas tarefas do designer reutilizam o mesmo modelo.
+caminhos não vêm do cliente. As tarefas do designer reutilizam o mesmo modelo.
 Cada produção/validação textual usa uma sessão Pi nova por
 tentativa, modelo configurado sem fallback e nenhuma tool de terminal, escrita ou
 navegador. O fluxo visual usa sessão própria com `customTools` do SDK: apenas as
@@ -54,7 +55,7 @@ teste**; aprovar não chama os modelos. T6.1 entrega os casos em `awaiting_appro
 e T6.2 implementa a aprovação humana e a solicitação de alterações sobre o conjunto validado,
 mantendo a espera. T8.2 entrega o mapeamento validado: **Mapear aplicação** após as duas
 aprovações humanas e o acesso configurado; o mapa aprovado termina em `ready/mapping` e o
-detalhamento dos percursos, a execução e o relatório continuam pendentes. O ajuste de 24/09
+T6.3 acrescenta `route_detail` validado; execução e relatório continuam pendentes. O ajuste de 24/09
 acrescenta respostas rastreáveis e retomada explícita da preparação: originais
 permanecem intactos, respostas viram fontes, revisões e aprovações antigas ficam
 históricas. Pergunta pode bloquear uma regra sem bloquear toda a história; novas
@@ -70,3 +71,5 @@ A demonstração anterior permanece em [T4.1](../docs/evidencias/t4.1/README.md)
 a avaliação da versão atual está em
 [ajuste de entradas](../docs/evidencias/ajuste-entradas/README.md). A demonstração de
 casos tem registro próprio em [T6.1](../docs/evidencias/t6.1/README.md).
+
+Decisão de 26/09/2026: o relatório do protótipo usará capturas ligadas a caso e tentativa; vídeos são evolução futura. Capturas do mapa não comprovam testes executados.

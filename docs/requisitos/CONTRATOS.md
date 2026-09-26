@@ -72,7 +72,7 @@ Os nomes internos são mantidos; não exigem um template de US/CA na entrada.
 | Resposta (`answer`) | `questionId`, `revision`, `actorId`, `at`, `text`, `affectedCaseIds` |
 | Tentativa (`attempt`) | `id`, `status`, `verdict`, `setupObservation`, `events`, `observed`, `evidenceIds`, `evidenceGaps`, `reason` |
 | Resultado (`result`) | `caseId`, `verdict`, `attempts`, `reason` |
-| Evidência (`evidence`) | `id`, `caseId`, `attemptId`, `kind`, `capture`, `assetId`; intervalo para vídeo |
+| Evidência (`evidence`) | `id`, `caseId`, `attemptId`, `kind`, `capture`, `assetId`; no protótipo, `kind: "screenshot"` |
 | Relatório (`report`) | `summary`, `limitations`, referências a casos, resultados e evidências |
 | Saída (`output`) | `id`, `phase`, `producer`, `revision`, `budgetCycleId`, `dependsOn`, `answerRefs`, `payload` |
 | Parecer (`validation`) | `id`, `outputId`, `outputRevision`, `validator`, `status`, `findings`, `reason` |
@@ -108,8 +108,8 @@ justificada. Cobertura planejada, cobertura executada e aprovação são medidas
 | `curation` | `{requirements, questions}` | Validador aprova |
 | `planning` | `{testPlan}` | Validador e usuário aprovam o plano |
 | `case_design` | `{testCases}`; `pathId: null` | Validador e usuário aprovam os casos lógicos |
-| `mapping` | `{navigation}` | Acesso confirmado; validador aprova o mapa |
-| `route_detail` | `{testCases}` com caminho e `approvedCaseRevision` | Validador aprova e backend confere preservação dos campos aprovados |
+| `mapping` | `{accessRevision, authentication, map, pending, limitations}` | Acesso confirmado; validador aprova o mapa |
+| `route_detail` | `{testCases, pending}` com caminho ou pendência e `approvedCaseRevision` | Validador aprova e backend confere preservação dos campos aprovados |
 | `execution` | `{results, evidence}` | Validador aprova as conclusões publicáveis |
 | `report` | `{report}` | Validador aprova antes da publicação |
 
@@ -142,7 +142,9 @@ Uma decisão antiga nunca libera uma revisão nova.
 Em `route_detail`, cada caso tem `approvedCaseRevision: {outputId, revision}` apontando
 para o conjunto lógico aprovado. O backend compara IDs, escopo (`requirementIds`,
 `ruleIds`), pré-condições, preparação (`setup`), dados, técnicas, expectativa e fontes
-com aquele snapshot. Apenas `pathId` e a referência à aprovação são acrescentados.
+com aquele snapshot. Apenas `pathId` e a referência à aprovação são acrescentados. O modelo retorna
+somente `{routes: [{caseId, pathId, reason}]}`; o backend copia os casos
+aprovados. Um `pathId: null` exige motivo em `pending: [{caseId, reason}]`.
 Mudança material retorna a `case_design`, nova validação e aprovação humana; se afetar
 o plano, este também é revisado. Não é necessário introduzir hash ou outro serviço.
 
@@ -1502,11 +1504,11 @@ O envio de `POST` reconfere todas as regras independentemente de `canDecideCases
 Estas regras ficam definidas no contrato agora e serão implementadas junto de cada etapa correspondente:
 
 - **Projetista em `route_detail`:** recebe o mapa estruturado e validado. Usa Pro (`deepseek-v4-pro` com raciocínio `high`) para associar percursos aos casos, preservando os campos já aprovados (IDs, escopo, pré-condições, preparação, dados, técnicas, expectativa e fontes).
-- **Executor:** usa Flash (`deepseek-flash` com raciocínio `high`) tanto no mapeamento quanto na execução. As ferramentas realizam cliques, capturas e gravações; o modelo decide as ações.
+- **Executor:** usa Flash (`deepseek-flash` com raciocínio `high`) tanto no mapeamento quanto na execução. As ferramentas realizam cliques e capturas; gravações são capacidade técnica para evolução futura; o modelo decide as ações.
 - **Validador visual:** continua sendo o mesmo papel `output-validator`, com sessão independente e perfil Flash/high (`deepseek-flash`). Recebe fontes, saída sob revisão e evidências pertinentes (capturas de tela), não apenas a descrição do executor.
 - **Validador textual:** usa Pro/high (`deepseek-v4-pro`). Na revisão do relatório, confere fidelidade aos resultados e referências previamente validados.
 - **Conclusão que exige imagem:** deve obrigatoriamente passar pela validação visual. Um parecer textual não pode declarar que examinou uma imagem.
-- **Vídeos:** permanecem evidências para o usuário. Para análise automática pelo validador, utilizam-se capturas ou quadros identificados por instante, sem pressupor suporte nativo a arquivos de vídeo.
+- **Vídeos (evolução futura, decisão de 26/09/2026):** não são requisito do protótipo. Capturas são as evidências exigidas no relatório. Para análise automática pelo validador, utilizam-se capturas ou quadros identificados por instante, sem pressupor suporte nativo a arquivos de vídeo.
 
 A seleção do perfil (textual vs visual) é realizada pelo backend conforme a tarefa e a fase; essa escolha não é delegada ao agente e não há validação recursiva.
 As aprovações e transições existentes permanecem estritamente preservadas. As fases futuras continuam desabilitadas até suas entregas: a política documentada não significa que já existam implementação ou evidências de funcionamento.
@@ -1789,6 +1791,69 @@ e exibe por `blob:` (CSP ajustada somente em `img-src`), revogando as URLs ao sa
 Sem fallback silencioso de modelo; indisponibilidade recusa o início com motivo.
 
 
+## Detalhamento de percursos validado — T6.3
+
+A decisão de 26/09/2026 usa capturas no relatório e adia vídeos. T6.3 implementa
+somente a associação dos casos aprovados ao mapa validado, sem navegador ou teste.
+
+`POST /api/runs/:id/continue` recebe `{outputId, outputRevision}` do **mapa**.
+O coordenador resolve a operação pela fase da saída: plano gera casos; casos com
+`expectedAccessRevision` geram mapa; mapa sem esse campo inicia detalhamento.
+Sessão, proprietário, `Origin`, `X-Expected-User-Id` e recusa de campos extras
+continuam obrigatórios. Primeiro aceite retorna 202; repetição do mesmo mapa e
+revisão retorna 200, inclusive após término, sem novas inferências. Reserva única
+é compartilhada com as etapas anteriores; ambiente ocupado preserva o mapa.
+
+A elegibilidade exige `ready / mapping`, tempo restante, curadoria/plano/casos
+vigentes, as duas aprovações humanas e mapa aprovado com acesso vigente. Confere
+referências, fontes, esclarecimentos, origem autorizada e autenticação observada.
+A intenção `detail_routes` e estado `running / route_detail` são persistidos
+antes de responder. Acesso, fontes, respostas, casos e mapa são reconferidos antes
+de salvar a saída, seu parecer e a transição final. Saída desatualizada não libera
+continuidade. Não existe retomada de `route_detail` nesta entrega.
+
+Projetista: `detail-test-routes`, mesmo perfil `PI_PLANNER_*` documentado
+(`deepseek-v4-pro` / `high`). Entrada: originais/esclarecimentos, curadoria, plano,
+casos aprovados/aprovação, mapa aprovado, pendências e achados da revisão anterior.
+Resposta estrita:
+
+```json
+{"routes":[{"caseId":"CT-01","pathId":"path-existing","reason":null},{"caseId":"CT-02","pathId":null,"reason":"Funcionalidade ausente no mapa observado."}]}
+```
+
+Cada caso aparece exatamente uma vez. Caminho preenchido existe no mapa e exige
+`reason: null`; ausência exige justificativa concreta de até 4000 caracteres.
+O modelo não devolve o conteúdo lógico. O backend constrói e compara
+estruturalmente `{testCases, pending}`, copiando os casos originais e acrescentando
+`pathId` e `approvedCaseRevision: {outputId, revision}`. `case_design` conserva
+`pathId: null`. Não há hash, dependência nova ou terceira aprovação humana.
+
+A saída contém `phase: route_detail`, `producer: test-designer`, `accessRevision`
+no envelope da saída, quatro `dependsOn` (curadoria, plano, casos, mapa) e
+`answerRefs` das fontes vigentes. Revisões são imutáveis e preservam ID da saída.
+O validador `validate-output`, com `PI_VALIDATOR_*` (Pro/high), recebe contexto
+próprio e verifica cada associação/pendência, adequação às ações e pré-condições,
+abrangência e preservação. Não abre navegador nem reavalia imagens do mapa.
+
+| Parecer/situação | Transição |
+| --- | --- |
+| `approved`, ao menos um caso com caminho | `ready / route_detail`; pendências dos outros permanecem |
+| `approved`, todos sem caminho | `awaiting_input / route_detail`, `ROUTES_PENDING` |
+| `blocked` | `awaiting_input / route_detail`, `VALIDATION_BLOCKED` |
+| `changes_requested` | Nova produção com achados, até três produções no total |
+| Falha técnica de validação | Até duas tentativas por revisão; erro nunca aprova |
+| Dependência alterada, limite, cancelamento ou reinício | Interromper/cancelar conforme causa, preservar histórico e impedir publicação tardia |
+
+120 s por chamada, 45 min ativos acumulados desde a preparação, espera humana
+fora da soma. A etapa compartilha os mesmos controles de cancelamento/recuperação.
+
+`GET /api/runs/:id` acrescenta `canDetailRoutes` e `routeDetail` (ou null), com
+ID/revisão, `current`, `ready`, dependências, casos, pendências e pareceres.
+`ready` exige saída vigente, parecer aprovado, estado `ready / route_detail` e
+pelo menos um caso associado. Conteúdo provisório/rejeitado/desatualizado mantém
+rótulo explícito. O painel apresenta nomes de telas e transições, referência aos
+casos aprovados e pendências junto dos casos. Não oferece execução funcional.
+
 ## Mapeamento, dúvidas e execução
 
 Tela: `{id, name, recognition}`. Transição: `{id, from, action, to}`. Caminho:
@@ -1841,6 +1906,7 @@ fase cuja saída está sendo conferida.
 
 | `run.status` | Significado |
 | --- | --- |
+| `ready` | Etapa validada aguardando continuidade (`mapping` ou `route_detail`); não significa teste executado |
 | `draft` | Configuração salva; processamento ainda não iniciado |
 | `running` | Uma tarefa está sendo processada |
 | `awaiting_approval` | Plano ou casos aguardam decisão humana |
@@ -1881,14 +1947,20 @@ Cada tentativa tem veredito e motivo próprios. Uma violação sustentada não d
 se outra tentativa passar; registrar a variação. Não tomar a última tentativa como
 verdade por padrão. Corrigir veredito sem suporte preserva a revisão rejeitada.
 
-Vídeos usam `kind: "video"`, `capture: "original" | "reproduction"`, `startMs`, `endMs`
-e `assetId`. Corte em arquivo próprio começa em zero. Reprodução ganha outra tentativa
-com `reproducesAttemptId`. Vídeos curtos mostram ação e resultado, em sucesso e falha.
-Falta de captura fica em `evidenceGaps`; não sustentar veredito sem evidência suficiente.
-Vídeo acessível por caso executado é exigido para a demonstração completa.
+**Evidência do protótipo — decisão de 26/09/2026:** screenshots usam
+`kind: "screenshot"`, `id`, `caseId`, `attemptId`, `capture: "original" | "reproduction"`
+e `assetId`. Identificam a tentativa e acompanham passos, esperado e observado.
+Captura do mapeamento não comprova execução. Falta de suporte fica em
+`evidenceGaps`; nenhuma aprovação se sustenta apenas na ausência de prova contrária.
+Capturas não podem expor credenciais ou informações sensíveis. Reprodução cria
+outra tentativa com `reproducesAttemptId`. Interface e PDF mantêm a mesma versão.
+
+**Contrato futuro de vídeo:** `kind: "video"`, `startMs`, `endMs` e `assetId`,
+com vínculo a caso/tentativa e captura original/reprodução. Vídeos curtos deixam
+de ser requisito de aceite do protótipo; infraestrutura de captura/FFmpeg permanece.
 
 Relatório relaciona US/CA, caso, esperado, observado, parecer e mídia; inclui bloqueados,
-inconclusivos e não executados. A página de impressão usa capturas representativas no lugar de vídeos, identifica a
+inconclusivos e não executados. A página de impressão usa as mesmas capturas representativas e conclusões da versão web, identifica a
 execução/versão e permite salvar em PDF pelo navegador, conforme RF-17. Relatório parcial só utiliza conclusões validadas e registros
 técnicos; não publica saída rejeitada como achado. Validá-lo não muda `interrupted`,
 `error` ou `cancelled` para `completed`. O progresso técnico permanece acessível mesmo
@@ -1898,7 +1970,7 @@ sem relatório. Cancelamento não dispara chamadas novas para produzir um relat�
 
 Esta seção descreve o contrato completo proposto do produto. Estão disponíveis
 as rotas de T3.2, criação/histórico de T3.3, início/cancelamento de T4.1,
-resposta/retomada da preparação de 24/09 e continuidade para casos de T6.1, nos
+resposta/retomada da preparação de 24/09, casos de T6.1, mapa de T8.2 e detalhamento de T6.3, nos
 limites documentados acima. A consulta individual entrega plano, casos, progresso,
 motivo e perguntas, incluindo `plan: null` e `cases: null` quando ausentes.
 As demais operações aguardam a integração correspondente.
@@ -1920,7 +1992,7 @@ internos nem segredos. Autenticação e cadastro seguem os RF do produto.
 | `POST /api/runs/:id/request-changes` | Registrar decisão sobre revisão exata e comentário para plano ou casos; análise do pedido de plano aguarda continuidade |
 | `POST /api/runs/:id/answer` | Implementado para questão da revisão atual da curadoria; demais etapas aguardam integração |
 | `POST /api/runs/:id/resume` | Implementado para reprocessar preparação com respostas novas, reserva e orçamento acumulado |
-| `POST /api/runs/:id/continue` | Implementado somente para gerar casos do plano validado e aprovado; recebe `{outputId, outputRevision}`, reserva e preserva orçamento |
+| `POST /api/runs/:id/continue` | Gera casos (referência do plano), mapa (referência dos casos + `expectedAccessRevision`) ou detalhamento (referência do mapa). Reserva única, idempotência e orçamento acumulado preservados. |
 | `POST /api/runs/:id/finish-with-pending` | Após casos elegíveis, registrar encerramento das pendências e gerar relatório sujeito à validação |
 | `POST /api/runs/:id/cancel` | Cancelar preservando os dados existentes |
 | `POST /api/runs/:id/duplicate` | Criar novo rascunho com cópia explícita de entradas |

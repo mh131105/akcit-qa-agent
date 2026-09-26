@@ -1014,6 +1014,68 @@ não entra no contexto dos agentes; ele serve apenas à avaliação externa.
   anteriores, ações com erro e aprovação contraditória de autenticação não
   liberam `ready`.
 
+## Detalhar percursos dos casos — T6.3
+
+Pré-condições: mapa validado em `ready / mapping`, casos/duas aprovações vigentes,
+acesso sem alterações desde o mapa e orçamento restante. Use **Detalhar percursos**
+na página da execução. O projetista existente e o validador textual usam os perfis
+`PI_PLANNER_*` e `PI_VALIDATOR_*` documentados: `deepseek-v4-pro` / `high`.
+
+A interface mostra geração e validação reais. Abra cada caso para consultar a
+sequência de telas/transições, referência à revisão aprovada e pendências. Um
+parecer aprovado com ao menos um caminho termina em **Percursos validados —
+aguardando execução dos testes**; todos pendentes ou parecer bloqueado aguardam
+entrada. A retomada dessa etapa ainda não está disponível. Não editar JSON para
+forçar avanço. Conteúdo provisório/rejeitado/desatualizado não autoriza execução.
+
+Decisão de 26/09/2026: relatório do protótipo com capturas por caso/tentativa,
+passos, esperado e observado; vídeos são evolução futura. A infraestrutura
+compartilhada permanece. T6.3 não executa testes nem gera relatório.
+
+### Verificação e ensaio real
+
+Com Node 24 e dependências do lockfile:
+
+```sh
+npm run check
+npm test
+npm run build
+npm run eval:routes:real -- --run
+```
+
+O último comando equivale a `node scripts/eval-mapping-real.mjs --with-route-detail --run`,
+com chamadas reais e pagas aos perfis existentes. Execute na imagem candidata com
+Chromium/Xvfb e credenciais privadas, como no ensaio de mapeamento. Informe
+`EVAL_HUMAN_DIR`, `EVAL_EVIDENCE_DIR`, `APP_REVISION`, `EVAL_IMAGE` e, opcionalmente,
+`EVAL_IMPLEMENTER` (padrão: Codex). Nenhuma chave ou decisão humana vai no Git.
+
+O ensaio cria seu próprio diretório privado com `mkdtemp`. **Ignora `DATA_DIR` para
+armazenamento de teste e nunca apaga o diretório da instância.** A limpeza só remove
+o diretório criado pelo próprio ensaio. Evidências exportadas ficam no diretório
+indicado e exigem revisão/sanitização antes de compartilhamento. O teste de
+isolamento confirma que um arquivo na instância permanece intacto.
+
+1. A jornada pela interface salva `awaiting-plan-<runId>.json` e
+   `awaiting-cases-<runId>.json`. Uma pessoa lê os conteúdos e grava os respectivos
+   `decision-plan-<runId>.json` e `decision-cases-<runId>.json` com
+   `{"decision":"approved","human":true,"reviewer":"nome da pessoa"}` ou recusa
+   com `changes_requested`. O implementador não fabrica essas decisões.
+2. Após **Detalhar percursos**, o roteiro confere chamadas reais Pro/high,
+   preservação de casos/aprovações e resultado após recarga; exporta a interface.
+3. Outro integrante confere `awaiting-routes-<runId>.json` contra casos/mapa e
+   grava `decision-routes-<runId>.json`, com os mesmos campos e
+   `negativeControl: {caseId, pathId, reason}`. Selecione um caminho que **já existe
+   no mapa**, mas é inadequado para o caso. A justificativa humana fica fora do
+   contexto do validador. Sem alternativa inadequada demonstrável, o controle fica
+   incompleto; não invente um caminho para fazê-lo passar.
+4. O controle negativo usa uma cópia estruturalmente válida, separada da jornada
+   normal e sem alterar a execução persistida. O validador precisa recusar e
+   localizar a associação. Aprovação incorreta ou revisão ausente falha o ensaio.
+
+`--skip-journey-a` não é aceito no ensaio de percursos. `eval:mapping:real` conserva
+seu escopo original e passa a usar o mesmo isolamento seguro. Os smokes continuam
+com modelos simulados explicitamente e não demonstram a qualidade semântica real.
+
 ## Referências
 
 - [SDK do Pi](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md)

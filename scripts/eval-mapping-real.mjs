@@ -16,6 +16,9 @@ import { createApp } from '../dist/app.js';
 import { readConfig, resolvePreparationModels, resolveVisualModels } from '../dist/config.js';
 import { RunStore } from '../dist/storage/runs.js';
 import { executeVisualTask } from '../dist/runtime/pi-visual.js';
+import { createEvaluationDirectory } from './eval-data.mjs';
+import { executeSpecialistTask } from '../dist/runtime/pi.js';
+import { buildRouteDetail } from '../dist/domain/route-detail.js';
 import { parseVerdict } from '../dist/domain/preparation.js';
 import { createDemoTarget } from './demo-target.mjs';
 
@@ -32,6 +35,11 @@ const PROFILES = {
   PI_VALIDATOR_VISUAL_PROVIDER: 'deepseek', PI_VALIDATOR_VISUAL_MODEL: 'deepseek-flash', PI_VALIDATOR_VISUAL_THINKING_LEVEL: 'high',
 };
 const env = { ...process.env, ...PROFILES };
+const withRouteDetail = process.argv.includes('--with-route-detail');
+if (withRouteDetail) {
+  assert.ok(process.env.EVAL_HUMAN_DIR, 'EVAL_HUMAN_DIR é obrigatório: plano, casos e associações exigem revisão humana real.');
+  assert.ok(!process.argv.includes('--skip-journey-a'), 'O ensaio T6.3 exige a jornada humana completa; --skip-journey-a não se aplica.');
+}
 const humanDir = process.env.EVAL_HUMAN_DIR ? resolvePath(process.env.EVAL_HUMAN_DIR) : null;
 const evidenceDir = resolvePath(process.env.EVAL_EVIDENCE_DIR ?? join(tmpdir(), 'akcit-eval-mapping-real-' + Date.now()));
 function resolvePath(path) { return path.startsWith('/') ? path : join(process.cwd(), path); }
@@ -42,13 +50,13 @@ const ACCOUNT = { name: 'Avaliador Real', email: 'eval-mapping@example.test', pa
 
 const report = {
   startedAt: new Date().toISOString(), sha: process.env.APP_REVISION ?? null,
-  image: process.env.EVAL_IMAGE ?? null, profiles: PROFILES, scenarios: [], failures: [],
+  image: process.env.EVAL_IMAGE ?? null, profiles: PROFILES, withRouteDetail,
+  implementer: process.env.EVAL_IMPLEMENTER ?? 'Codex', scenarios: [], failures: [],
 };
 const runs = new Map(); // runId -> { id, journey, review }
-const dataDir = resolvePath(env.DATA_DIR ?? join(tmpdir(), 'akcit-eval-mapping-' + Date.now()));
+// DATA_DIR da instância nunca é reutilizado nem removido pelo ensaio.
+const dataDir = await createEvaluationDirectory();
 const store = new RunStore(dataDir);
-await store.initialize();
-await rm(dataDir, { recursive: true, force: true });
 await store.initialize();
 const target = createDemoTarget({ port: 0, user: TARGET_USER, password: TARGET_PASSWORD, mode: 'reference' });
 target.server.listen(0, '127.0.0.1');
@@ -433,14 +441,17 @@ console.error('[eval-A] ' + 'A10 salvar');
         await page.getByText('Mapa validado — aguardando detalhamento dos percursos.', { exact: false }).first().waitFor({ timeout: 60_000 });
         await page.waitForFunction(() => {
           const image = document.querySelector('img[alt="Captura da tela observada"]');
+          image?.scrollIntoView();
           return image && image.complete && image.naturalWidth > 0 && image.src.startsWith('blob:');
         }, null, { timeout: 90_000 });
         await page.screenshot({ path: join(evidenceDir, 'ui-mapa-' + runId + '.png'), fullPage: true });
-        const finalReview = (await api('/api/runs/' + runId, undefined, sessionCookie, userId)).body;
+        let finalReview = (await api('/api/runs/' + runId, undefined, sessionCookie, userId)).body;
         assert.equal(finalReview.status, 'ready');
         assert.equal(finalReview.phase, 'mapping');
         assert.ok(!JSON.stringify(finalReview.mapping?.payload).includes('caseId'));
         assert.equal(target.reservations.length, 0);
+        if (withRouteDetail) finalReview = await routeJourney(page, runId, sessionCookie, userId, scenario);
+        scenario.finalStatus = finalReview.status; scenario.phase = finalReview.phase;
         recordRun(runId, scenario.name, finalReview);
         const exported = await exportRun(runId, sessionCookie, userId, 'jornada-interface');
         scenario.verdicts = finalReview.mapping?.validations ?? [];
@@ -463,6 +474,7 @@ console.error('[eval-A] ' + 'A10 salvar');
         }
       }
     }
+    if (withRouteDetail) return;
     // Jornada B: aprovações automatizadas, registradas como tal.
     console.error('[eval] inicio jornada B (automatizada)');
     const jornadaB = await fullJourney('jornada-completa-aprovacoes-automatizadas', 'automatizada (roteiro)');
@@ -474,6 +486,8 @@ console.error('[eval-A] ' + 'A10 salvar');
     if (approvedRunId) await validatorControls(approvedRunId);
   } finally {
     await browser.close();
+    await json(join(evidenceDir, 'report.json'), report);
+    if (report.failures.length) process.exitCode = 1;
   }
   await json(join(evidenceDir, 'report.json'), report);
   console.log(JSON.stringify({ event: 'eval-finished', evidenceDir, scenarios: report.scenarios.map(scenario => ({ name: scenario.name, error: scenario.error ?? null, finalStatus: scenario.finalStatus ?? scenario.blockedStatus ?? null })) }, null, 2));
@@ -488,14 +502,93 @@ async function waitForHumanDecision(decisionFile, timeoutMs = 30 * 60_000) {
   for (;;) {
     try {
       const decision = JSON.parse(await readFile(decisionFile, 'utf8'));
-      if (decision && typeof decision.decision === 'string') return decision;
-    } catch {}
+      if (decision && typeof decision.decision === 'string') {
+        if (withRouteDetail) {
+          assert.equal(decision.human, true, 'Identifique explicitamente a decisão humana.');
+          assert.ok(typeof decision.reviewer === 'string' && decision.reviewer.trim(), 'Registre o responsável humano.');
+        }
+        return decision;
+      }
+    } catch (error) { if (error?.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error; }
     if (Date.now() > deadline) throw new Error('Decisão humana não chegou em tempo: ' + decisionFile);
     await new Promise(resolve => setTimeout(resolve, 5000));
   }
 }
 
-await main();
-await app.shutdown();
-app.close(); app.closeAllConnections(); await once(app, 'close');
-if (target.server.listening) { target.server.close(); await once(target.server, 'close'); }
+/** Jornada normal, sem modificar saídas nem substituir chamadas de modelo. */
+async function routeJourney(page, runId, cookie, userId, scenario) {
+  const before = await store.read(runId);
+  const response = page.waitForResponse(response => response.url().endsWith(`/api/runs/${runId}/continue`));
+  await page.getByRole('button', { name: 'Detalhar percursos', exact: true }).click();
+  assert.equal((await response).status(), 202);
+  const review = await waitFor(runId, cookie, userId, item => item.status !== 'running', 'detalhamento validado');
+  assert.equal(review.status, 'ready', JSON.stringify(review.stopReason));
+  assert.equal(review.phase, 'route_detail'); assert.equal(review.routeDetail.ready, true);
+  await page.getByText('Percursos validados — aguardando execução dos testes', { exact: true }).waitFor({ timeout: 60_000 });
+  const after = await store.read(runId);
+  assert.deepEqual(after.run.outputs.filter(output => output.phase !== 'route_detail'), before.run.outputs);
+  assert.deepEqual(after.run.approvals, before.run.approvals);
+  const calls = after.run.preparation.calls.filter(call => call.phase === 'route_detail');
+  for (const role of ['test-designer', 'output-validator']) assert.ok(calls.some(call =>
+    call.role === role && call.provider === 'deepseek' && call.model === 'deepseek-v4-pro' && call.thinkingLevel === 'high' && call.status === 'completed'));
+  await page.reload();
+  await page.getByText('Percursos validados — aguardando execução dos testes', { exact: true }).waitFor({ timeout: 60_000 });
+  const casePanel = page.locator('section.panel').filter({ has: page.getByRole('heading', { name: 'Casos de teste', exact: true }) });
+  await casePanel.locator('details').first().locator('summary').click();
+  await page.screenshot({ path: join(evidenceDir, 'ui-percursos-' + runId + '.png'), fullPage: true });
+  const requestFile = join(humanDir, 'awaiting-routes-' + runId + '.json');
+  await json(requestFile, { runId, cases: review.cases, mapping: review.mapping, routeDetail: review.routeDetail,
+    instruction: 'Outro integrante deve conferir todas as associações e pendências. Registre human:true, reviewer e decision. Para o controle negativo, indique negativeControl:{caseId,pathId,reason} com um caminho EXISTENTE, porém inadequado. A justificativa não será enviada ao modelo.' });
+  console.log(JSON.stringify({ event: 'human-route-review-required', file: requestFile }));
+  const decision = await waitForHumanDecision(join(humanDir, 'decision-routes-' + runId + '.json'));
+  assert.equal(decision.decision, 'approved', 'revisão humana recusou os percursos');
+  assert.notEqual(decision.reviewer.trim(), report.implementer, 'outro integrante deve revisar as associações');
+  scenario.humanRoutes = decision; scenario.routeCalls = calls;
+  scenario.steps.push('percursos-validados-e-revisados-por-pessoa');
+  await exportRun(runId, cookie, userId, 'jornada-percursos');
+  await routeValidatorControl(after.run, decision.negativeControl);
+  return review;
+}
+
+/** Experimento controlado separado: associação adulterada nunca entra no RunStore. */
+async function routeValidatorControl(run, selection) {
+  const scenario = { name: 'T6.3-controle-negativo-associacao', controlledExperiment: true, error: null };
+  try {
+    const latest = phase => run.outputs.filter(output => output.phase === phase).at(-1);
+    const cases = latest('case_design'), mapping = latest('mapping'), detail = latest('route_detail');
+    assert.ok(selection?.caseId && selection?.pathId && selection?.reason, 'O revisor deve indicar um caminho existente e inadequado; sem essa seleção o controle fica incompleto.');
+    const current = detail.payload.testCases.find(item => item.id === selection.caseId);
+    assert.ok(current && current.pathId !== selection.pathId, 'A associação do controle deve diferir da original.');
+    assert.ok(mapping.payload.map.paths.some(path => path.id === selection.pathId), 'O controle exige um caminho existente no mapa real.');
+    const routes = detail.payload.testCases.map(item => ({ caseId: item.id,
+      pathId: item.id === selection.caseId ? selection.pathId : item.pathId,
+      reason: item.id === selection.caseId ? null : detail.payload.pending.find(pending => pending.caseId === item.id)?.reason ?? null }));
+    const payload = buildRouteDetail({ routes }, cases.payload, mapping.payload, { outputId: cases.id, revision: cases.revision });
+    const output = { ...detail, payload }; // contrato válido antes da inferência
+    const decision = run.approvals.find(item => item.outputId === cases.id && item.outputRevision === cases.revision);
+    const input = { task: 'validation', artifacts: [...run.artifacts, ...(run.answerArtifacts ?? [])], answers: run.answers,
+      approvedCuration: latest('curation'), approvedPlan: latest('planning'), approvedCases: cases,
+      caseApproval: decision, approvedMapping: mapping, pending: mapping.payload.pending,
+      output, previousOutput: null, previousVerdicts: [] };
+    const result = await executeSpecialistTask({ role: 'output-validator', task: 'validate-output',
+      model: resolvedText['output-validator'], ...(config.piAuthPath ? { authPath: config.piAuthPath } : {}),
+      prompt: JSON.stringify(input), signal: new AbortController().signal, timeoutMs: 120000 });
+    const verdict = parseVerdict(result.payload);
+    scenario.selection = selection; scenario.verdict = verdict; scenario.metadata = result.metadata;
+    await json(join(evidenceDir, 'controle-negativo-percursos.json'), { controlledExperiment: true, input, verdict, metadata: result.metadata, selection });
+    assert.ok(['changes_requested', 'blocked'].includes(verdict.status), 'O validador aprovou incorretamente a associação inadequada.');
+    const index = payload.testCases.findIndex(item => item.id === selection.caseId);
+    assert.ok(verdict.findings.some(item => item.location?.includes(selection.caseId) || item.location?.includes(`testCases[${index}]`) || item.location?.includes(`testCases/${index}`)), 'O parecer precisa localizar a associação inadequada.');
+  } catch (error) {
+    scenario.error = error.message;
+    report.failures.push({ scenario: scenario.name, error: scenario.error });
+    throw error;
+  } finally { report.scenarios.push(scenario); }
+}
+
+try { await main(); } finally {
+  await app.shutdown();
+  app.close(); app.closeAllConnections(); await once(app, 'close');
+  if (target.server.listening) { target.server.close(); await once(target.server, 'close'); }
+  await rm(dataDir, { recursive: true, force: true });
+}

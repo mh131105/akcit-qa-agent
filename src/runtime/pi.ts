@@ -5,7 +5,7 @@ import { createAgentSession, DefaultResourceLoader, ModelRuntime, SessionManager
 import type { AgentRole } from '../agents/registry.js';
 
 export type PreparationRole = 'artifact-curator' | 'test-designer' | 'output-validator';
-export type PreparationTask = 'curate-artifacts' | 'create-test-plan' | 'create-test-cases' | 'validate-output';
+export type PreparationTask = 'curate-artifacts' | 'create-test-plan' | 'create-test-cases' | 'detail-test-routes' | 'validate-output';
 export type ThinkingLevel = 'off' | 'low' | 'high';
 export interface SpecialistModel {
   provider: string;
@@ -42,7 +42,7 @@ export class SpecialistError extends Error {
 export const projectRoot = fileURLToPath(new URL('../../', import.meta.url));
 const permittedTasks: Record<PreparationRole, readonly PreparationTask[]> = {
   'artifact-curator': ['curate-artifacts'],
-  'test-designer': ['create-test-plan', 'create-test-cases'],
+  'test-designer': ['create-test-plan', 'create-test-cases', 'detail-test-routes'],
   'output-validator': ['validate-output'],
 };
 

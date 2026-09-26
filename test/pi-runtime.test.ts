@@ -125,7 +125,7 @@ test('runtime usa sessão própria sem tools, histórico, retries ou compactaç�
 test('tarefas de plano, casos e validação carregam uma única skill em sessões separadas', async t => {
   t.mock.method(ModelRuntime.prototype, 'getAuth', async () => ({ auth: { apiKey: 'fake-never-sent' } }));
   const sessions: string[] = [];
-  const expectedSkills = ['create-test-plan', 'create-test-cases', 'validate-output'];
+  const expectedSkills = ['create-test-plan', 'create-test-cases', 'detail-test-routes', 'validate-output'];
   t.mock.method(AgentSession.prototype, 'prompt', async function (this: AgentSession) {
     const selected = expectedSkills[sessions.length]!;
     sessions.push(this.sessionId);
@@ -135,13 +135,16 @@ test('tarefas de plano, casos e validação carregam uma única skill em sessõe
     }
     assert.deepEqual(this.messages, []);
     assert.deepEqual(this.getActiveToolNames(), []);
-    assert.equal(this.model?.id, selection.model);
+    assert.equal(this.model?.id, selected === 'detail-test-routes' ? 'deepseek-v4-pro' : selection.model);
+    if (selected === 'detail-test-routes') assert.equal(this.thinkingLevel, 'high');
     answer(this, '{"synthetic":true}');
   });
   await executeSpecialistTask({ ...task(), role: 'test-designer', task: 'create-test-plan' });
   await executeSpecialistTask({ ...task(), role: 'test-designer', task: 'create-test-cases' });
+  await executeSpecialistTask({ ...task(), role: 'test-designer', task: 'detail-test-routes',
+    model: { provider: 'deepseek', model: 'deepseek-v4-pro', thinkingLevel: 'high' } });
   await executeSpecialistTask({ ...task(), role: 'output-validator', task: 'validate-output' });
-  assert.equal(new Set(sessions).size, 3);
+  assert.equal(new Set(sessions).size, 4);
 });
 
 test('runtime recusa tarefa incompatível, ausente ou caminho arbitrário antes de acessar modelos', async t => {
@@ -150,6 +153,7 @@ test('runtime recusa tarefa incompatível, ausente ou caminho arbitrário antes 
   for (const input of [
     { ...task(), role: 'test-designer', task: 'validate-output' },
     { ...task(), role: 'output-validator', task: 'create-test-cases' },
+    { ...task(), role: 'artifact-curator', task: 'detail-test-routes' },
     { ...task(), task: '../../../private/SKILL.md' },
     { ...task(), task: undefined },
     { ...task(), role: '__proto__' },
