@@ -348,9 +348,14 @@ try {
   });
   const fixtureTool = name => fixtureSession.tools.find(item => item.name === name);
   // Aba principal permanece; aba extra aberta pelo alvo é bloqueada.
+  await waitForPaint(fixtureSession.page);
   const popupPoint = await screenPoint(fixtureSession.page, '#popup');
-  await fixtureTool('pointer').execute('smoke-popup', { action: 'click', x: popupPoint.x, y: popupPoint.y }, undefined);
-  await fixtureSession.page.waitForTimeout(300);
+  const [popup] = await Promise.all([
+    fixtureSession.page.context().waitForEvent('page', { timeout: 10_000 }),
+    fixtureTool('pointer').execute('smoke-popup', { action: 'click', x: popupPoint.x, y: popupPoint.y }, undefined),
+  ]);
+  if (!popup.isClosed()) await popup.waitForEvent('close', { timeout: 10_000 });
+  assert.equal(fixtureSession.page.isClosed(), false, 'a aba principal continua aberta');
   assert.equal(fixtureSession.page.context().pages().length, 1, 'aba principal permanece aberta e aba extra é bloqueada');
   checked.push('aba-principal-permanece-popup-bloqueado');
   // Cliques atingem alvos pequenos em posições distintas usando coordenadas da captura.

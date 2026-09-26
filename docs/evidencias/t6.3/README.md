@@ -92,6 +92,18 @@ ffmpeg/x11grab, com a mesma exigência de tamanho e os mesmos cliques/capturas.
 Não houve alteração do navegador do produto. O resultado do candidato corrigido
 é registrado nos checks do PR.
 
+Na [execução seguinte](https://github.com/mh131105/akcit-qa-agent/actions/runs/36259899610),
+a captura passou e o roteiro avançou até a verificação de popup. A espera fixa de
+300 ms encontrou duas abas antes de terminar o fechamento. O smoke agora aguarda
+a abertura e o fechamento reais, com prazo de 10 s, e exige tanto a aba principal
+aberta quanto exatamente uma aba no contexto. A proteção do produto é preservada.
+
+Durante o trabalho, Matheus publicou `edb9c10`, preservando os dados privados e
+exportando evidências de ensaios com falha. Essa atualização foi incorporada sem
+sobrescrita e acrescenta um teste, totalizando 228 no candidato; o resultado
+atualizado está nos checks do PR. Os 227 da tabela correspondem à execução local
+anterior a essa integração.
+
 ### Capturas e comando local
 
 Conteúdo e respostas de modelo sintéticos, sem documentos privados. O navegador,

@@ -1054,6 +1054,9 @@ armazenamento de teste e nunca apaga o diretório da instância.** A limpeza só
 o diretório criado pelo próprio ensaio. Evidências exportadas ficam no diretório
 indicado e exigem revisão/sanitização antes de compartilhamento. O teste de
 isolamento confirma que um arquivo na instância permanece intacto.
+Em falha, os dados temporários privados são preservados para diagnóstico e seu
+caminho é registrado no relatório; a limpeza automática ocorre somente no sucesso.
+Esse diretório privado não deve ser publicado.
 
 1. A jornada pela interface salva `awaiting-plan-<runId>.json` e
    `awaiting-cases-<runId>.json`. Uma pessoa lê os conteúdos e grava os respectivos
