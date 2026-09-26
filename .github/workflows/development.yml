@@ -55,6 +55,37 @@ jobs:
           --tmpfs /home/node:rw,size=128m,uid=1000,gid=1000,mode=0700
           --tmpfs /data:rw,size=128m,uid=1000,gid=1000,mode=0700
           "$IMAGE" node scripts/smoke-runtime.mjs
+      - name: Verificar jornada web antes de publicar
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
+        run: |
+          mkdir -p artifacts/web
+          chmod 777 artifacts/web
+          docker run --rm --cpus=1 --memory=2g --shm-size=512m \
+            --cap-drop=ALL --security-opt=no-new-privileges --read-only \
+            --tmpfs /tmp:rw,size=512m,mode=1777 \
+            --tmpfs /home/node:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+            --tmpfs /data:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+            -e SMOKE_ARTIFACT_DIR=/evidence -v "$PWD/artifacts/web:/evidence" \
+            "$IMAGE" node scripts/smoke-web.mjs
+      - name: Verificar execução visual antes de publicar
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
+        run: >-
+          docker run --rm --cpus=1 --memory=2g --shm-size=512m
+          --cap-drop=ALL --security-opt=no-new-privileges --read-only
+          --tmpfs /tmp:rw,size=512m,mode=1777
+          --tmpfs /home/node:rw,size=128m,uid=1000,gid=1000,mode=0700
+          --tmpfs /data:rw,size=128m,uid=1000,gid=1000,mode=0700
+          "$IMAGE" node scripts/smoke-execution.mjs
+      - name: Evidências sintéticas da interface
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: web-smoke-development
+          path: artifacts/web/
+          if-no-files-found: ignore
+          retention-days: 14
       - id: publish
         name: Publicar imagem imutável
         env:

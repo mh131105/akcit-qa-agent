@@ -4,6 +4,7 @@ COPY package*.json ./
 RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
+COPY agents ./agents
 RUN npm run build
 
 FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS runtime
@@ -17,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=dependencies /app/dist ./dist
+COPY --from=dependencies /app/src/web ./src/web
 COPY package*.json ./
 COPY scripts ./scripts
 COPY agents ./agents

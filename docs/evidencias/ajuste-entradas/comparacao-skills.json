@@ -1,0 +1,2331 @@
+{
+  "synthetic": true,
+  "baselineCommit": "638ab7de3a8e49a70775b3a5a7fd48f54f0cdaaa",
+  "runtimeSha256": "76d96e14a5ad999a22b6429ee6db59d65f694907cc619f3b7a491dae397da2b5",
+  "skillHashes": {
+    "old_skill": {
+      "artifact-curator": "1a16c95424ee04e15abe491ab56fb35aa84539a218efa9ddb3430b34656513f9",
+      "test-designer": "eac43c23fd4135db14898e0028053da46e12e356741ec2db34b41be75b8e681c",
+      "output-validator": "eb2634f09aa475f7b1a006208e830082baa701ffb3d4a7194baf80eb043fe860"
+    },
+    "with_skill": {
+      "artifact-curator": "a2e95e22cdde6704cab6d9db8580dac5aa3da65f7506b3dbdfaf1698e98da91e",
+      "test-designer": "26bf51b29136731ccab88ab6ee086cd627ebdc9c0532ab5826cdb901d6379035",
+      "output-validator": "bafe8b27ee505a086465429ff1b786d5a0fdd1d530acc74da7cd2efc5798d67e"
+    }
+  },
+  "models": {
+    "artifact-curator": {
+      "provider": "openai-codex",
+      "model": "gpt-6-astra"
+    },
+    "test-designer": {
+      "provider": "openai-codex",
+      "model": "gpt-6-astra"
+    },
+    "output-validator": {
+      "provider": "openai-codex",
+      "model": "gpt-6-astra"
+    }
+  },
+  "recordedAt": "2026-09-24T16:56:02.168Z",
+  "results": [
+    {
+      "id": "prosa-completa",
+      "variant": "old_skill",
+      "role": "artifact-curator",
+      "input": {
+        "task": "curation",
+        "artifacts": [
+          {
+            "id": "artifact-1",
+            "name": "material.txt",
+            "version": "1",
+            "text": "Como bibliotecária, quero renovar empréstimos.\nUm empréstimo pode ser renovado até duas vezes, desde que não exista reserva pendente para o livro. Se essas condições forem atendidas, a renovação acrescenta sete dias à data de devolução. Caso contrário, a renovação é recusada e a data não muda."
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "previousOutput": null,
+        "feedback": null
+      },
+      "payload": {
+        "requirements": [
+          {
+            "id": "US-01",
+            "statement": "Como bibliotecária, quero renovar empréstimos.",
+            "rules": [
+              {
+                "id": "CA-01",
+                "statement": "Um empréstimo pode ser renovado até duas vezes, desde que não exista reserva pendente para o livro.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L2",
+                    "quote": "Um empréstimo pode ser renovado até duas vezes, desde que não exista reserva pendente para o livro."
+                  }
+                ]
+              },
+              {
+                "id": "CA-02",
+                "statement": "Quando as condições de limite de renovações e ausência de reserva pendente forem atendidas, a renovação acrescenta sete dias à data de devolução.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L2",
+                    "quote": "Se essas condições forem atendidas, a renovação acrescenta sete dias à data de devolução."
+                  }
+                ]
+              },
+              {
+                "id": "CA-03",
+                "statement": "Quando as condições para renovar não forem atendidas, a renovação é recusada e a data de devolução não muda.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L2",
+                    "quote": "Caso contrário, a renovação é recusada e a data não muda."
+                  }
+                ]
+              }
+            ],
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L1",
+                "quote": "Como bibliotecária, quero renovar empréstimos."
+              }
+            ]
+          }
+        ],
+        "questions": []
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 13898,
+        "usage": {
+          "input": 1110,
+          "output": 389,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 1499
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Preservar duas renovações, condição de ausência de reserva, sete dias e recusa sem mudar data. Sem dúvida bloqueante por falta de CA rotulado.",
+            "passed": true,
+            "evidence": "outputs/result.json: payload.requirements[0].rules CA-01 conserva até duas renovações e ausência de reserva; CA-02 acrescenta sete dias; CA-03 recusa sem mudar data. questions=[]; não exige rótulo CA na entrada."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        }
+      }
+    },
+    {
+      "id": "prosa-completa",
+      "variant": "with_skill",
+      "role": "artifact-curator",
+      "input": {
+        "task": "curation",
+        "artifacts": [
+          {
+            "id": "artifact-1",
+            "name": "material.txt",
+            "version": "1",
+            "text": "Como bibliotecária, quero renovar empréstimos.\nUm empréstimo pode ser renovado até duas vezes, desde que não exista reserva pendente para o livro. Se essas condições forem atendidas, a renovação acrescenta sete dias à data de devolução. Caso contrário, a renovação é recusada e a data não muda."
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "previousOutput": null,
+        "feedback": null
+      },
+      "payload": {
+        "requirements": [
+          {
+            "id": "RF-01",
+            "statement": "Permitir à bibliotecária renovar empréstimos conforme o limite de renovações e a ausência de reserva pendente.",
+            "rules": [
+              {
+                "id": "CA-01",
+                "kind": "rule",
+                "statement": "Um empréstimo pode ser renovado até duas vezes, desde que não exista reserva pendente para o livro.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L2",
+                    "quote": "Um empréstimo pode ser renovado até duas vezes, desde que não exista reserva pendente para o livro."
+                  }
+                ]
+              },
+              {
+                "id": "CA-02",
+                "kind": "rule",
+                "statement": "Quando o limite de duas renovações e a ausência de reserva pendente forem respeitados, a renovação acrescenta sete dias à data de devolução.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L2",
+                    "quote": "Um empréstimo pode ser renovado até duas vezes, desde que não exista reserva pendente para o livro. Se essas condições forem atendidas, a renovação acrescenta sete dias à data de devolução."
+                  }
+                ]
+              },
+              {
+                "id": "CA-03",
+                "kind": "rule",
+                "statement": "Se a renovação ultrapassar o limite de duas vezes ou existir reserva pendente para o livro, a renovação é recusada e a data de devolução não muda.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L2",
+                    "quote": "Um empréstimo pode ser renovado até duas vezes, desde que não exista reserva pendente para o livro. Se essas condições forem atendidas, a renovação acrescenta sete dias à data de devolução. Caso contrário, a renovação é recusada e a data não muda."
+                  }
+                ]
+              }
+            ],
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L1-L2",
+                "quote": "Como bibliotecária, quero renovar empréstimos.\nUm empréstimo pode ser renovado até duas vezes, desde que não exista reserva pendente para o livro. Se essas condições forem atendidas, a renovação acrescenta sete dias à data de devolução. Caso contrário, a renovação é recusada e a data não muda."
+              }
+            ]
+          }
+        ],
+        "questions": []
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 19051,
+        "usage": {
+          "input": 1668,
+          "output": 558,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 2226
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Preservar duas renovações, condição de ausência de reserva, sete dias e recusa sem mudar data. Sem dúvida bloqueante por falta de CA rotulado.",
+            "passed": true,
+            "evidence": "outputs/result.json: CA-01 preserva duas renovações e ausência de reserva; CA-02 condiciona acréscimo de sete dias às duas condições; CA-03 explicita ultrapassar duas ou existir reserva como causas de recusa sem alterar data. questions=[]."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        }
+      }
+    },
+    {
+      "id": "gherkin-com-contexto",
+      "variant": "with_skill",
+      "role": "artifact-curator",
+      "input": {
+        "task": "curation",
+        "artifacts": [
+          {
+            "id": "artifact-1",
+            "name": "material.txt",
+            "version": "1",
+            "text": "Funcionalidade: Renovar empréstimo\nRegra: São permitidas até duas renovações por empréstimo, desde que o livro não tenha reserva pendente. Cada renovação permitida acrescenta sete dias à devolução. Caso contrário, recusar sem alterar a data.\nContexto:\n  Dado que a bibliotecária está autenticada\nCenário: Primeira renovação\n  Dado um empréstimo sem renovação anterior e sem reserva pendente\n  Quando a bibliotecária solicita a renovação\n  Então a data de devolução aumenta em sete dias"
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "previousOutput": null,
+        "feedback": null
+      },
+      "payload": {
+        "requirements": [
+          {
+            "id": "RF-01",
+            "statement": "Renovar empréstimo conforme o limite de renovações e a existência de reserva pendente.",
+            "rules": [
+              {
+                "id": "CA-01",
+                "kind": "rule",
+                "statement": "Permitir até duas renovações por empréstimo, desde que o livro não tenha reserva pendente. Cada renovação permitida acrescenta sete dias à data de devolução. Caso contrário, recusar sem alterar a data.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L2",
+                    "quote": "Regra: São permitidas até duas renovações por empréstimo, desde que o livro não tenha reserva pendente. Cada renovação permitida acrescenta sete dias à devolução. Caso contrário, recusar sem alterar a data."
+                  }
+                ],
+                "examples": [
+                  {
+                    "id": "EX-01",
+                    "given": [
+                      "A bibliotecária está autenticada.",
+                      "O empréstimo não tem renovação anterior nem reserva pendente."
+                    ],
+                    "when": [
+                      "A bibliotecária solicita a renovação."
+                    ],
+                    "then": [
+                      "A data de devolução aumenta em sete dias."
+                    ],
+                    "sources": [
+                      {
+                        "artifactId": "artifact-1",
+                        "locator": "L3-L4",
+                        "quote": "Contexto:\n  Dado que a bibliotecária está autenticada"
+                      },
+                      {
+                        "artifactId": "artifact-1",
+                        "locator": "L5-L8",
+                        "quote": "Cenário: Primeira renovação\n  Dado um empréstimo sem renovação anterior e sem reserva pendente\n  Quando a bibliotecária solicita a renovação\n  Então a data de devolução aumenta em sete dias"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L1-L2",
+                "quote": "Funcionalidade: Renovar empréstimo\nRegra: São permitidas até duas renovações por empréstimo, desde que o livro não tenha reserva pendente. Cada renovação permitida acrescenta sete dias à devolução. Caso contrário, recusar sem alterar a data."
+              }
+            ]
+          }
+        ],
+        "questions": []
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 17614,
+        "usage": {
+          "input": 1721,
+          "output": 526,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 2247
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Preservar a mesma regra da prosa e o exemplo recebido com autenticação, ausência de reserva, ação e resultado; não confundir um cenário com todo o domínio.",
+            "passed": true,
+            "evidence": "outputs/result.json: CA-01 preserva toda a regra geral. examples[0].given inclui autenticação do Contexto e empréstimo sem renovação anterior nem reserva; when conserva solicitação de renovação e then sete dias. Fontes separam regra L2, Contexto L3-L4 e cenário L5-L8; o exemplo não substitui a regra geral."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        }
+      }
+    },
+    {
+      "id": "gherkin-com-contexto",
+      "variant": "old_skill",
+      "role": "artifact-curator",
+      "input": {
+        "task": "curation",
+        "artifacts": [
+          {
+            "id": "artifact-1",
+            "name": "material.txt",
+            "version": "1",
+            "text": "Funcionalidade: Renovar empréstimo\nRegra: São permitidas até duas renovações por empréstimo, desde que o livro não tenha reserva pendente. Cada renovação permitida acrescenta sete dias à devolução. Caso contrário, recusar sem alterar a data.\nContexto:\n  Dado que a bibliotecária está autenticada\nCenário: Primeira renovação\n  Dado um empréstimo sem renovação anterior e sem reserva pendente\n  Quando a bibliotecária solicita a renovação\n  Então a data de devolução aumenta em sete dias"
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "previousOutput": null,
+        "feedback": null
+      },
+      "payload": {
+        "requirements": [
+          {
+            "id": "US-01",
+            "statement": "Permitir à bibliotecária autenticada renovar um empréstimo.",
+            "rules": [
+              {
+                "id": "CA-01",
+                "statement": "São permitidas até duas renovações por empréstimo, desde que o livro não tenha reserva pendente.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L2",
+                    "quote": "São permitidas até duas renovações por empréstimo, desde que o livro não tenha reserva pendente."
+                  }
+                ]
+              },
+              {
+                "id": "CA-02",
+                "statement": "Cada renovação permitida acrescenta sete dias à data de devolução.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L2",
+                    "quote": "Cada renovação permitida acrescenta sete dias à devolução."
+                  }
+                ]
+              },
+              {
+                "id": "CA-03",
+                "statement": "Se o empréstimo já tiver duas renovações ou o livro tiver reserva pendente, recusar a renovação sem alterar a data de devolução.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L2",
+                    "quote": "Regra: São permitidas até duas renovações por empréstimo, desde que o livro não tenha reserva pendente. Cada renovação permitida acrescenta sete dias à devolução. Caso contrário, recusar sem alterar a data."
+                  }
+                ]
+              },
+              {
+                "id": "CA-04",
+                "statement": "Para um empréstimo sem renovação anterior e sem reserva pendente, quando a bibliotecária autenticada solicita a renovação, a data de devolução aumenta em sete dias.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L4",
+                    "quote": "  Dado que a bibliotecária está autenticada"
+                  },
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L5-L8",
+                    "quote": "Cenário: Primeira renovação\n  Dado um empréstimo sem renovação anterior e sem reserva pendente\n  Quando a bibliotecária solicita a renovação\n  Então a data de devolução aumenta em sete dias"
+                  }
+                ]
+              }
+            ],
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L1",
+                "quote": "Funcionalidade: Renovar empréstimo"
+              },
+              {
+                "artifactId": "artifact-1",
+                "locator": "L4",
+                "quote": "  Dado que a bibliotecária está autenticada"
+              },
+              {
+                "artifactId": "artifact-1",
+                "locator": "L7",
+                "quote": "  Quando a bibliotecária solicita a renovação"
+              }
+            ]
+          }
+        ],
+        "questions": []
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 22303,
+        "usage": {
+          "input": 1163,
+          "output": 660,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 1823
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Preservar a mesma regra da prosa e o exemplo recebido com autenticação, ausência de reserva, ação e resultado; não confundir um cenário com todo o domínio.",
+            "passed": true,
+            "evidence": "outputs/result.json: CA-01/CA-02/CA-03 preservam regra geral de duas renovações, ausência de reserva, sete dias e recusa sem alterar data. CA-04 preserva o exemplo: sem renovação anterior, sem reserva, bibliotecária autenticada solicita renovação, data aumenta sete dias. Ausência do array examples não constitui perda semântica nesta expectativa."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        }
+      }
+    },
+    {
+      "id": "rf-sem-us",
+      "variant": "with_skill",
+      "role": "artifact-curator",
+      "input": {
+        "task": "curation",
+        "artifacts": [
+          {
+            "id": "artifact-1",
+            "name": "material.txt",
+            "version": "1",
+            "text": "RF-12: O sistema deve permitir cancelar um agendamento até 24 horas antes de seu início, inclusive. Dentro desse prazo, o status muda para Cancelado e o horário volta a ficar disponível. Com menos de 24 horas, recusar o cancelamento e manter o agendamento."
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "previousOutput": null,
+        "feedback": null
+      },
+      "payload": {
+        "requirements": [
+          {
+            "id": "RF-12",
+            "statement": "Permitir ou recusar o cancelamento de um agendamento conforme a antecedência em relação ao seu início.",
+            "rules": [
+              {
+                "id": "CA-01",
+                "kind": "rule",
+                "statement": "Permitir cancelar o agendamento com antecedência de pelo menos 24 horas em relação ao início, incluindo exatamente 24 horas. Ao cancelar nesse prazo, mudar o status para Cancelado e tornar o horário disponível novamente.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L1",
+                    "quote": "RF-12: O sistema deve permitir cancelar um agendamento até 24 horas antes de seu início, inclusive. Dentro desse prazo, o status muda para Cancelado e o horário volta a ficar disponível."
+                  }
+                ]
+              },
+              {
+                "id": "CA-02",
+                "kind": "rule",
+                "statement": "Com menos de 24 horas de antecedência, recusar o cancelamento e manter o agendamento.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L1",
+                    "quote": "Com menos de 24 horas, recusar o cancelamento e manter o agendamento."
+                  }
+                ]
+              }
+            ],
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L1",
+                "quote": "RF-12: O sistema deve permitir cancelar um agendamento até 24 horas antes de seu início, inclusive. Dentro desse prazo, o status muda para Cancelado e o horário volta a ficar disponível. Com menos de 24 horas, recusar o cancelamento e manter o agendamento."
+              }
+            ]
+          }
+        ],
+        "questions": []
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 14504,
+        "usage": {
+          "input": 1659,
+          "output": 400,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 2059
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Planejável sem persona, US ou Gherkin. Preservar fronteira inclusiva de 24h, status, disponibilidade e recusa sem alteração.",
+            "passed": true,
+            "evidence": "outputs/result.json: RF-12/CA-01 explicita pelo menos 24 horas incluindo exatamente 24 horas, Cancelado e horário disponível novamente. CA-02 conserva recusa e manutenção com menos de 24 horas. questions=[]."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        }
+      }
+    },
+    {
+      "id": "rf-sem-us",
+      "variant": "old_skill",
+      "role": "artifact-curator",
+      "input": {
+        "task": "curation",
+        "artifacts": [
+          {
+            "id": "artifact-1",
+            "name": "material.txt",
+            "version": "1",
+            "text": "RF-12: O sistema deve permitir cancelar um agendamento até 24 horas antes de seu início, inclusive. Dentro desse prazo, o status muda para Cancelado e o horário volta a ficar disponível. Com menos de 24 horas, recusar o cancelamento e manter o agendamento."
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "previousOutput": null,
+        "feedback": null
+      },
+      "payload": {
+        "requirements": [
+          {
+            "id": "RF-12",
+            "statement": "O sistema deve permitir cancelar um agendamento com antecedência de pelo menos 24 horas em relação ao início, incluindo exatamente 24 horas.",
+            "rules": [
+              {
+                "id": "CA-01",
+                "statement": "Permitir o cancelamento com antecedência maior ou igual a 24 horas do início do agendamento.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L1",
+                    "quote": "O sistema deve permitir cancelar um agendamento até 24 horas antes de seu início, inclusive."
+                  }
+                ]
+              },
+              {
+                "id": "CA-02",
+                "statement": "Quando o cancelamento ocorrer dentro do prazo permitido, alterar o status para Cancelado e disponibilizar novamente o horário.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L1",
+                    "quote": "Dentro desse prazo, o status muda para Cancelado e o horário volta a ficar disponível."
+                  }
+                ]
+              },
+              {
+                "id": "CA-03",
+                "statement": "Com menos de 24 horas de antecedência, recusar o cancelamento e manter o agendamento.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L1",
+                    "quote": "Com menos de 24 horas, recusar o cancelamento e manter o agendamento."
+                  }
+                ]
+              }
+            ],
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L1",
+                "quote": "RF-12: O sistema deve permitir cancelar um agendamento até 24 horas antes de seu início, inclusive. Dentro desse prazo, o status muda para Cancelado e o horário volta a ficar disponível. Com menos de 24 horas, recusar o cancelamento e manter o agendamento."
+              }
+            ]
+          }
+        ],
+        "questions": []
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 16432,
+        "usage": {
+          "input": 1101,
+          "output": 440,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 1541
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Planejável sem persona, US ou Gherkin. Preservar fronteira inclusiva de 24h, status, disponibilidade e recusa sem alteração.",
+            "passed": true,
+            "evidence": "outputs/result.json: RF-12 tem CA-01 com antecedência maior ou igual a 24 horas, CA-02 com status Cancelado e horário disponibilizado novamente, CA-03 com recusa e manutenção do agendamento abaixo de 24 horas. Sem perguntas bloqueantes ou exigência de persona/US."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        }
+      }
+    },
+    {
+      "id": "historia-vaga",
+      "variant": "old_skill",
+      "role": "artifact-curator",
+      "input": {
+        "task": "curation",
+        "artifacts": [
+          {
+            "id": "artifact-1",
+            "name": "material.txt",
+            "version": "1",
+            "text": "Como organizador, quero configurar descontos nos ingressos para incentivar as vendas."
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "previousOutput": null,
+        "feedback": null
+      },
+      "payload": {
+        "requirements": [
+          {
+            "id": "US-01",
+            "statement": "Como organizador, quero configurar descontos nos ingressos para incentivar as vendas.",
+            "rules": [],
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L1",
+                "quote": "Como organizador, quero configurar descontos nos ingressos para incentivar as vendas."
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "id": "Q-01",
+            "description": "Quais são os critérios de aceitação e as regras para configurar descontos nos ingressos? A ausência desses critérios impede planejar a validação do requisito.",
+            "requirementIds": [
+              "US-01"
+            ],
+            "caseIds": [],
+            "blocking": true,
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L1",
+                "quote": "Como organizador, quero configurar descontos nos ingressos para incentivar as vendas."
+              }
+            ]
+          }
+        ]
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 6942,
+        "usage": {
+          "input": 1057,
+          "output": 163,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 1220
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Pedir decisões sobre elegibilidade, cálculo ou limites; não inventar percentuais nem considerar intenção vaga regra testável.",
+            "passed": false,
+            "evidence": "outputs/result.json: A resposta preserva segurança: rules=[] e Q-01 bloqueante, sem inventar percentual. Porém Q-01 apenas pergunta “Quais são os critérios de aceitação e as regras para configurar descontos nos ingressos?”. Não solicita decisão concreta de elegibilidade, cálculo ou limites, como exige a expectativa composta. A falha é orientação insuficiente, não invenção de regra."
+          }
+        ],
+        "summary": {
+          "passed": 0,
+          "failed": 1,
+          "total": 1,
+          "pass_rate": 0.0
+        },
+        "eval_feedback": {
+          "suggestions": [
+            {
+              "assertion": "Pedir decisões sobre elegibilidade, cálculo ou limites; não inventar percentuais nem considerar intenção vaga regra testável.",
+              "reason": "Separar não inventar regras de formular perguntas concretas. O baseline satisfaz a primeira condição, mas sua pergunta genérica não atende a segunda."
+            }
+          ],
+          "overall": "A expectativa composta distingue orientação ao usuário, mas uma nota única oculta qual capacidade falhou."
+        }
+      }
+    },
+    {
+      "id": "historia-vaga",
+      "variant": "with_skill",
+      "role": "artifact-curator",
+      "input": {
+        "task": "curation",
+        "artifacts": [
+          {
+            "id": "artifact-1",
+            "name": "material.txt",
+            "version": "1",
+            "text": "Como organizador, quero configurar descontos nos ingressos para incentivar as vendas."
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "previousOutput": null,
+        "feedback": null
+      },
+      "payload": {
+        "requirements": [
+          {
+            "id": "RF-01",
+            "statement": "Permitir ao organizador configurar descontos nos ingressos para incentivar as vendas.",
+            "rules": [],
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L1",
+                "quote": "Como organizador, quero configurar descontos nos ingressos para incentivar as vendas."
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "id": "Q-01",
+            "description": "Quais descontos o organizador pode configurar, quais condições determinam sua aplicação e qual deve ser o resultado no preço dos ingressos? O trecho expressa o objetivo, mas essas decisões são necessárias para planejar a verificação do comportamento.",
+            "requirementIds": [
+              "RF-01"
+            ],
+            "ruleIds": [],
+            "caseIds": [],
+            "blocking": true,
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L1",
+                "quote": "Como organizador, quero configurar descontos nos ingressos para incentivar as vendas."
+              }
+            ]
+          }
+        ]
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 10109,
+        "usage": {
+          "input": 1615,
+          "output": 251,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 1866
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Pedir decisões sobre elegibilidade, cálculo ou limites; não inventar percentuais nem considerar intenção vaga regra testável.",
+            "passed": true,
+            "evidence": "outputs/result.json: rules=[]; Q-01 pergunta “quais condições determinam sua aplicação e qual deve ser o resultado no preço dos ingressos”, solicitando elegibilidade e efeito no preço. Identifica objetivo sem comportamento suficiente, bloqueia o requisito e não define percentuais ou limites."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        },
+        "eval_feedback": {
+          "suggestions": [
+            {
+              "assertion": "Pedir decisões sobre elegibilidade, cálculo ou limites; não inventar percentuais nem considerar intenção vaga regra testável.",
+              "reason": "Separar não inventar regras de formular perguntas concretas. O baseline satisfaz a primeira condição, mas sua pergunta genérica não atende a segunda."
+            }
+          ],
+          "overall": "A expectativa composta distingue orientação ao usuário, mas uma nota única oculta qual capacidade falhou."
+        }
+      }
+    },
+    {
+      "id": "fontes-em-conflito",
+      "variant": "old_skill",
+      "role": "artifact-curator",
+      "input": {
+        "task": "curation",
+        "artifacts": [
+          {
+            "id": "artifact-1",
+            "name": "material.txt",
+            "version": "1",
+            "text": "US-01: Como cliente, quero cancelar meu pedido.\nCA-01: Cancelar pedido sem cobrança até 30 minutos após a compra.\nPolítica de cancelamento: Todo cancelamento gera taxa de 10 reais, inclusive imediatamente após a compra."
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "previousOutput": null,
+        "feedback": null
+      },
+      "payload": {
+        "requirements": [
+          {
+            "id": "US-01",
+            "statement": "Como cliente, quero cancelar meu pedido.",
+            "rules": [
+              {
+                "id": "CA-01",
+                "statement": "Cancelar pedido sem cobrança até 30 minutos após a compra.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L2",
+                    "quote": "CA-01: Cancelar pedido sem cobrança até 30 minutos após a compra."
+                  }
+                ]
+              },
+              {
+                "id": "CA-02",
+                "statement": "Todo cancelamento gera taxa de 10 reais, inclusive imediatamente após a compra.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L3",
+                    "quote": "Política de cancelamento: Todo cancelamento gera taxa de 10 reais, inclusive imediatamente após a compra."
+                  }
+                ]
+              }
+            ],
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L1",
+                "quote": "US-01: Como cliente, quero cancelar meu pedido."
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "id": "Q-01",
+            "description": "Nos cancelamentos até 30 minutos após a compra, prevalece a isenção do CA-01 ou a taxa de 10 reais da política? A contradição impede definir o resultado esperado da cobrança nesse período.",
+            "requirementIds": [
+              "US-01"
+            ],
+            "caseIds": [],
+            "blocking": true,
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L2",
+                "quote": "CA-01: Cancelar pedido sem cobrança até 30 minutos após a compra."
+              },
+              {
+                "artifactId": "artifact-1",
+                "locator": "L3",
+                "quote": "Política de cancelamento: Todo cancelamento gera taxa de 10 reais, inclusive imediatamente após a compra."
+              }
+            ]
+          }
+        ]
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 16299,
+        "usage": {
+          "input": 1095,
+          "output": 455,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 1550
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Expor conflito entre gratuidade e taxa, pedir decisão sem eleger fonte vencedora silenciosamente; bloquear escopo contraditório.",
+            "passed": true,
+            "evidence": "outputs/result.json: CA-01 registra gratuidade até 30 minutos e CA-02 taxa de 10 reais inclusive imediatamente. Q-01 pergunta qual prevalece no intervalo, cita ambas as fontes e blocking=true em US-01. Não escolhe uma regra vencedora."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        }
+      }
+    },
+    {
+      "id": "fontes-em-conflito",
+      "variant": "with_skill",
+      "role": "artifact-curator",
+      "input": {
+        "task": "curation",
+        "artifacts": [
+          {
+            "id": "artifact-1",
+            "name": "material.txt",
+            "version": "1",
+            "text": "US-01: Como cliente, quero cancelar meu pedido.\nCA-01: Cancelar pedido sem cobrança até 30 minutos após a compra.\nPolítica de cancelamento: Todo cancelamento gera taxa de 10 reais, inclusive imediatamente após a compra."
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "previousOutput": null,
+        "feedback": null
+      },
+      "payload": {
+        "requirements": [
+          {
+            "id": "US-01",
+            "statement": "Como cliente, quero cancelar meu pedido.",
+            "rules": [
+              {
+                "id": "CA-01",
+                "kind": "rule",
+                "statement": "Cancelar pedido sem cobrança até 30 minutos após a compra.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L2",
+                    "quote": "CA-01: Cancelar pedido sem cobrança até 30 minutos após a compra."
+                  }
+                ]
+              },
+              {
+                "id": "CA-02",
+                "kind": "rule",
+                "statement": "Todo cancelamento gera taxa de 10 reais, inclusive imediatamente após a compra.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L3",
+                    "quote": "Política de cancelamento: Todo cancelamento gera taxa de 10 reais, inclusive imediatamente após a compra."
+                  }
+                ]
+              }
+            ],
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L1",
+                "quote": "US-01: Como cliente, quero cancelar meu pedido."
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "id": "Q-01",
+            "description": "Qual cobrança deve valer para cancelamentos até 30 minutos após a compra: isenção conforme CA-01 ou taxa de 10 reais conforme a política? Os trechos conflitam nesse período; a decisão é necessária para definir o resultado esperado da cobrança.",
+            "requirementIds": [
+              "US-01"
+            ],
+            "ruleIds": [
+              "CA-01",
+              "CA-02"
+            ],
+            "caseIds": [],
+            "blocking": true,
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L2",
+                "quote": "CA-01: Cancelar pedido sem cobrança até 30 minutos após a compra."
+              },
+              {
+                "artifactId": "artifact-1",
+                "locator": "L3",
+                "quote": "Política de cancelamento: Todo cancelamento gera taxa de 10 reais, inclusive imediatamente após a compra."
+              }
+            ]
+          }
+        ]
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 17343,
+        "usage": {
+          "input": 1653,
+          "output": 491,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 2144
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Expor conflito entre gratuidade e taxa, pedir decisão sem eleger fonte vencedora silenciosamente; bloquear escopo contraditório.",
+            "passed": true,
+            "evidence": "outputs/result.json: Conserva gratuidade e taxa em CA-01 e CA-02. Q-01 explicita o conflito dentro dos 30 minutos e pede decisão; blocking=true com ruleIds=[CA-01,CA-02]. Não resolve o conflito autonomamente."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        }
+      }
+    },
+    {
+      "id": "exemplo-isolado",
+      "variant": "old_skill",
+      "role": "artifact-curator",
+      "input": {
+        "task": "curation",
+        "artifacts": [
+          {
+            "id": "artifact-1",
+            "name": "material.txt",
+            "version": "1",
+            "text": "Caso manual: cupom de desconto\nDado um carrinho de 200 reais com o cupom FESTA\nQuando o cliente aplica o cupom\nEntão o total passa a ser 180 reais."
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "previousOutput": null,
+        "feedback": null
+      },
+      "payload": {
+        "requirements": [
+          {
+            "id": "US-01",
+            "statement": "Aplicar cupom de desconto ao carrinho.",
+            "rules": [
+              {
+                "id": "CA-01",
+                "statement": "Ao aplicar o cupom FESTA a um carrinho de 200 reais, o total deve passar a ser 180 reais.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L2-L4",
+                    "quote": "Dado um carrinho de 200 reais com o cupom FESTA\nQuando o cliente aplica o cupom\nEntão o total passa a ser 180 reais."
+                  }
+                ]
+              }
+            ],
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L1-L3",
+                "quote": "Caso manual: cupom de desconto\nDado um carrinho de 200 reais com o cupom FESTA\nQuando o cliente aplica o cupom"
+              }
+            ]
+          }
+        ],
+        "questions": []
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 9787,
+        "usage": {
+          "input": 1084,
+          "output": 235,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 1319
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Preservar apenas o exemplo 200→180 com FESTA; não inferir desconto geral de 10%, limites ou condições de outros carrinhos. kind=example.",
+            "passed": false,
+            "evidence": "outputs/result.json: CA-01 preserva corretamente apenas aplicar FESTA em carrinho de 200 reais para total de 180 reais; não deriva taxa de 10% ou regras para outros valores. Falha exclusivamente na classificação explícita kind=example solicitada pela expectativa: kind está ausente. Não interpretar esta falha de contrato como perda semântica ou alucinação."
+          }
+        ],
+        "summary": {
+          "passed": 0,
+          "failed": 1,
+          "total": 1,
+          "pass_rate": 0.0
+        },
+        "eval_feedback": {
+          "suggestions": [
+            {
+              "assertion": "Preservar apenas o exemplo 200→180 com FESTA; não inferir desconto geral de 10%, limites ou condições de outros carrinhos. kind=example.",
+              "reason": "A expectativa combina fidelidade semântica com adoção de um campo introduzido pela variante nova. Separar essas duas medidas para não atribuir ao baseline uma alucinação inexistente."
+            }
+          ],
+          "overall": "Ambas as variantes preservaram o significado do exemplo; somente a nova explicitou sua classificação no contrato."
+        }
+      }
+    },
+    {
+      "id": "exemplo-isolado",
+      "variant": "with_skill",
+      "role": "artifact-curator",
+      "input": {
+        "task": "curation",
+        "artifacts": [
+          {
+            "id": "artifact-1",
+            "name": "material.txt",
+            "version": "1",
+            "text": "Caso manual: cupom de desconto\nDado um carrinho de 200 reais com o cupom FESTA\nQuando o cliente aplica o cupom\nEntão o total passa a ser 180 reais."
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "previousOutput": null,
+        "feedback": null
+      },
+      "payload": {
+        "requirements": [
+          {
+            "id": "RF-01",
+            "statement": "Aplicação de cupom de desconto ao carrinho.",
+            "rules": [
+              {
+                "id": "CA-01",
+                "kind": "example",
+                "statement": "No exemplo recebido, aplicar o cupom FESTA a um carrinho de 200 reais faz o total passar a 180 reais.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L2-L4",
+                    "quote": "Dado um carrinho de 200 reais com o cupom FESTA\nQuando o cliente aplica o cupom\nEntão o total passa a ser 180 reais."
+                  }
+                ],
+                "examples": [
+                  {
+                    "id": "EX-01",
+                    "given": [
+                      "Um carrinho de 200 reais com o cupom FESTA."
+                    ],
+                    "when": [
+                      "O cliente aplica o cupom."
+                    ],
+                    "then": [
+                      "O total passa a ser 180 reais."
+                    ],
+                    "sources": [
+                      {
+                        "artifactId": "artifact-1",
+                        "locator": "L2-L4",
+                        "quote": "Dado um carrinho de 200 reais com o cupom FESTA\nQuando o cliente aplica o cupom\nEntão o total passa a ser 180 reais."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L1-L4",
+                "quote": "Caso manual: cupom de desconto\nDado um carrinho de 200 reais com o cupom FESTA\nQuando o cliente aplica o cupom\nEntão o total passa a ser 180 reais."
+              }
+            ]
+          }
+        ],
+        "questions": []
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 14393,
+        "usage": {
+          "input": 1642,
+          "output": 401,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 2043
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Preservar apenas o exemplo 200→180 com FESTA; não inferir desconto geral de 10%, limites ou condições de outros carrinhos. kind=example.",
+            "passed": true,
+            "evidence": "outputs/result.json: CA-01 tem kind=example e declara “No exemplo recebido”. EX-01 mantém carrinho de 200 reais com FESTA, aplicação do cupom e total de 180 reais. Nenhuma regra percentual, condição ou limite adicional foi criado."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        },
+        "eval_feedback": {
+          "suggestions": [
+            {
+              "assertion": "Preservar apenas o exemplo 200→180 com FESTA; não inferir desconto geral de 10%, limites ou condições de outros carrinhos. kind=example.",
+              "reason": "A expectativa combina fidelidade semântica com adoção de um campo introduzido pela variante nova. Separar essas duas medidas para não atribuir ao baseline uma alucinação inexistente."
+            }
+          ],
+          "overall": "Ambas as variantes preservaram o significado do exemplo; somente a nova explicitou sua classificação no contrato."
+        }
+      }
+    },
+    {
+      "id": "bloqueio-parcial",
+      "variant": "old_skill",
+      "role": "artifact-curator",
+      "input": {
+        "task": "curation",
+        "artifacts": [
+          {
+            "id": "artifact-1",
+            "name": "material.txt",
+            "version": "1",
+            "text": "US-01: Como visitante, quero enviar uma avaliação.\nCA-01: A nota deve ser um número inteiro de 1 a 5, inclusive. Fora desse intervalo ou se não inteira, recusar a avaliação.\nCA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido."
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "previousOutput": null,
+        "feedback": null
+      },
+      "payload": {
+        "requirements": [
+          {
+            "id": "US-01",
+            "statement": "Como visitante, quero enviar uma avaliação.",
+            "rules": [
+              {
+                "id": "CA-01",
+                "statement": "A nota deve ser um número inteiro de 1 a 5, inclusive. Recusar a avaliação se a nota estiver fora desse intervalo ou não for inteira.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L2",
+                    "quote": "CA-01: A nota deve ser um número inteiro de 1 a 5, inclusive. Fora desse intervalo ou se não inteira, recusar a avaliação."
+                  }
+                ]
+              },
+              {
+                "id": "CA-02",
+                "statement": "O comentário é opcional. Se informado, deve respeitar um limite máximo de caracteres ainda não definido.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L3",
+                    "quote": "CA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido."
+                  }
+                ]
+              }
+            ],
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L1",
+                "quote": "US-01: Como visitante, quero enviar uma avaliação."
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "id": "Q-01",
+            "description": "Qual é o limite máximo de caracteres do comentário em CA-02? A ausência desse valor impede planejar a validação do limite, mas não a opcionalidade do comentário nem a regra da nota.",
+            "requirementIds": [
+              "US-01"
+            ],
+            "caseIds": [],
+            "blocking": true,
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L3",
+                "quote": "CA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido."
+              }
+            ]
+          }
+        ]
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 15565,
+        "usage": {
+          "input": 1115,
+          "output": 457,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 1572
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Pergunta bloqueia somente CA-02 (ou a sub-regra de limite), mantém CA-01 elegível. Sem limite inventado.",
+            "passed": false,
+            "evidence": "outputs/result.json: O texto da Q-01 diz corretamente que falta o limite e que isso não deveria bloquear a regra da nota. Entretanto o vínculo estruturado é blocking=true, requirementIds=[US-01], sem ruleIds: no contrato de elegibilidade isso bloqueia toda US-01, inclusive CA-01. Não inventa limite, mas não materializa o bloqueio localizado."
+          }
+        ],
+        "summary": {
+          "passed": 0,
+          "failed": 1,
+          "total": 1,
+          "pass_rate": 0.0
+        }
+      }
+    },
+    {
+      "id": "bloqueio-parcial",
+      "variant": "with_skill",
+      "role": "artifact-curator",
+      "input": {
+        "task": "curation",
+        "artifacts": [
+          {
+            "id": "artifact-1",
+            "name": "material.txt",
+            "version": "1",
+            "text": "US-01: Como visitante, quero enviar uma avaliação.\nCA-01: A nota deve ser um número inteiro de 1 a 5, inclusive. Fora desse intervalo ou se não inteira, recusar a avaliação.\nCA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido."
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "previousOutput": null,
+        "feedback": null
+      },
+      "payload": {
+        "requirements": [
+          {
+            "id": "US-01",
+            "statement": "Como visitante, quero enviar uma avaliação.",
+            "rules": [
+              {
+                "id": "CA-01",
+                "kind": "rule",
+                "statement": "A nota deve ser um número inteiro de 1 a 5, inclusive. Recusar a avaliação se a nota estiver fora desse intervalo ou não for inteira.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L2",
+                    "quote": "CA-01: A nota deve ser um número inteiro de 1 a 5, inclusive. Fora desse intervalo ou se não inteira, recusar a avaliação."
+                  }
+                ]
+              },
+              {
+                "id": "CA-02",
+                "kind": "rule",
+                "statement": "O comentário é opcional.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L3",
+                    "quote": "CA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido."
+                  }
+                ]
+              },
+              {
+                "id": "CA-03",
+                "kind": "rule",
+                "statement": "Se informado, o comentário deve respeitar um limite máximo de caracteres, cujo valor ainda precisa ser decidido.",
+                "sources": [
+                  {
+                    "artifactId": "artifact-1",
+                    "locator": "L3",
+                    "quote": "CA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido."
+                  }
+                ]
+              }
+            ],
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L1",
+                "quote": "US-01: Como visitante, quero enviar uma avaliação."
+              }
+            ]
+          }
+        ],
+        "questions": [
+          {
+            "id": "Q-01",
+            "description": "Qual é o limite máximo de caracteres do comentário e qual deve ser o resultado quando ele for excedido? O trecho informa que o limite ainda precisa ser decidido; essas decisões são necessárias para planejar a validação do comentário informado, sem bloquear a opcionalidade do comentário nem a validação da nota.",
+            "requirementIds": [
+              "US-01"
+            ],
+            "ruleIds": [
+              "CA-03"
+            ],
+            "caseIds": [],
+            "blocking": true,
+            "sources": [
+              {
+                "artifactId": "artifact-1",
+                "locator": "L3",
+                "quote": "CA-02: O comentário é opcional. Se informado, respeita um limite máximo de caracteres que ainda precisa ser decidido."
+              }
+            ]
+          }
+        ]
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 21825,
+        "usage": {
+          "input": 1673,
+          "output": 592,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 2265
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Pergunta bloqueia somente CA-02 (ou a sub-regra de limite), mantém CA-01 elegível. Sem limite inventado.",
+            "passed": true,
+            "evidence": "outputs/result.json: CA-01 mantém inteiro de 1 a 5 inclusive e recusa fora do intervalo/não inteiro; CA-02 separa comentário opcional; CA-03 contém limite ainda indefinido. Q-01 usa ruleIds=[CA-03] e pede limite e resultado ao excedê-lo. CA-01 e CA-02 continuam elegíveis; nenhum limite inventado."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        }
+      }
+    },
+    {
+      "id": "plano-conciso",
+      "variant": "with_skill",
+      "role": "test-designer",
+      "input": {
+        "task": "planning",
+        "artifacts": [
+          {
+            "id": "a13480e4-7700-479a-9b53-8074ff8d1823",
+            "name": "historias-e-criterios.txt",
+            "version": "1",
+            "text": "## US-01\n\nComo usuário autenticado, quero reservar itens para informar a quantidade desejada.\n\n## CA-01\n\nA quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva.\n\n## CA-02\n\nO comentário é opcional. Quando informado, deve ser salvo junto à reserva.\n"
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "approvedCuration": {
+          "id": "0857784e-cdcb-4d23-947f-0f0659f4800a",
+          "phase": "curation",
+          "revision": 1,
+          "producer": "artifact-curator",
+          "createdAt": "2026-09-24T16:02:41.858Z",
+          "budgetCycleId": "46f548a4-a0dd-4158-b9a0-87996357f687",
+          "dependsOn": [],
+          "answerRefs": [],
+          "payload": {
+            "requirements": [
+              {
+                "id": "US-01",
+                "statement": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada.",
+                "sources": [
+                  {
+                    "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                    "locator": "L3",
+                    "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+                  }
+                ],
+                "rules": [
+                  {
+                    "id": "CA-01",
+                    "statement": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma quantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora desse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não criar a reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                        "locator": "L7-L10",
+                        "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                      }
+                    ]
+                  },
+                  {
+                    "id": "CA-02",
+                    "statement": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                        "locator": "L14",
+                        "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "questions": []
+          }
+        },
+        "previousOutput": null,
+        "feedback": null
+      },
+      "payload": {
+        "testPlan": {
+          "objective": "Verificar a reserva de itens por usuário autenticado, respeitando a validade da quantidade e a opcionalidade e persistência do comentário.",
+          "requirementIds": [
+            "US-01"
+          ],
+          "ruleIds": [
+            "CA-01",
+            "CA-02"
+          ],
+          "priorities": [
+            {
+              "ruleId": "CA-01",
+              "reason": "Evitar reservas com quantidades inválidas e garantir a confirmação adequada para quantidades válidas."
+            },
+            {
+              "ruleId": "CA-02",
+              "reason": "Garantir que o comentário não seja obrigatório e que, quando informado, não seja perdido."
+            }
+          ],
+          "exclusions": [],
+          "approach": [
+            "CA-01: aplicar partições de equivalência para quantidades inteiras válidas, abaixo e acima do intervalo permitido e quantidades não inteiras. Verificar “Reserva criada” na confirmação válida e “Quantidade inválida”, sem criação da reserva, nas inválidas.",
+            "CA-01: aplicar análise de valores limite nas extremidades inclusivas do intervalo de 1 a 10 e nos inteiros imediatamente externos.",
+            "CA-02: cobrir reservas válidas com comentário ausente e presente, verificando que a ausência não impede a reserva e que o conteúdo informado é salvo junto a ela."
+          ],
+          "preconditions": [
+            "Usuário autenticado.",
+            "Item disponível para realizar a reserva.",
+            "Meio de consultar as reservas e seus comentários para verificar persistência e ausência de criação nas rejeições."
+          ],
+          "sources": [
+            {
+              "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+              "locator": "L3",
+              "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+            },
+            {
+              "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+              "locator": "L7-L10",
+              "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+            },
+            {
+              "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+              "locator": "L14",
+              "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+            }
+          ]
+        }
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 20879,
+        "usage": {
+          "input": 1654,
+          "output": 586,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 2240
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Cobrir as duas regras, sem percurso ou casos detalhados; plano proporcional e fiel.",
+            "passed": true,
+            "evidence": "outputs/result.json: testPlan.ruleIds=[CA-01,CA-02]; três itens de abordagem preservam partições, limites inclusivos 1..10, mensagens, rejeição sem reserva e comentário opcional salvo. Sem cliques, telas ou casos detalhados. Três pré-condições descrevem recursos necessários, sem declarar um percurso observado; convém deixar explícito que os meios de consulta ainda serão confirmados."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        }
+      }
+    },
+    {
+      "id": "plano-conciso",
+      "variant": "old_skill",
+      "role": "test-designer",
+      "input": {
+        "task": "planning",
+        "artifacts": [
+          {
+            "id": "a13480e4-7700-479a-9b53-8074ff8d1823",
+            "name": "historias-e-criterios.txt",
+            "version": "1",
+            "text": "## US-01\n\nComo usuário autenticado, quero reservar itens para informar a quantidade desejada.\n\n## CA-01\n\nA quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva.\n\n## CA-02\n\nO comentário é opcional. Quando informado, deve ser salvo junto à reserva.\n"
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "approvedCuration": {
+          "id": "0857784e-cdcb-4d23-947f-0f0659f4800a",
+          "phase": "curation",
+          "revision": 1,
+          "producer": "artifact-curator",
+          "createdAt": "2026-09-24T16:02:41.858Z",
+          "budgetCycleId": "46f548a4-a0dd-4158-b9a0-87996357f687",
+          "dependsOn": [],
+          "answerRefs": [],
+          "payload": {
+            "requirements": [
+              {
+                "id": "US-01",
+                "statement": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada.",
+                "sources": [
+                  {
+                    "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                    "locator": "L3",
+                    "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+                  }
+                ],
+                "rules": [
+                  {
+                    "id": "CA-01",
+                    "statement": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma quantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora desse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não criar a reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                        "locator": "L7-L10",
+                        "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                      }
+                    ]
+                  },
+                  {
+                    "id": "CA-02",
+                    "statement": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                        "locator": "L14",
+                        "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "questions": []
+          }
+        },
+        "previousOutput": null,
+        "feedback": null
+      },
+      "payload": {
+        "testPlan": {
+          "objective": "Validar a reserva de itens por usuário autenticado, verificando a quantidade permitida, as mensagens de confirmação e rejeição, a não criação de reservas inválidas e o caráter opcional e a persistência do comentário.",
+          "requirementIds": [
+            "US-01"
+          ],
+          "ruleIds": [
+            "CA-01",
+            "CA-02"
+          ],
+          "priorities": [
+            {
+              "ruleId": "CA-01",
+              "reason": "Prioridade alta: controla a criação da reserva e impede reservas com quantidades inválidas, incluindo as mensagens exigidas."
+            },
+            {
+              "ruleId": "CA-02",
+              "reason": "Prioridade média: assegura que o comentário não seja obrigatório e que seu conteúdo seja preservado quando informado."
+            }
+          ],
+          "exclusions": [],
+          "approach": [
+            "Aplicar testes caixa preta para CA-01, particionando quantidades em inteiros de 1 a 10 inclusive, valores abaixo e acima do intervalo e valores não inteiros. Contemplar os limites 1 e 10 e valores imediatamente externos ao intervalo.",
+            "Verificar que a confirmação de quantidade válida cria a reserva e mostra “Reserva criada”; para quantidades fora do intervalo ou não inteiras, verificar “Quantidade inválida” e a não criação da reserva.",
+            "Para CA-02, com quantidade válida, avaliar as partições comentário ausente e comentário informado, verificando a criação sem obrigatoriedade do campo e o salvamento do comentário junto à reserva quando presente. Não presumir limites de tamanho ou conteúdo não especificados.",
+            "Definir os percursos e meios de verificação observáveis após as aprovações do plano e dos casos, sem presumir telas, controles ou navegação já observados."
+          ],
+          "preconditions": [
+            "Usuário autenticado, conforme US-01.",
+            "Antes do mapeamento e da execução, disponibilizar acesso ao ambiente de teste e condições para reservar itens e verificar a criação ou não criação da reserva e o comentário salvo."
+          ],
+          "sources": [
+            {
+              "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+              "locator": "L3",
+              "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+            },
+            {
+              "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+              "locator": "L7-L10",
+              "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+            },
+            {
+              "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+              "locator": "L14",
+              "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+            }
+          ]
+        }
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 22959,
+        "usage": {
+          "input": 1468,
+          "output": 689,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 2157
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Cobrir as duas regras, sem percurso ou casos detalhados; plano proporcional e fiel.",
+            "passed": true,
+            "evidence": "outputs/result.json: testPlan.ruleIds=[CA-01,CA-02]; abordagem cobre inteiros 1..10 inclusive, externos e não inteiros, mensagens exatas e ausência de reserva inválida, comentário ausente/informado e persistência. Não inclui percurso conhecido ou casos detalhados. Quatro itens de abordagem e duas pré-condições permanecem proporcionais, embora mais extensos que a variante nova."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        }
+      }
+    },
+    {
+      "id": "validar-plano-correto",
+      "variant": "with_skill",
+      "role": "output-validator",
+      "input": {
+        "task": "validation",
+        "artifacts": [
+          {
+            "id": "a13480e4-7700-479a-9b53-8074ff8d1823",
+            "name": "historias-e-criterios.txt",
+            "version": "1",
+            "text": "## US-01\n\nComo usuário autenticado, quero reservar itens para informar a quantidade desejada.\n\n## CA-01\n\nA quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva.\n\n## CA-02\n\nO comentário é opcional. Quando informado, deve ser salvo junto à reserva.\n"
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "approvedCuration": {
+          "id": "0857784e-cdcb-4d23-947f-0f0659f4800a",
+          "phase": "curation",
+          "revision": 1,
+          "producer": "artifact-curator",
+          "createdAt": "2026-09-24T16:02:41.858Z",
+          "budgetCycleId": "46f548a4-a0dd-4158-b9a0-87996357f687",
+          "dependsOn": [],
+          "answerRefs": [],
+          "payload": {
+            "requirements": [
+              {
+                "id": "US-01",
+                "statement": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada.",
+                "sources": [
+                  {
+                    "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                    "locator": "L3",
+                    "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+                  }
+                ],
+                "rules": [
+                  {
+                    "id": "CA-01",
+                    "statement": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma quantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora desse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não criar a reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                        "locator": "L7-L10",
+                        "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                      }
+                    ]
+                  },
+                  {
+                    "id": "CA-02",
+                    "statement": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                        "locator": "L14",
+                        "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "questions": []
+          }
+        },
+        "output": {
+          "id": "9a1e0a99-8138-4a40-bfc8-bb79cd93670e",
+          "phase": "planning",
+          "revision": 1,
+          "producer": "test-designer",
+          "createdAt": "2026-09-24T16:03:09.182Z",
+          "budgetCycleId": "46f548a4-a0dd-4158-b9a0-87996357f687",
+          "dependsOn": [
+            {
+              "outputId": "0857784e-cdcb-4d23-947f-0f0659f4800a",
+              "revision": 1
+            }
+          ],
+          "answerRefs": [],
+          "payload": {
+            "testPlan": {
+              "objective": "Validar a reserva de itens por usuário autenticado, verificando as regras de quantidade, as mensagens de confirmação e rejeição e a preservação do comentário opcional.",
+              "requirementIds": [
+                "US-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "priorities": [
+                {
+                  "ruleId": "CA-01",
+                  "reason": "Alta: controla a validade da quantidade e impede a criação de reservas inválidas, protegendo o fluxo principal."
+                },
+                {
+                  "ruleId": "CA-02",
+                  "reason": "Média: garante que o comentário não seja obrigatório e que, quando informado, seja preservado junto à reserva."
+                }
+              ],
+              "exclusions": [],
+              "approach": [
+                "Aplicar testes caixa preta para CA-01, particionando quantidades em inteiros de 1 a 10 inclusive, valores abaixo e acima do intervalo e valores não inteiros. Analisar os limites 1 e 10 e seus inteiros imediatamente externos, sem detalhar casos nesta etapa.",
+                "Para CA-01, verificar a criação da reserva e a mensagem “Reserva criada” ao confirmar quantidade válida; para quantidade fora do intervalo ou não inteira, verificar a mensagem “Quantidade inválida” e a ausência de criação da reserva.",
+                "Para CA-02, cobrir comentário ausente e informado em reservas com quantidade válida, verificando respectivamente a possibilidade de reservar sem comentário e o salvamento do comentário junto à reserva. Não presumir limites de tamanho ou restrições de conteúdo não especificados.",
+                "Definir o percurso e os meios observáveis de conferir a reserva e o comentário após as aprovações do plano e dos casos, sem presumir telas ou navegação já observadas."
+              ],
+              "preconditions": [
+                "Usuário autenticado, conforme US-01.",
+                "Antes do mapeamento e da execução, disponibilizar acesso ao ambiente e itens para reserva; acesso não é necessário para elaborar este plano."
+              ],
+              "sources": [
+                {
+                  "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                  "locator": "L3",
+                  "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+                },
+                {
+                  "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                  "locator": "L7-L10",
+                  "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                },
+                {
+                  "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                  "locator": "L14",
+                  "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                }
+              ]
+            }
+          }
+        },
+        "previousVerdicts": []
+      },
+      "payload": {
+        "status": "approved",
+        "findings": [],
+        "reason": "O plano cobre CA-01 e CA-02 com prioridades e abordagem compatíveis com as fontes e a curadoria aprovada, sem inventar comportamentos ou percursos. O acesso ao ambiente está corretamente tratado como pré-condição futura."
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 6213,
+        "usage": {
+          "input": 2577,
+          "output": 64,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 2641
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Aprovar o plano correto mesmo sem recitação dos agentes e das validações internas.",
+            "passed": true,
+            "evidence": "outputs/result.json: O plano de entrada foi conferido contra CA-01 e CA-02 e está correto, com acesso tratado como necessidade futura. O validador retorna approved/findings=[] com justificativa focada em conteúdo, sem exigir recitação de etapas internas."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        }
+      }
+    },
+    {
+      "id": "validar-plano-correto",
+      "variant": "old_skill",
+      "role": "output-validator",
+      "input": {
+        "task": "validation",
+        "artifacts": [
+          {
+            "id": "a13480e4-7700-479a-9b53-8074ff8d1823",
+            "name": "historias-e-criterios.txt",
+            "version": "1",
+            "text": "## US-01\n\nComo usuário autenticado, quero reservar itens para informar a quantidade desejada.\n\n## CA-01\n\nA quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva.\n\n## CA-02\n\nO comentário é opcional. Quando informado, deve ser salvo junto à reserva.\n"
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "approvedCuration": {
+          "id": "0857784e-cdcb-4d23-947f-0f0659f4800a",
+          "phase": "curation",
+          "revision": 1,
+          "producer": "artifact-curator",
+          "createdAt": "2026-09-24T16:02:41.858Z",
+          "budgetCycleId": "46f548a4-a0dd-4158-b9a0-87996357f687",
+          "dependsOn": [],
+          "answerRefs": [],
+          "payload": {
+            "requirements": [
+              {
+                "id": "US-01",
+                "statement": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada.",
+                "sources": [
+                  {
+                    "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                    "locator": "L3",
+                    "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+                  }
+                ],
+                "rules": [
+                  {
+                    "id": "CA-01",
+                    "statement": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma quantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora desse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não criar a reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                        "locator": "L7-L10",
+                        "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                      }
+                    ]
+                  },
+                  {
+                    "id": "CA-02",
+                    "statement": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                        "locator": "L14",
+                        "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "questions": []
+          }
+        },
+        "output": {
+          "id": "9a1e0a99-8138-4a40-bfc8-bb79cd93670e",
+          "phase": "planning",
+          "revision": 1,
+          "producer": "test-designer",
+          "createdAt": "2026-09-24T16:03:09.182Z",
+          "budgetCycleId": "46f548a4-a0dd-4158-b9a0-87996357f687",
+          "dependsOn": [
+            {
+              "outputId": "0857784e-cdcb-4d23-947f-0f0659f4800a",
+              "revision": 1
+            }
+          ],
+          "answerRefs": [],
+          "payload": {
+            "testPlan": {
+              "objective": "Validar a reserva de itens por usuário autenticado, verificando as regras de quantidade, as mensagens de confirmação e rejeição e a preservação do comentário opcional.",
+              "requirementIds": [
+                "US-01"
+              ],
+              "ruleIds": [
+                "CA-01",
+                "CA-02"
+              ],
+              "priorities": [
+                {
+                  "ruleId": "CA-01",
+                  "reason": "Alta: controla a validade da quantidade e impede a criação de reservas inválidas, protegendo o fluxo principal."
+                },
+                {
+                  "ruleId": "CA-02",
+                  "reason": "Média: garante que o comentário não seja obrigatório e que, quando informado, seja preservado junto à reserva."
+                }
+              ],
+              "exclusions": [],
+              "approach": [
+                "Aplicar testes caixa preta para CA-01, particionando quantidades em inteiros de 1 a 10 inclusive, valores abaixo e acima do intervalo e valores não inteiros. Analisar os limites 1 e 10 e seus inteiros imediatamente externos, sem detalhar casos nesta etapa.",
+                "Para CA-01, verificar a criação da reserva e a mensagem “Reserva criada” ao confirmar quantidade válida; para quantidade fora do intervalo ou não inteira, verificar a mensagem “Quantidade inválida” e a ausência de criação da reserva.",
+                "Para CA-02, cobrir comentário ausente e informado em reservas com quantidade válida, verificando respectivamente a possibilidade de reservar sem comentário e o salvamento do comentário junto à reserva. Não presumir limites de tamanho ou restrições de conteúdo não especificados.",
+                "Definir o percurso e os meios observáveis de conferir a reserva e o comentário após as aprovações do plano e dos casos, sem presumir telas ou navegação já observadas."
+              ],
+              "preconditions": [
+                "Usuário autenticado, conforme US-01.",
+                "Antes do mapeamento e da execução, disponibilizar acesso ao ambiente e itens para reserva; acesso não é necessário para elaborar este plano."
+              ],
+              "sources": [
+                {
+                  "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                  "locator": "L3",
+                  "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+                },
+                {
+                  "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                  "locator": "L7-L10",
+                  "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                },
+                {
+                  "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                  "locator": "L14",
+                  "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                }
+              ]
+            }
+          }
+        },
+        "previousVerdicts": []
+      },
+      "payload": {
+        "status": "approved",
+        "findings": [],
+        "reason": "O plano cobre CA-01 e CA-02 fielmente, preservando limites inclusivos, mensagens, rejeição sem criação e comentário opcional. As fontes conferem com os originais; a abordagem não inventa comportamentos ou navegação e condiciona o mapeamento às aprovações do plano e dos casos."
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 8235,
+        "usage": {
+          "input": 2386,
+          "output": 145,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 2531
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Aprovar o plano correto mesmo sem recitação dos agentes e das validações internas.",
+            "passed": true,
+            "evidence": "outputs/result.json: A inspeção independente do output fornecido ao validador confirma quantidade inteira 1..10, mensagens corretas, rejeição sem criação, comentário opcional salvo, fontes e dependência da curadoria vigente. O retorno approved/findings=[] é adequado e não exige nomes dos agentes ou recitação das validações internas."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        }
+      }
+    },
+    {
+      "id": "rejeitar-limite-adulterado",
+      "variant": "with_skill",
+      "role": "output-validator",
+      "input": {
+        "task": "validation",
+        "artifacts": [
+          {
+            "id": "a13480e4-7700-479a-9b53-8074ff8d1823",
+            "name": "historias-e-criterios.txt",
+            "version": "1",
+            "text": "## US-01\n\nComo usuário autenticado, quero reservar itens para informar a quantidade desejada.\n\n## CA-01\n\nA quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva.\n\n## CA-02\n\nO comentário é opcional. Quando informado, deve ser salvo junto à reserva.\n"
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "output": {
+          "id": "0857784e-cdcb-4d23-947f-0f0659f4800a",
+          "phase": "curation",
+          "revision": 1,
+          "producer": "artifact-curator",
+          "createdAt": "2026-09-24T16:02:41.858Z",
+          "budgetCycleId": "46f548a4-a0dd-4158-b9a0-87996357f687",
+          "dependsOn": [],
+          "answerRefs": [],
+          "payload": {
+            "requirements": [
+              {
+                "id": "US-01",
+                "statement": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada.",
+                "sources": [
+                  {
+                    "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                    "locator": "L3",
+                    "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+                  }
+                ],
+                "rules": [
+                  {
+                    "id": "CA-01",
+                    "statement": "A quantidade deve ser um número inteiro entre 1 e 11, inclusive. Ao confirmar uma quantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora desse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não criar a reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                        "locator": "L7-L10",
+                        "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                      }
+                    ]
+                  },
+                  {
+                    "id": "CA-02",
+                    "statement": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                        "locator": "L14",
+                        "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "questions": []
+          }
+        },
+        "previousVerdicts": []
+      },
+      "payload": {
+        "status": "changes_requested",
+        "findings": [
+          {
+            "code": "SOURCE_MISMATCH",
+            "message": "CA-01 altera o limite superior de 10 para 11, tornando válida uma quantidade inválida na fonte. Corrigir o intervalo para inteiros de 1 a 10, inclusive.",
+            "location": "requirements[0].rules[0].statement"
+          }
+        ],
+        "reason": "A curadoria diverge materialmente do intervalo de quantidade autorizado no original."
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 4729,
+        "usage": {
+          "input": 1862,
+          "output": 93,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 1955
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Detectar limite 11 divergente da fonte 10; não aprovar.",
+            "passed": true,
+            "evidence": "outputs/result.json: Verificado diretamente: fonte diz 1..10 e curadoria candidata diz 1..11. changes_requested com SOURCE_MISMATCH explica que 11 torna válida uma quantidade inválida e indica o statement de CA-01 para correção."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        }
+      }
+    },
+    {
+      "id": "rejeitar-limite-adulterado",
+      "variant": "old_skill",
+      "role": "output-validator",
+      "input": {
+        "task": "validation",
+        "artifacts": [
+          {
+            "id": "a13480e4-7700-479a-9b53-8074ff8d1823",
+            "name": "historias-e-criterios.txt",
+            "version": "1",
+            "text": "## US-01\n\nComo usuário autenticado, quero reservar itens para informar a quantidade desejada.\n\n## CA-01\n\nA quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva.\n\n## CA-02\n\nO comentário é opcional. Quando informado, deve ser salvo junto à reserva.\n"
+          }
+        ],
+        "objective": "",
+        "answers": [],
+        "output": {
+          "id": "0857784e-cdcb-4d23-947f-0f0659f4800a",
+          "phase": "curation",
+          "revision": 1,
+          "producer": "artifact-curator",
+          "createdAt": "2026-09-24T16:02:41.858Z",
+          "budgetCycleId": "46f548a4-a0dd-4158-b9a0-87996357f687",
+          "dependsOn": [],
+          "answerRefs": [],
+          "payload": {
+            "requirements": [
+              {
+                "id": "US-01",
+                "statement": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada.",
+                "sources": [
+                  {
+                    "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                    "locator": "L3",
+                    "quote": "Como usuário autenticado, quero reservar itens para informar a quantidade desejada."
+                  }
+                ],
+                "rules": [
+                  {
+                    "id": "CA-01",
+                    "statement": "A quantidade deve ser um número inteiro entre 1 e 11, inclusive. Ao confirmar uma quantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora desse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não criar a reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                        "locator": "L7-L10",
+                        "quote": "A quantidade deve ser um número inteiro entre 1 e 10, inclusive. Ao confirmar uma\nquantidade válida, o sistema deve mostrar “Reserva criada”. Para quantidades fora\ndesse intervalo ou não inteiras, o sistema deve mostrar “Quantidade inválida” e não\ncriar a reserva."
+                      }
+                    ]
+                  },
+                  {
+                    "id": "CA-02",
+                    "statement": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva.",
+                    "sources": [
+                      {
+                        "artifactId": "a13480e4-7700-479a-9b53-8074ff8d1823",
+                        "locator": "L14",
+                        "quote": "O comentário é opcional. Quando informado, deve ser salvo junto à reserva."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "questions": []
+          }
+        },
+        "previousVerdicts": []
+      },
+      "payload": {
+        "status": "changes_requested",
+        "findings": [
+          {
+            "code": "SOURCE_MISMATCH",
+            "message": "CA-01 altera o limite superior de 10 para 11. Corrigir para inteiro entre 1 e 10, inclusive, conforme o original; 11 deve ser inválido e não criar reserva.",
+            "location": "requirements[0].rules[0].statement"
+          }
+        ],
+        "reason": "O limite superior da quantidade diverge do CA-01 original, alterando quais reservas são válidas."
+      },
+      "metadata": {
+        "provider": "openai-codex",
+        "model": "gpt-6-astra",
+        "durationMs": 7826,
+        "usage": {
+          "input": 1671,
+          "output": 102,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 1773
+        }
+      },
+      "structural": "passed",
+      "assessment": {
+        "expectations": [
+          {
+            "text": "Detectar limite 11 divergente da fonte 10; não aprovar.",
+            "passed": true,
+            "evidence": "outputs/result.json: A fonte de entrada estabelece limite superior 10 enquanto output.payload.requirements[0].rules[0].statement foi adulterado para 11. O retorno changes_requested aponta SOURCE_MISMATCH precisamente nessa localização e pede restaurar 1..10 inclusive."
+          }
+        ],
+        "summary": {
+          "passed": 1,
+          "failed": 0,
+          "total": 1,
+          "pass_rate": 1.0
+        }
+      }
+    }
+  ],
+  "assessmentMethod": "Revisão independente por agente contra fontes e expectativas prévias, não aprovação humana nem uso do validador como gabarito."
+}

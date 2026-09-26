@@ -1,8 +1,8 @@
 # AKCIT QA Agent
 
 Este repositório prepara os ambientes local, desenvolvimento e produção de um
-sistema multiagentes de testes caixa preta. A metodologia e os requisitos do produto
-serão definidos pela equipe em etapas seguintes.
+sistema multiagentes de testes caixa preta. Os requisitos do produto e o fluxo
+aprovado estão em docs/requisitos/PROTOTIPO.md; contratos em CONTRATOS.md na mesma pasta.
 
 - Use Node.js 24 e as versões fixadas no package-lock.json.
 - Faça mudanças em branches de trabalho e abra PR para develop.

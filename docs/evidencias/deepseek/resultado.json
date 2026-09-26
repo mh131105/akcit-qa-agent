@@ -1,0 +1,552 @@
+{
+  "notice": "Execução técnica com material sintético. Chamadas aos modelos reais. Aprovação do plano simulada em execução isolada; nenhum teste de navegador executado.",
+  "models": {
+    "curation": "deepseek/deepseek-flash",
+    "planning_cases_validation": "deepseek/deepseek-v4-pro"
+  },
+  "reasoning": {
+    "flash": "low",
+    "pro": "high"
+  },
+  "summary": {
+    "status": "passed",
+    "durationMs": 132154,
+    "calls": 6,
+    "tokens": 30011,
+    "estimatedCost": 0.061963484,
+    "cases": 6,
+    "finalStatus": "awaiting_approval",
+    "finalPhase": "case_design",
+    "note": "Aprovação de plano simulada exclusivamente para verificação técnica em dados isolados."
+  },
+  "input": [
+    {
+      "id": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+      "name": "historias-e-criterios.txt",
+      "version": "1",
+      "text": "US-01: Como usuário, quero reservar itens informando a quantidade.\nCA-01: A quantidade deve ser um número inteiro entre 1 e 3, inclusive. Ao confirmar uma quantidade válida, mostrar \"Reserva criada\". Para quantidades fora desse intervalo ou não inteiras, mostrar \"Quantidade inválida\" e não criar a reserva."
+    }
+  ],
+  "outputs": [
+    {
+      "id": "3a8d5fcb-3633-41c1-8561-c1af1d0cc5d0",
+      "phase": "curation",
+      "revision": 1,
+      "producer": "artifact-curator",
+      "createdAt": "2026-09-25T00:28:39.795Z",
+      "budgetCycleId": "ef0fbd78-404f-4066-8f36-d43e528cde46",
+      "dependsOn": [],
+      "answerRefs": [],
+      "payload": {
+        "requirements": [
+          {
+            "id": "US-01",
+            "statement": "Como usuário, quero reservar itens informando a quantidade.",
+            "sources": [
+              {
+                "artifactId": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+                "locator": "L1",
+                "quote": "US-01: Como usuário, quero reservar itens informando a quantidade."
+              }
+            ],
+            "rules": [
+              {
+                "id": "CA-01",
+                "statement": "A quantidade deve ser um número inteiro entre 1 e 3, inclusive. Ao confirmar uma quantidade válida, mostrar \"Reserva criada\". Para quantidades fora desse intervalo ou não inteiras, mostrar \"Quantidade inválida\" e não criar a reserva.",
+                "sources": [
+                  {
+                    "artifactId": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+                    "locator": "L2",
+                    "quote": "CA-01: A quantidade deve ser um número inteiro entre 1 e 3, inclusive. Ao confirmar uma quantidade válida, mostrar \"Reserva criada\". Para quantidades fora desse intervalo ou não inteiras, mostrar \"Quantidade inválida\" e não criar a reserva."
+                  }
+                ],
+                "kind": "rule",
+                "examples": []
+              }
+            ]
+          }
+        ],
+        "questions": []
+      }
+    },
+    {
+      "id": "207d65ee-3371-4be3-96a1-8c7d7b0eaa39",
+      "phase": "planning",
+      "revision": 1,
+      "producer": "test-designer",
+      "createdAt": "2026-09-25T00:29:09.689Z",
+      "budgetCycleId": "ef0fbd78-404f-4066-8f36-d43e528cde46",
+      "dependsOn": [
+        {
+          "outputId": "3a8d5fcb-3633-41c1-8561-c1af1d0cc5d0",
+          "revision": 1
+        }
+      ],
+      "answerRefs": [],
+      "payload": {
+        "testPlan": {
+          "objective": "Validar a reserva de itens informando quantidade inteira de 1 a 3 e a recusa com \"Quantidade inválida\" para valores fora desse intervalo ou não inteiros.",
+          "requirementIds": [
+            "US-01"
+          ],
+          "ruleIds": [
+            "CA-01"
+          ],
+          "priorities": [
+            {
+              "ruleId": "CA-01",
+              "reason": "Regra central que define a validação da quantidade e o resultado funcional da reserva."
+            }
+          ],
+          "exclusions": [],
+          "approach": [
+            "Cobrir a classe válida de quantidades inteiras entre 1 e 3, com partição de equivalência e análise de valor limite nos limites 1 e 3, verificando a mensagem \"Reserva criada\".",
+            "Cobrir partições inválidas de valores inteiros abaixo do limite inferior e acima do limite superior, verificando a mensagem \"Quantidade inválida\" e a não criação da reserva.",
+            "Cobrir quantidade não inteira, verificando a mensagem \"Quantidade inválida\" e a não criação da reserva."
+          ],
+          "preconditions": [
+            "Existir fluxo de reserva disponível para informar e confirmar a quantidade."
+          ],
+          "sources": [
+            {
+              "artifactId": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+              "locator": "L1",
+              "quote": "US-01: Como usuário, quero reservar itens informando a quantidade."
+            },
+            {
+              "artifactId": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+              "locator": "L2",
+              "quote": "CA-01: A quantidade deve ser um número inteiro entre 1 e 3, inclusive. Ao confirmar uma quantidade válida, mostrar \"Reserva criada\". Para quantidades fora desse intervalo ou não inteiras, mostrar \"Quantidade inválida\" e não criar a reserva."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "291baf7d-01de-452f-abbd-fcaf11ae6535",
+      "phase": "case_design",
+      "revision": 1,
+      "producer": "test-designer",
+      "createdAt": "2026-09-25T00:30:12.930Z",
+      "budgetCycleId": "ef0fbd78-404f-4066-8f36-d43e528cde46",
+      "dependsOn": [
+        {
+          "outputId": "3a8d5fcb-3633-41c1-8561-c1af1d0cc5d0",
+          "revision": 1
+        },
+        {
+          "outputId": "207d65ee-3371-4be3-96a1-8c7d7b0eaa39",
+          "revision": 1
+        }
+      ],
+      "answerRefs": [],
+      "payload": {
+        "testCases": [
+          {
+            "id": "TC-01",
+            "requirementIds": [
+              "US-01"
+            ],
+            "ruleIds": [
+              "CA-01"
+            ],
+            "preconditions": [
+              "Existir fluxo de reserva disponível para informar e confirmar a quantidade."
+            ],
+            "setup": "Nenhuma preparação adicional além das precondições.",
+            "pathId": null,
+            "data": {
+              "quantidade": 1
+            },
+            "techniques": [
+              {
+                "name": "Análise de valor limite",
+                "description": "Exercita o limite inferior válido do intervalo fechado [1,3] da regra CA-01. O valor 1 é o menor inteiro aceito e deve confirmar a reserva.",
+                "values": [
+                  1
+                ]
+              }
+            ],
+            "expected": "Exibir a mensagem \"Reserva criada\".",
+            "sources": [
+              {
+                "artifactId": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+                "locator": "L1",
+                "quote": "US-01: Como usuário, quero reservar itens informando a quantidade."
+              },
+              {
+                "artifactId": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+                "locator": "L2",
+                "quote": "CA-01: A quantidade deve ser um número inteiro entre 1 e 3, inclusive. Ao confirmar uma quantidade válida, mostrar \"Reserva criada\". Para quantidades fora desse intervalo ou não inteiras, mostrar \"Quantidade inválida\" e não criar a reserva."
+              }
+            ]
+          },
+          {
+            "id": "TC-02",
+            "requirementIds": [
+              "US-01"
+            ],
+            "ruleIds": [
+              "CA-01"
+            ],
+            "preconditions": [
+              "Existir fluxo de reserva disponível para informar e confirmar a quantidade."
+            ],
+            "setup": "Nenhuma preparação adicional além das precondições.",
+            "pathId": null,
+            "data": {
+              "quantidade": 2
+            },
+            "techniques": [
+              {
+                "name": "Partição de equivalência",
+                "description": "Exercita um representante da classe válida de quantidades inteiras entre 1 e 3. O valor 2 está dentro do intervalo definido pela regra CA-01.",
+                "values": [
+                  2
+                ]
+              }
+            ],
+            "expected": "Exibir a mensagem \"Reserva criada\".",
+            "sources": [
+              {
+                "artifactId": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+                "locator": "L1",
+                "quote": "US-01: Como usuário, quero reservar itens informando a quantidade."
+              },
+              {
+                "artifactId": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+                "locator": "L2",
+                "quote": "CA-01: A quantidade deve ser um número inteiro entre 1 e 3, inclusive. Ao confirmar uma quantidade válida, mostrar \"Reserva criada\". Para quantidades fora desse intervalo ou não inteiras, mostrar \"Quantidade inválida\" e não criar a reserva."
+              }
+            ]
+          },
+          {
+            "id": "TC-03",
+            "requirementIds": [
+              "US-01"
+            ],
+            "ruleIds": [
+              "CA-01"
+            ],
+            "preconditions": [
+              "Existir fluxo de reserva disponível para informar e confirmar a quantidade."
+            ],
+            "setup": "Nenhuma preparação adicional além das precondições.",
+            "pathId": null,
+            "data": {
+              "quantidade": 3
+            },
+            "techniques": [
+              {
+                "name": "Análise de valor limite",
+                "description": "Exercita o limite superior válido do intervalo fechado [1,3] da regra CA-01. O valor 3 é o maior inteiro aceito e deve confirmar a reserva.",
+                "values": [
+                  3
+                ]
+              }
+            ],
+            "expected": "Exibir a mensagem \"Reserva criada\".",
+            "sources": [
+              {
+                "artifactId": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+                "locator": "L1",
+                "quote": "US-01: Como usuário, quero reservar itens informando a quantidade."
+              },
+              {
+                "artifactId": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+                "locator": "L2",
+                "quote": "CA-01: A quantidade deve ser um número inteiro entre 1 e 3, inclusive. Ao confirmar uma quantidade válida, mostrar \"Reserva criada\". Para quantidades fora desse intervalo ou não inteiras, mostrar \"Quantidade inválida\" e não criar a reserva."
+              }
+            ]
+          },
+          {
+            "id": "TC-04",
+            "requirementIds": [
+              "US-01"
+            ],
+            "ruleIds": [
+              "CA-01"
+            ],
+            "preconditions": [
+              "Existir fluxo de reserva disponível para informar e confirmar a quantidade."
+            ],
+            "setup": "Nenhuma preparação adicional além das precondições.",
+            "pathId": null,
+            "data": {
+              "quantidade": 0
+            },
+            "techniques": [
+              {
+                "name": "Análise de valor limite",
+                "description": "Exercita a fronteira imediatamente abaixo do limite inferior do intervalo [1,3]. O valor 0 é inteiro, mas está fora do intervalo aceito pela regra CA-01.",
+                "values": [
+                  0
+                ]
+              }
+            ],
+            "expected": "Exibir a mensagem \"Quantidade inválida\" e não criar a reserva.",
+            "sources": [
+              {
+                "artifactId": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+                "locator": "L1",
+                "quote": "US-01: Como usuário, quero reservar itens informando a quantidade."
+              },
+              {
+                "artifactId": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+                "locator": "L2",
+                "quote": "CA-01: A quantidade deve ser um número inteiro entre 1 e 3, inclusive. Ao confirmar uma quantidade válida, mostrar \"Reserva criada\". Para quantidades fora desse intervalo ou não inteiras, mostrar \"Quantidade inválida\" e não criar a reserva."
+              }
+            ]
+          },
+          {
+            "id": "TC-05",
+            "requirementIds": [
+              "US-01"
+            ],
+            "ruleIds": [
+              "CA-01"
+            ],
+            "preconditions": [
+              "Existir fluxo de reserva disponível para informar e confirmar a quantidade."
+            ],
+            "setup": "Nenhuma preparação adicional além das precondições.",
+            "pathId": null,
+            "data": {
+              "quantidade": 4
+            },
+            "techniques": [
+              {
+                "name": "Análise de valor limite",
+                "description": "Exercita a fronteira imediatamente acima do limite superior do intervalo [1,3]. O valor 4 é inteiro, mas está fora do intervalo aceito pela regra CA-01.",
+                "values": [
+                  4
+                ]
+              }
+            ],
+            "expected": "Exibir a mensagem \"Quantidade inválida\" e não criar a reserva.",
+            "sources": [
+              {
+                "artifactId": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+                "locator": "L1",
+                "quote": "US-01: Como usuário, quero reservar itens informando a quantidade."
+              },
+              {
+                "artifactId": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+                "locator": "L2",
+                "quote": "CA-01: A quantidade deve ser um número inteiro entre 1 e 3, inclusive. Ao confirmar uma quantidade válida, mostrar \"Reserva criada\". Para quantidades fora desse intervalo ou não inteiras, mostrar \"Quantidade inválida\" e não criar a reserva."
+              }
+            ]
+          },
+          {
+            "id": "TC-06",
+            "requirementIds": [
+              "US-01"
+            ],
+            "ruleIds": [
+              "CA-01"
+            ],
+            "preconditions": [
+              "Existir fluxo de reserva disponível para informar e confirmar a quantidade."
+            ],
+            "setup": "Nenhuma preparação adicional além das precondições.",
+            "pathId": null,
+            "data": {
+              "quantidade": 1.5
+            },
+            "techniques": [
+              {
+                "name": "Partição de equivalência",
+                "description": "Exercita um representante da classe de valores não inteiros rejeitados pela regra CA-01. O valor 1.5 é numérico, mas não é inteiro.",
+                "values": [
+                  1.5
+                ]
+              }
+            ],
+            "expected": "Exibir a mensagem \"Quantidade inválida\" e não criar a reserva.",
+            "sources": [
+              {
+                "artifactId": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+                "locator": "L1",
+                "quote": "US-01: Como usuário, quero reservar itens informando a quantidade."
+              },
+              {
+                "artifactId": "fa2ccb2c-5c07-4459-9414-67b4a296ea25",
+                "locator": "L2",
+                "quote": "CA-01: A quantidade deve ser um número inteiro entre 1 e 3, inclusive. Ao confirmar uma quantidade válida, mostrar \"Reserva criada\". Para quantidades fora desse intervalo ou não inteiras, mostrar \"Quantidade inválida\" e não criar a reserva."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "validations": [
+    {
+      "id": "0bfc3768-cf17-4928-8994-61f60626fabf",
+      "outputId": "3a8d5fcb-3633-41c1-8561-c1af1d0cc5d0",
+      "outputRevision": 1,
+      "validator": "output-validator",
+      "at": "2026-09-25T00:28:44.078Z",
+      "attempt": 1,
+      "status": "approved",
+      "findings": [],
+      "reason": "A curadoria reproduz fielmente a US-01 e a CA-01 conforme o artefato original, preservando condições, ações, intervalo, mensagens e associação de fontes."
+    },
+    {
+      "id": "a6c08ebf-40d9-4ea5-8ab7-35a010df4d04",
+      "outputId": "207d65ee-3371-4be3-96a1-8c7d7b0eaa39",
+      "outputRevision": 1,
+      "validator": "output-validator",
+      "at": "2026-09-25T00:29:19.317Z",
+      "attempt": 1,
+      "status": "approved",
+      "findings": [],
+      "reason": "O plano cobre integralmente a regra CA-01, incluindo valores válidos nos limites, partições inválidas e não inteiros, com precondição explícita e fontes corretas."
+    },
+    {
+      "id": "04ef50ee-cf56-4bfc-8cbf-e94c4e76039c",
+      "outputId": "291baf7d-01de-452f-abbd-fcaf11ae6535",
+      "outputRevision": 1,
+      "validator": "output-validator",
+      "at": "2026-09-25T00:30:43.160Z",
+      "attempt": 1,
+      "status": "approved",
+      "findings": [],
+      "reason": "Os casos cobrem a regra CA-01 conforme o plano aprovado: limites válidos 1 e 3, representante válido 2, valores inválidos 0 e 4 e quantidade não inteira 1.5, com expectativas e precondições alinhadas às fontes."
+    }
+  ],
+  "calls": [
+    {
+      "id": "1b8e1fd5-4df8-42ac-85c6-8f929d83f675",
+      "role": "artifact-curator",
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "phase": "curation",
+      "attempt": 1,
+      "outputRevision": 1,
+      "startedAt": "2026-09-25T00:28:31.036Z",
+      "status": "completed",
+      "budgetCycleId": "ef0fbd78-404f-4066-8f36-d43e528cde46",
+      "finishedAt": "2026-09-25T00:28:39.779Z",
+      "durationMs": 8743,
+      "usage": {
+        "input": 2009,
+        "output": 1882,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 3891
+      },
+      "estimatedCost": 0.0028610999999999997
+    },
+    {
+      "id": "2664285d-ef6c-441d-bc25-82c3ab6bb22c",
+      "role": "output-validator",
+      "provider": "deepseek",
+      "model": "deepseek-v4-pro",
+      "phase": "curation",
+      "attempt": 1,
+      "outputRevision": 1,
+      "startedAt": "2026-09-25T00:28:39.810Z",
+      "status": "completed",
+      "budgetCycleId": "ef0fbd78-404f-4066-8f36-d43e528cde46",
+      "finishedAt": "2026-09-25T00:28:44.068Z",
+      "durationMs": 4258,
+      "usage": {
+        "input": 2673,
+        "output": 246,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 2919
+      },
+      "estimatedCost": 0.00450252
+    },
+    {
+      "id": "a3b7b9f9-f6ee-4b1a-af1d-74a5e8673afd",
+      "role": "test-designer",
+      "provider": "deepseek",
+      "model": "deepseek-v4-pro",
+      "phase": "planning",
+      "attempt": 1,
+      "outputRevision": 1,
+      "startedAt": "2026-09-25T00:28:44.087Z",
+      "status": "completed",
+      "budgetCycleId": "ef0fbd78-404f-4066-8f36-d43e528cde46",
+      "finishedAt": "2026-09-25T00:29:09.678Z",
+      "durationMs": 25591,
+      "usage": {
+        "input": 1820,
+        "output": 2167,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 3987
+      },
+      "estimatedCost": 0.01098372
+    },
+    {
+      "id": "e647228e-9e9c-4d90-9118-5ec08032f2fe",
+      "role": "output-validator",
+      "provider": "deepseek",
+      "model": "deepseek-v4-pro",
+      "phase": "planning",
+      "attempt": 1,
+      "outputRevision": 1,
+      "startedAt": "2026-09-25T00:29:09.698Z",
+      "status": "completed",
+      "budgetCycleId": "ef0fbd78-404f-4066-8f36-d43e528cde46",
+      "finishedAt": "2026-09-25T00:29:19.304Z",
+      "durationMs": 9606,
+      "usage": {
+        "input": 3235,
+        "output": 619,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 3854
+      },
+      "estimatedCost": 0.00672144
+    },
+    {
+      "id": "0cd3ec8d-f92a-4c12-8867-1c7e87b62287",
+      "role": "test-designer",
+      "provider": "deepseek",
+      "model": "deepseek-v4-pro",
+      "phase": "case_design",
+      "attempt": 1,
+      "outputRevision": 1,
+      "startedAt": "2026-09-25T00:29:19.355Z",
+      "status": "completed",
+      "budgetCycleId": "ef0fbd78-404f-4066-8f36-d43e528cde46",
+      "finishedAt": "2026-09-25T00:30:12.917Z",
+      "durationMs": 53562,
+      "usage": {
+        "input": 2582,
+        "output": 5431,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 8013
+      },
+      "estimatedCost": 0.024915
+    },
+    {
+      "id": "b0b0d8a9-9026-45b1-af6f-b078c2be04cc",
+      "role": "output-validator",
+      "provider": "deepseek",
+      "model": "deepseek-v4-pro",
+      "phase": "case_design",
+      "attempt": 1,
+      "outputRevision": 1,
+      "startedAt": "2026-09-25T00:30:12.941Z",
+      "status": "completed",
+      "budgetCycleId": "ef0fbd78-404f-4066-8f36-d43e528cde46",
+      "finishedAt": "2026-09-25T00:30:43.149Z",
+      "durationMs": 30208,
+      "usage": {
+        "input": 3255,
+        "output": 1916,
+        "cacheRead": 2176,
+        "cacheWrite": 0,
+        "totalTokens": 7347
+      },
+      "estimatedCost": 0.011979704
+    }
+  ]
+}

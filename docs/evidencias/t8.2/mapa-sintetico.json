@@ -1,0 +1,158 @@
+{
+  "note": "Mapa sanitizado e sintético da avaliação (smoke com modelo substituído). Nenhum segredo ou conteúdo de usuário.",
+  "run": {
+    "id": "run-sintetico",
+    "status": "ready",
+    "phase": "mapping"
+  },
+  "output": {
+    "id": "out-map-sintetico",
+    "phase": "mapping",
+    "producer": "test-executor",
+    "revision": 1,
+    "dependsOn": [
+      {
+        "outputId": "out-curation-sintetico",
+        "revision": 1
+      },
+      {
+        "outputId": "out-plan-sintetico",
+        "revision": 1
+      },
+      {
+        "outputId": "out-cases-sintetico",
+        "revision": 1
+      }
+    ],
+    "accessRevision": 1
+  },
+  "payload": {
+    "authentication": {
+      "status": "authenticated",
+      "observationId": "obs-inicio-sintetico"
+    },
+    "map": {
+      "screens": [
+        {
+          "id": "tela-login",
+          "name": "Login",
+          "recognition": "Formulário de usuário e senha.",
+          "observationIds": [
+            "obs-login-sintetico"
+          ]
+        },
+        {
+          "id": "tela-inicio",
+          "name": "Início",
+          "recognition": "Menu principal após autenticar.",
+          "observationIds": [
+            "obs-inicio-sintetico"
+          ]
+        },
+        {
+          "id": "tela-reservas",
+          "name": "Reservas",
+          "recognition": "Lista de reservas.",
+          "observationIds": [
+            "obs-reservas-sintetico"
+          ]
+        }
+      ],
+      "transitions": [
+        {
+          "id": "entrar",
+          "from": "tela-login",
+          "actionId": "act-entrar-sintetico",
+          "to": "tela-inicio",
+          "observationIds": [
+            "obs-inicio-sintetico"
+          ]
+        },
+        {
+          "id": "abrir-reservas",
+          "from": "tela-inicio",
+          "actionId": "act-reservas-sintetico",
+          "to": "tela-reservas",
+          "observationIds": [
+            "obs-reservas-sintetico"
+          ]
+        }
+      ],
+      "paths": [
+        {
+          "id": "percurso-reservas",
+          "startScreenId": "tela-login",
+          "transitionIds": [
+            "entrar",
+            "abrir-reservas"
+          ]
+        }
+      ]
+    },
+    "pending": [
+      {
+        "id": "pend-01",
+        "description": "Caminho de nova reserva não percorrido nesta etapa.",
+        "affectedCaseIds": [
+          "CT-01"
+        ]
+      }
+    ],
+    "limitations": [
+      "Exploração limitada às telas principais; sem criar reservas nem sondar limites."
+    ]
+  },
+  "observations": [
+    {
+      "id": "obs-login-sintetico",
+      "assetId": "asset-login-sintetico",
+      "width": 1366,
+      "height": 768
+    },
+    {
+      "id": "obs-inicio-sintetico",
+      "assetId": "asset-inicio-sintetico",
+      "width": 1366,
+      "height": 768
+    },
+    {
+      "id": "obs-reservas-sintetico",
+      "assetId": "asset-reservas-sintetico",
+      "width": 1366,
+      "height": 768
+    }
+  ],
+  "actions": [
+    {
+      "id": "act-entrar-sintetico",
+      "tool": "pointer",
+      "params": {
+        "action": "click",
+        "x": 640,
+        "y": 300
+      },
+      "outcome": "ok"
+    },
+    {
+      "id": "act-reservas-sintetico",
+      "tool": "pointer",
+      "params": {
+        "action": "click",
+        "x": 120,
+        "y": 80
+      },
+      "outcome": "ok"
+    }
+  ],
+  "validations": [
+    {
+      "outputId": "out-map-sintetico",
+      "outputRevision": 1,
+      "validator": "output-validator",
+      "status": "approved",
+      "attempt": 1,
+      "reason": "Mapa sustentado pelas imagens referenciadas (parecer simulado no smoke).",
+      "findings": []
+    }
+  ]
+}
