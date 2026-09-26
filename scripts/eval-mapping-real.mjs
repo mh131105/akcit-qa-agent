@@ -8,7 +8,7 @@ import { loadEnvFile } from 'node:process';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright-core';
@@ -16,7 +16,7 @@ import { createApp } from '../dist/app.js';
 import { readConfig, resolvePreparationModels, resolveVisualModels } from '../dist/config.js';
 import { RunStore } from '../dist/storage/runs.js';
 import { executeVisualTask } from '../dist/runtime/pi-visual.js';
-import { createEvaluationDirectory } from './eval-data.mjs';
+import { createEvaluationDirectory, finishEvaluationDirectory } from './eval-data.mjs';
 import { executeSpecialistTask } from '../dist/runtime/pi.js';
 import { buildRouteDetail } from '../dist/domain/route-detail.js';
 import { parseVerdict } from '../dist/domain/preparation.js';
@@ -114,7 +114,7 @@ function recordRun(runId, journey, review) { runs.set(runId, { id: runId, journe
 
 /** Exporta evidências de uma execução: registro sanitizado, capturas e projeção. */
 async function exportRun(runId, cookie, userId, tag) {
-  const review = (await api('/api/runs/' + runId, undefined, cookie, userId)).body;
+  const review = cookie ? (await api('/api/runs/' + runId, undefined, cookie, userId)).body : null;
   const stored = await store.read(runId);
   const sanitized = structuredClone(stored);
   delete sanitized.targetCredential;
@@ -321,9 +321,10 @@ async function main() {
     // Jornada A: interface real + revisão independente do plano e dos casos.
     if (!skipJourneyA) {
       const scenario = { name: 'jornada-completa-interface-revisao-humana', approvalMode: 'humana (arquivo de decisão em EVAL_HUMAN_DIR)', runId: null, steps: [], error: null };
+      let page;
       try {
         const context = await browser.newContext({ baseURL: origin, viewport: { width: 1366, height: 900 } });
-        const page = await context.newPage();
+        page = await context.newPage();
         page.setDefaultTimeout(20000);
 
 console.error('[eval-A] ' + 'A1 goto');
@@ -462,7 +463,10 @@ console.error('[eval-A] ' + 'A10 salvar');
         scenario.error = error?.stack ?? String(error);
         report.failures.push({ scenario: scenario.name, error: scenario.error });
         console.error('[eval] falha na jornada A:', scenario.error);
-        try { await page.screenshot({ path: join(evidenceDir, 'falha-jornada-a.png') }).catch(() => {}); } catch {}
+        try {
+          await mkdir(evidenceDir, { recursive: true });
+          await page?.screenshot({ path: join(evidenceDir, 'falha-jornada-a.png'), fullPage: true });
+        } catch { console.error('[eval] Captura da falha indisponível; os dados privados serão preservados.'); }
       } finally {
         report.scenarios.push(scenario);
         console.error('[eval] fim jornada A. Erros acumulados:', report.failures.length);
@@ -586,9 +590,30 @@ async function routeValidatorControl(run, selection) {
   } finally { report.scenarios.push(scenario); }
 }
 
-try { await main(); } finally {
-  await app.shutdown();
-  app.close(); app.closeAllConnections(); await once(app, 'close');
-  if (target.server.listening) { target.server.close(); await once(target.server, 'close'); }
-  await rm(dataDir, { recursive: true, force: true });
+let succeeded = false;
+try {
+  await main();
+  succeeded = report.failures.length === 0 && !process.exitCode;
+} finally {
+  try {
+    await app.shutdown();
+    app.close(); app.closeAllConnections(); await once(app, 'close');
+    if (target.server.listening) { target.server.close(); await once(target.server, 'close'); }
+  } catch (error) {
+    succeeded = false;
+    throw error;
+  } finally {
+    if (!succeeded) {
+      report.retainedDataDir = dataDir;
+      console.error(JSON.stringify({ event: 'eval-private-data-retained', dataDir,
+        message: 'Dados privados preservados após falha; não publique este diretório.' }));
+      const runIds = new Set(report.scenarios.map(scenario => scenario.runId).filter(Boolean));
+      for (const runId of runIds) {
+        try { await exportRun(runId, undefined, undefined, 'falha'); }
+        catch { console.error('[eval] Exportação incompleta; consulte o diretório privado preservado.'); }
+      }
+      await json(join(evidenceDir, 'report.json'), report);
+    }
+    await finishEvaluationDirectory(dataDir, succeeded);
+  }
 }
