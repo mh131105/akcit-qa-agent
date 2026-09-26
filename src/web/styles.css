@@ -92,22 +92,18 @@ button:disabled {
   align-items:center;
   gap:12px;
   text-decoration:none;
-  font-size:20px;
+  font-size:24px;
   font-weight:750;
-  letter-spacing:.04em;
+  letter-spacing:-.035em;
 }
 .brand-mark {
-  background:var(--dark);
-  color:#fff;
-  border-radius:10px;
   width:40px;
   height:40px;
-  display:grid;
-  place-items:center;
-  font-family:inherit;
-  font-size:30px;
-  letter-spacing:-.1em;
-  padding-right:5px;
+  display:block;
+  flex:none;
+}
+.brand-name {
+  white-space:nowrap;
 }
 .brand-caption {
   font-size:12px;
