@@ -107,7 +107,7 @@ test('resposta preserva fontes e aprovação histórica, invalida gate antes de 
   await assert.rejects(h.coordinator.resume(h.id, h.owner), { code: 'INVALID_STATE' });
 });
 
-test('resposta atômica é idempotente; conflito, referência velha, usuário alheio e corpo inválido preservam histórico', async t => {
+test('resposta atômica é idempotente; correção versionada, referência velha, usuário alheio e corpo inválido preservam histórico', async t => {
   const h = await setup(t); await h.start(); const request = await h.answer();
   const unchanged = await h.read();
   await assert.rejects(h.coordinator.answer(h.id, 'other', request), { code: 'RUN_NOT_FOUND' });
@@ -117,8 +117,11 @@ test('resposta atômica é idempotente; conflito, referência velha, usuário al
   assert.deepEqual(await h.read(), unchanged);
   await Promise.all([h.coordinator.answer(h.id, h.owner, request), h.coordinator.answer(h.id, h.owner, request)]);
   const saved = await h.read(); assert.equal(saved.answers.length, 1); assert.equal(saved.answerArtifacts!.length, 1);
-  await assert.rejects(h.coordinator.answer(h.id, h.owner, { ...request, text: 'Outro conteúdo.' }), { code: 'ANSWER_CONFLICT' });
-  assert.deepEqual(await h.read(), saved);
+  await h.coordinator.answer(h.id, h.owner, { ...request, text: 'Outro conteúdo.', expectedAnswerRevision: 1 });
+  const revised = await h.read();
+  assert.equal(revised.answers.length, 2); assert.equal(revised.answers[1]!.revision, 2);
+  assert.deepEqual(revised.answers[0], saved.answers[0]);
+  assert.equal(revised.answerArtifacts!.length, 2);
   await h.coordinator.resume(h.id, h.owner); await h.coordinator.settled();
   await assert.rejects(h.coordinator.answer(h.id, h.owner, request), { code: 'STALE_VERSION' });
 });
@@ -200,7 +203,7 @@ test('answer/resume HTTP exigem sessão, origem, identidade, propriedade e contr
   const answer = await send('answer', request); assert.equal(answer.status, 200); assert.equal(answer.body.canResume, true);
   assert.equal(answer.body.answers[0].actorId, owner.user.id);
   assert.equal((await send('answer', request)).status, 200);
-  assert.equal((await send('answer', { ...request, text: 'Diferente' })).status, 409);
+  assert.equal((await send('answer', { ...request, text: 'Diferente', expectedAnswerRevision: 1 })).status, 200);
   assert.equal((await send('resume', {})).status, 202); await h.coordinator.settled();
   assert.equal((await h.read()).status, 'awaiting_approval');
 });

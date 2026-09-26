@@ -195,7 +195,9 @@ test('T3.3: entrar, criar por HTTP, abrir rascunho literal e reencontrar após r
   const raw = await h.raw(id);
   const opened = await h.request(`/api/runs/${id}`, undefined, cookie);
   assert.equal(opened.status, 200);
-  assert.deepEqual(opened.body, { ...created.body, plan: null, curation: null, cases: null, canCreateCases: false, canDecideCases: false, canDetailRoutes: false, routeDetail: null, canMap: false, mapping: null, mappingActions: [], observations: [], answers: [], canResume: false, approvals: [], questions: [], stopReason: null,
+  assert.ok(!JSON.stringify(opened.body).includes(input.text), 'projeção de metadados não expõe texto original nem caminhos privados');
+  assert.ok(!JSON.stringify(opened.body).includes(h.dataDir));
+  assert.deepEqual(opened.body, { ...created.body, canCancel: true, canAnalyzeFeedback: false, canExecute: false, canWriteReport: false, canClosePending: false, canPartialReport: false, artifacts: [{ id: artifact.id, name: artifact.name, version: artifact.version, format: 'txt', originalId: null, sizeBytes: null, pages: [] }], executionResults: [], attempts: [], report: null, invalidations: [], versions: [], plan: null, curation: null, cases: null, canCreateCases: false, canDecideCases: false, canDetailRoutes: false, routeDetail: null, canMap: false, mapping: null, mappingActions: [], observations: [], answers: [], canResume: false, approvals: [], questions: [], stopReason: null,
     targetAccess: { revision: 0, startUrl: null, accessProfile: null, dataPreparation: null, authorizedTarget: false, hasCredential: false, canEdit: true },
     progress: { processingId: null, activeRole: null, activity: null, startedAt: null, finishedAt: null } });
   error(await h.request(`/api/runs/${id}/approve`, { outputId: 'inexistente', outputRevision: 1 }, cookie), 409, 'INVALID_STATE');

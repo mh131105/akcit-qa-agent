@@ -7,6 +7,130 @@ implementados. As seções de entregas implementadas delimitam
 o comportamento disponível. O [exemplo sintético](exemplos/execucao-demo.json)
 apoia os contratos e testes; a interface usa a API e não carrega exemplos.
 
+## Conclusão do fluxo — T9.1
+
+Esta seção registra o contrato do candidato T9.1 e prevalece sobre notas de
+funcionalidades futuras dos recortes históricos abaixo. Implementação não substitui
+o [aceite registrado](../evidencias/fechamento-sprint/README.md). A validação manual
+com modelos reais e o aceite humano serão feitos por Matheus, por orientação dele.
+
+### Entradas, perfil e administração
+
+`POST /api/runs` mantém JSON e aceita `multipart/form-data` com campos `name`,
+`applicationName`, `objective`, `text` e partes `files`. O leitor incremental
+recusa mais de cinco arquivos ou arquivo acima de 10 MiB antes de acumulá-lo por
+inteiro. Servidor valida UTF-8/extensão e PDF com texto; `pdftotext` é executado
+com argumentos controlados. Erro preserva o formulário. Não há OCR nem truncamento.
+
+Cada documento conserva seu `id`, `name`, `version`, `text`, `originalId`, formato,
+tamanho e digest. `pages: [{page,firstLine,lastLine}]` relaciona PDF às citações
+`Lx-Ly`; documentos não são concatenados em fonte indistinta. Os originais são
+privados e distintos da extração. Excesso de contexto recusa a preparação pedindo
+redução explícita; limites de dez requisitos e trinta casos permanecem.
+
+Perfil permite nome e equipe sem alterar identidade/e-mail ou autenticação.
+`POST /api/runs/:id/duplicate` recebe `artifactIds`, gera novos IDs e copia apenas
+entradas/configurações não secretas; exige novo acesso e não copia pareceres,
+aprovações, tentativas ou resultados. `DELETE /api/runs/:id` recebe
+`{confirmed:true}`, exige proprietário, estado encerrado e ausência de trabalho
+ativo; remove registro, arquivos e credencial local. Repetição da remoção é segura.
+
+### Análise de alterações e respostas
+
+Intenção `analyze_feedback`, produtor `test-designer`, tarefa `analyze-feedback`;
+validador textual em sessão nova. A saída de fase `feedback` é revisionada:
+
+```json
+{"impact":"navigation","restartFrom":"mapping","reason":"Só a localização visual foi esclarecida.","requirementIds":["REQ-1"],"caseIds":["CT-1"],"instructions":["Observar novamente o trecho indicado."],"question":null}
+```
+
+| Impacto | Retorno | Aprovações |
+| --- | --- | --- |
+| `requirements` | `curation` ou `planning`, conforme interpretação validada | Novas revisões de plano e casos exigem aprovação humana. |
+| `cases` | `case_design` | Nova aprovação humana do conjunto. |
+| `navigation` | `mapping` | Preservar lógica/aprovações; observar e validar mapa/percurso afetado. |
+| `clarification` | `null` | `instructions: []`; pergunta localizada antes de alterar significado. |
+
+O backend valida formato/IDs e aplica a matriz; não classifica comentários por
+heurística. `run.invalidations` registra ID, saída/revisão afetada, motivo, data,
+`feedbackRef` e `caseIds`; históricos permanecem. Resultados por caso permitem
+preservar conclusões independentes. Cada resposta é imutável, correção incrementa
+`revision`; nova resposta é analisada no contexto da pergunta e dos registros
+anteriores. `answerRefs` da análise identifica somente as respostas interpretadas.
+Esclarecimento de navegação não invalida a aprovação lógica por si só.
+
+### Tentativas, resultados e evidências
+
+`run.executionAttempts[]` é persistido antes da primeira ação, com campos:
+
+```text
+id, caseId, approvedCaseRevision:{outputId,revision}, routeDetailRef:{outputId,revision}
+startedAt, finishedAt, status:running|completed|interrupted|cancelled
+setupObservation, events, observed, verdict, reason, evidenceIds, evidenceGaps
+reproducesAttemptId (somente reprodução)
+```
+
+Há uma tentativa original e até uma reprodução justificada por caso, incluindo
+retomadas. `completed` na tentativa indica término técnico, sem implicar `passed`.
+Bloqueio é veredito; interrupções não se repetem automaticamente. Correção da
+conclusão usa as mesmas observações e nova revisão; não abre o navegador outra vez.
+
+Cada caso tem um ID estável de saída `execution`, com revisões crescentes. O
+helper `latestExecutionOutputs` seleciona por caso; `latestOutput(run,'execution')`
+não se aplica. Payload:
+
+```json
+{"caseId":"CT-1","attemptId":"attempt-backend","setupObservation":"Preparo observado.","observed":"Resposta observada.","verdict":"inconclusive","reason":"Falta captura do resultado.","evidenceIds":[],"evidenceGaps":["Captura final indisponível."],"question":null,"reproduce":false}
+```
+
+O backend preenche IDs, datas e vínculos; o modelo só devolve a conclusão.
+`not_run` é derivado da ausência de tentativa/impedimento, não inventado pelo
+executor. `passed`/`failed` exigem suporte visual; `blocked` exige impedimento
+concreto e pergunta; tentativa sem suporte é `inconclusive`. Rejeição correta de
+entrada inválida é `passed`; erro de modelo/captura não prova defeito do alvo.
+
+Cada observação/evento físico carrega `caseId` e `attemptId`. A captura do relatório
+tem `id`, `assetId`, caso/tentativa e `capture: original|reproduction`. A rota de
+mídia exige sessão/identidade/proprietário/pertencimento e não revela caminho local.
+O validador visual recebe cada caso/expectativa, percurso, eventos, manifesto e
+imagens efetivas da tentativa (até 24 por revisão). Não valida só amostra dos casos
+nem descarta imagens para caber; limite excedido interrompe explicitamente.
+
+### Relatório e encerramento
+
+`POST /api/runs/:id/finish-with-pending` (também `/report`) inicia encerramento
+regular somente sem caso independente elegível, com orçamento. `/partial-report`
+é explícito e só atende estados `interrupted`/`error`. Nenhum desses caminhos
+inicia após cancelamento ou orçamento esgotado.
+
+O backend cria `snapshot` com identificação, modo, escopo/fontes/exclusões,
+contagens dos cinco vereditos, cobertura por US/CA, casos esperados/observados,
+tentativas, capturas, perguntas/respostas, pendências e referências/pareceres.
+Cobertura distingue casos planejados, tentados, com conclusão suficiente e
+pendentes; aprovação dos casos não equivale a execução. Critérios sem cobertura
+têm justificativa. Uma falha validada não desaparece quando a reprodução passa.
+
+O redator devolve somente `{summary,scope,limitations,conclusion}`; o backend
+acrescenta o snapshot imutável em `{snapshot,narrative}`. O validador textual confere
+fidelidade a todas as conclusões recebidas; nova interpretação de imagem exige
+retorno à validação visual. Conclusão rejeitada não é publicada como achado.
+Fallback parcial para versão anteriormente validada fica explícito como histórico
+em `scope.current`, `case.current`, `attempt.current` e `references[].current`;
+não concede cobertura à revisão posterior ainda sem aprovação.
+
+`run.publishedReport:{outputId,revision}` só aponta para revisão aprovada. Durante
+correções, conserva-se a publicação anterior e indica-se material em revisão.
+Encerramento regular termina em `completed / done`; parcial preserva estado/fase
+de erro/interrupção, inclusive se aprovado. Sem casos, snapshot relata zero casos
+sem fabricar cobertura. A impressão usa exclusivamente a revisão publicada, com
+imagens autenticadas por `fetch`/Blob carregadas antes de imprimir.
+
+Cancelamento também funciona em `ready` e esperas abertas. Reinício preserva
+resultados confirmados, interrompe tentativas ativas e não repete ações. Uma tarefa
+ocupa o ambiente; orçamento de 45 minutos ativos é acumulado, sem espera humana.
+Permanece o teto de 120 s/chamada, três produções/saída, duas tentativas técnicas
+de validação/revisão, cem ações de exploração e cinquenta ações/tentativa.
+
 ## Fluxo e responsabilidades
 
 ```mermaid

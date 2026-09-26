@@ -41,10 +41,14 @@ Estão implementadas e integradas na base as etapas fundamentais de preparação
 - **Mapeamento visual validado (T8.2):** navegador real, capturas e revisão visual independente; termina em `ready / mapping`.
 - **Detalhamento de percursos (T6.3):** associação pelo projetista e revisão independente; preserva casos/aprovações, mantém pendências locais e termina em `ready / route_detail` quando há caminho elegível. O estado das verificações deste candidato está em [T6.3](../evidencias/t6.3/README.md).
 
-As etapas seguintes continuam pendentes:
-- Execução dos casos na interface, tentativas, capturas e validação dos resultados (T8/T10).
-- Retomada de dúvidas de navegação/detalhamento e tratamento completo de bloqueios.
-- Redação/validação do relatório final e impressão/PDF (T6/T10).
+O candidato **T9.1** acrescenta upload `.txt`/`.md`/PDF textual, perfil,
+duplicação/exclusão, análise de alterações e respostas das etapas visuais,
+execução por caso com capturas e validação independente, relatório e impressão.
+Os contratos atuais estão na seção T9.1 de [CONTRATOS.md](CONTRATOS.md#conclusão-do-fluxo--t91).
+O estado de verificação, os ensaios reais R1–R5 e o aceite dos 17 RFs/A-01 a A-08
+estão em [fechamento da sprint](../evidencias/fechamento-sprint/README.md).
+Não considerar o card encerrado somente porque o código ou os testes substituídos
+passaram; publicação, promoção da imagem e revisão humana precisam de comprovação.
 
 **Decisão de 26/09/2026:** capturas por caso/tentativa são as evidências do relatório;
 vídeos curtos são evolução futura, fora do aceite do protótipo. Capturas do mapa

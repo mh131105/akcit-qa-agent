@@ -9,7 +9,7 @@ import { openBrowserSession } from '../../agents/test-executor/tools/browser.mjs
 import type { BrowserActionRecord, BrowserObservationRecord, BrowserSession } from '../../agents/test-executor/tools/browser.mjs';
 
 export type VisualRole = 'test-executor' | 'output-validator';
-export type VisualKind = 'map-application' | 'validate-navigation';
+export type VisualKind = 'map-application' | 'validate-navigation' | 'execute-test-case' | 'validate-test-result';
 export type VisualCallEvent = {
   /** Identificador da inferência; ausente apenas em resultados substitutos legados. */
   callId?: string;
@@ -65,8 +65,8 @@ export interface VisualResult {
 type AgentMessage = { role?: string; usage?: { input: number; output: number; cacheRead?: number;
   cacheWrite?: number; totalTokens?: number } };
 const permittedKinds: Record<VisualRole, readonly VisualKind[]> = {
-  'test-executor': ['map-application'],
-  'output-validator': ['validate-navigation'],
+  'test-executor': ['map-application', 'execute-test-case'],
+  'output-validator': ['validate-navigation', 'validate-test-result'],
 };
 
 /** Configuração da sessão visual: sem retry automático, sem compaction e com o
@@ -122,6 +122,9 @@ export async function executeVisualTask(task: VisualTask, seams: {
     task.signal.throwIfAborted();
     if (!Object.hasOwn(permittedKinds, task.role) || !permittedKinds[task.role].includes(task.kind)) {
       throw new SpecialistError('INVALID_TASK', 'A combinação de papel e tarefa visual não está autorizada.');
+    }
+    if ((task.role === 'output-validator' && task.browser) || (task.images?.length ?? 0) > 24) {
+      throw new SpecialistError('INVALID_TASK', 'Validadores não recebem navegador e cada sessão admite até 24 imagens.');
     }
     const directory = join(projectRoot, 'agents', task.role);
     const skill = await readFile(join(directory, 'skills', task.kind, 'SKILL.md'), { encoding: 'utf8', signal: task.signal });

@@ -1,6 +1,6 @@
 # Sprint única: entrega em 26/09 às 17h
 
-Atualizado em 24/09/2026. Horário de Manaus. A equipe mantém quatro frentes, com
+Atualizado em 26/09/2026. Horário de Manaus. A equipe mantém quatro frentes, com
 responsáveis a escolher. A [especificação](requisitos/PROTOTIPO.md) define a entrega;
 as tarefas abaixo implementam seus requisitos, sem uma segunda sprint no plano.
 
@@ -13,6 +13,25 @@ anteriores abaixo são registros históricos do escopo existente na ocasião.
 O fluxo até o mapa validado permanece congelado; T6.3 acrescenta sua continuação.
 
 ## Quatro frentes
+
+### T9.1 — Concluir o fluxo completo e comprovar com LLM real
+
+Prioridade máxima. Base: `develop` após PR #30 (`8c93bc6`). Integração sob
+responsabilidade da frente B; A completa interface/arquivos/perfil/impressão,
+C entrega análise de alterações e metodologia do relatório/validação, D entrega
+tentativas visuais e roteiros. A divisão preserva `PreparationCoordinator`, Pi,
+armazenamento e navegador existentes, sem novo coordenador.
+
+O candidato inclui execução por caso, uma tentativa original e até uma reprodução,
+feedback validado, retomada localizada, relatório publicado somente após parecer,
+upload e administração. O aceite mantém o escopo completo: 17 RFs, A-01 a A-08 e
+ensaios reais R1–R5. [Evidências e situação efetiva](evidencias/fechamento-sprint/README.md)
+e [matriz de aceite](evidencias/fechamento-sprint/matriz-aceite.md).
+
+**Situação:** implementação candidata em integração e verificação. Não há aceite
+final, revisão humana ou promoção de imagem presumidos. Registrar o PR e a imagem
+efetivos no fechamento; não marcar tarefas históricas ou o marco encerrados antes
+de comprovar todos os critérios. As seções anteriores a T9.1 abaixo são históricas.
 
 | Frente | Responsabilidade | Primeiro trabalho |
 | --- | --- | --- |

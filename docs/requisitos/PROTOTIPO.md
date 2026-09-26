@@ -1,6 +1,6 @@
 # Especificação do protótipo
 
-Versão 1.2 · 26/09/2026 · Entrega: 26/09 às 17h, horário de Manaus.
+Versão 1.3 · 26/09/2026 · Entrega: 26/09 às 17h, horário de Manaus.
 
 Este documento define o que implementar e como aceitar a entrega. O fluxo e os seis
 agentes refletem as decisões da equipe. As telas, os limites operacionais e os critérios
@@ -29,6 +29,32 @@ entre sprints. Recuperação de conta será assistida pelo operador no piloto. O
 será restrito aos participantes habilitados pela equipe; a liberação pública fica fora.
 
 <!-- ponytail: um piloto com um proprietário por execução e um trabalho de agente por vez; colaboração e filas distribuídas só quando houver uso que justifique. -->
+
+### Conclusão do fluxo · T9.1
+
+O candidato T9.1 implementa a continuação do fluxo até execução e relatório,
+análise de alterações, uploads, perfil e administração das execuções. Mantém todos
+os 17 RFs e os cenários A-01 a A-08 abaixo. Implementação e teste substituído não
+constituem aceite real: consultar a [matriz de fechamento](../evidencias/fechamento-sprint/matriz-aceite.md).
+As seções T8.2/T6.3 registram o recorte histórico dessas entregas.
+
+Cada caso tem uma tentativa original e, quando justificado, até uma reprodução.
+Corrigir a conclusão usando as mesmas observações incrementa a revisão, sem nova
+interação. Reprodução cria outra tentativa vinculada à original; uma reprodução
+que passa não apaga uma falha anterior sustentada. O teto inclui retomadas e nunca
+autoriza repetir automaticamente uma ação interrompida que pode ter criado dados.
+
+O usuário pode encerrar com pendências quando não houver caso independente
+executável e houver orçamento. Só o relatório validado encerra o processo em
+`completed / done`, inclusive com falhas, bloqueios ou sem testes realizados.
+Relatório parcial é solicitado explicitamente após `interrupted` ou `error`;
+preserva esse estado. Cancelar, inclusive em `ready`, impede novas chamadas e
+conserva registros e publicação anterior. Esgotar orçamento não inicia redação extra.
+
+Contagens e cobertura vêm do backend. O redator explica resultados já validados;
+o validador textual confere fidelidade e encaminha necessidade de reinterpretar
+imagens para validação visual. Só revisão aprovada é publicada; correções mantêm
+a publicação anterior. A impressão usa esse mesmo snapshot e aguarda as capturas.
 
 ### Mapa validado e estado `ready` · T8.2
 

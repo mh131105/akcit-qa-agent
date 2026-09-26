@@ -4,11 +4,11 @@ const main = document.querySelector('#main');
 const account = document.querySelector('#account');
 const storagePrefix = 'akcit.intake.v1:';
 const limit = 16 * 1024;
-const statuses = { draft: 'Rascunho', running: 'Em andamento', awaiting_approval: 'Aguardando aprovação', awaiting_input: 'Aguardando informações', ready: 'Mapa validado', completed: 'Concluída', interrupted: 'Interrompida', error: 'Erro', cancelled: 'Cancelada' };
-const phases = { intake: 'Recebimento do material', curation: 'Curadoria', planning: 'Planejamento', case_design: 'Criação dos casos', mapping: 'Mapeamento', route_detail: 'Detalhamento dos percursos', execution: 'Execução dos testes', report: 'Relatório' };
+const statuses = { draft: 'Rascunho', running: 'Em andamento', awaiting_approval: 'Aguardando aprovação', awaiting_input: 'Aguardando informações', ready: 'Etapa validada', completed: 'Concluída', interrupted: 'Interrompida', error: 'Erro', cancelled: 'Cancelada' };
+const phases = { intake: 'Recebimento do material', curation: 'Curadoria', planning: 'Planejamento', case_design: 'Criação dos casos', mapping: 'Mapeamento', route_detail: 'Detalhamento dos percursos', execution: 'Execução dos testes', report: 'Relatório', done: 'Processo concluído' };
 const validations = { approved: 'Aprovado pelo validador', changes_requested: 'Validador solicitou alterações', blocked: 'Validação bloqueada', error: 'Erro de validação' };
-const roles = { 'artifact-curator': 'Curador', 'test-designer': 'Designer de testes', 'output-validator': 'Validador independente', 'test-executor': 'Executor de testes' };
-const activities = { curating: 'Organizando requisitos e fontes', planning: 'Elaborando o plano de testes', validating_curation: 'Revisando a curadoria', validating_planning: 'Revisando o plano de testes', case_design: 'Gerando casos de teste', validating_case_design: 'Validando os casos de teste', mapping: 'Mapeando a aplicação', validating_mapping: 'Validando o mapa de navegação', route_detail: 'Associando percursos aos casos aprovados', validating_route_detail: 'Validando as associações de percursos' };
+const roles = { 'artifact-curator': 'Curador', 'test-designer': 'Designer de testes', 'output-validator': 'Validador independente', 'test-executor': 'Executor de testes', 'report-writer': 'Redator' };
+const activities = { curating: 'Organizando requisitos e fontes', planning: 'Elaborando o plano de testes', validating_curation: 'Revisando a curadoria', validating_planning: 'Revisando o plano de testes', case_design: 'Gerando casos de teste', validating_case_design: 'Validando os casos de teste', mapping: 'Mapeando a aplicação', validating_mapping: 'Validando o mapa de navegação', route_detail: 'Associando percursos aos casos aprovados', validating_route_detail: 'Validando as associações de percursos', execution: 'Executando os casos pela interface', validating_execution: 'Validando as evidências do caso', report: 'Redigindo o relatório', validating_report: 'Validando o relatório', analyzing_feedback: 'Analisando as alterações solicitadas' };
 let user = null;
 let rememberForm = null;
 let sessionTimer;
@@ -111,7 +111,17 @@ function errorText(error) {
     ORIGIN_REJECTED: 'Este endereço não está habilitado para envio. Peça à equipe para conferir a origem configurada.',
     AUTH_NOT_CONFIGURED: 'O acesso ainda não foi configurado. Entre em contato com a equipe do piloto.',
     INVALID_INPUT: 'Confira os campos e seus limites antes de tentar novamente.',
-    BODY_TOO_LARGE: 'O envio completo ultrapassa 16 KiB. Reduza o texto ou os demais campos.',
+    BODY_TOO_LARGE: 'Os campos de texto ultrapassam 16 KiB. Reduza o texto ou os demais campos.',
+    INVALID_UPLOAD: 'Arquivo inválido. Envie .txt ou .md em UTF-8, ou PDF com texto selecionável.',
+    FILE_TOO_LARGE: 'Cada arquivo deve ter até 10 MiB. Reduza o arquivo e tente novamente.',
+    FILE_LIMIT: 'Selecione no máximo cinco arquivos.',
+    PDF_WITHOUT_TEXT: 'O PDF não contém texto selecionável. Envie texto ou um PDF com texto; OCR não está disponível.',
+    PDF_EXTRACTION_FAILED: 'Não foi possível ler o PDF. Confira se o arquivo é válido e não tem senha.',
+    EMPTY_FILE: 'O arquivo está vazio. Envie um arquivo com requisitos.',
+    RUN_ACTIVE: 'Encerre a execução e aguarde o término do trabalho antes de excluir.',
+    INPUT_LIMIT: 'Selecione até dez requisitos. Reduza explicitamente o material e crie uma nova execução.',
+    CASE_LIMIT: 'O conjunto excede trinta casos. Reduza o escopo em um novo plano; nenhum caso foi cortado.',
+    CONTEXT_LIMIT: 'O material excede o contexto suportado pelos modelos. Reduza explicitamente as fontes ou o escopo; nenhum texto foi truncado.',
     COMMENT_REQUIRED: 'Informe um comentário para solicitar alterações.',
     STALE_VERSION: 'A revisão ou suas dependências mudaram. Consulte o plano atualizado antes de decidir novamente.',
     DECISION_CONFLICT: 'Esta revisão já possui uma decisão diferente. Consulte a decisão salva.',
@@ -142,7 +152,7 @@ function errorText(error) {
 }
 async function api(path, { accountId, ...options } = {}) {
   const response = await fetch(`/api${path}`, { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(20000), ...options,
-    headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    headers: { ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
       ...(accountId ? { 'X-Expected-User-Id': accountId } : {}), ...options.headers } });
   if (response.status === 204) return null;
   const data = await response.json();
@@ -197,7 +207,7 @@ function clearAttempts() {
 }
 function navigation() {
   const accountId = user.id;
-  account.replaceChildren(link('Minhas execuções', '/execucoes'), el('span', user.name, 'account-name'));
+  account.replaceChildren(link('Minhas execuções', '/execucoes'), link('Meu perfil', '/perfil'), el('span', user.name, 'account-name'));
   const exit = button('Sair', async () => {
     exit.disabled = true;
     try {
@@ -260,6 +270,209 @@ function access(serviceMessage = '') {
   }; render();
 }
 
+function profilePage() {
+  const accountId = user.id;
+  main.replaceChildren(); heading('Meu perfil', 'Nome e equipe usados para identificar suas decisões.');
+  const panel = el('section', null, 'panel'); const form = el('form'); form.noValidate = true;
+  const name = field(form, 'profile-name', 'Nome', { autocomplete: 'name', hint: 'Até 120 caracteres.' });
+  const team = field(form, 'profile-team', 'Equipe (opcional)', { optional: true, autocomplete: 'organization', hint: 'Até 120 caracteres.' });
+  name.input.value = user.name; team.input.value = user.teamName || '';
+  form.append(el('p', `E-mail: ${user.email}`, 'hint'));
+  const notice = message(); const save = button('Salvar perfil'); save.type = 'submit'; form.append(save, notice); panel.append(form); main.append(panel);
+  form.addEventListener('submit', async event => {
+    event.preventDefault(); if (save.disabled) return;
+    const badName = invalid(name, !name.input.value.trim() || count(name.input.value.trim()) > 120 ? 'Informe seu nome com até 120 caracteres.' : '');
+    const badTeam = invalid(team, count(team.input.value.trim()) > 120 ? 'Use até 120 caracteres.' : '');
+    if (badName || badTeam) { (badName ? name : team).input.focus(); return; }
+    save.disabled = true; tell(notice, 'Salvando perfil…');
+    try {
+      await sameAccount(accountId);
+      const result = await api('/auth/me', { accountId, method: 'PATCH', body: JSON.stringify({ name: name.input.value.trim(), teamName: team.input.value.trim() }) });
+      if (user?.id !== accountId) return;
+      user = result.user; navigation(); tell(notice, 'Perfil atualizado.');
+    } catch (error) { if (user?.id === accountId) tell(notice, errorText(error), true); }
+    finally { save.disabled = false; }
+  });
+}
+
+let currentTab = null;
+let tabPhase = null;
+let currentArtifacts = [];
+let currentAnswerSources = [];
+function sourceLabel(source) {
+  const artifact = currentArtifacts.find(item => item.id === source.artifactId);
+  const lines = /^L(\d+)(?:-L(\d+))?$/.exec(source.locator);
+  const pages = lines && artifact?.pages?.filter(page => page.lastLine >= Number(lines[1]) && page.firstLine <= Number(lines[2] || lines[1]));
+  const answer = currentAnswerSources.find(item => item.artifactId === source.artifactId);
+  return `${artifact?.name || (answer ? `Resposta ${answer.questionId} r${answer.revision}` : source.artifactId)} · ${source.locator}${pages?.length ? ` · PDF página${pages.length > 1 ? 's' : ''} ${pages.map(page => page.page).join(', ')}` : ''}`;
+}
+function detailTabs(run) {
+  const defaults = { planning: 'plan', case_design: 'cases', mapping: 'cases', route_detail: 'cases', execution: 'results', report: 'results', done: 'results' };
+  if (tabPhase !== `${run.id}:${run.phase}`) { currentTab = defaults[run.phase] || 'overview'; tabPhase = `${run.id}:${run.phase}`; }
+  const nav = el('div', null, 'run-tabs'); nav.setAttribute('role', 'tablist'); nav.setAttribute('aria-label', 'Seções da execução');
+  const panes = {}; const buttons = [];
+  const choose = (id, focus = false) => {
+    currentTab = id;
+    buttons.forEach(node => { const selected = node.dataset.target === id; node.setAttribute('aria-selected', String(selected)); node.tabIndex = selected ? 0 : -1; if (selected && focus) node.focus(); });
+    for (const [key, pane] of Object.entries(panes)) pane.hidden = key !== id;
+  };
+  for (const [id, label] of [['overview', 'Visão geral'], ['plan', 'Plano'], ['cases', 'Casos'], ['results', 'Resultados']]) {
+    const tab = button(label, () => choose(id), 'secondary'); tab.id = `tab-${id}`; tab.dataset.target = id; tab.setAttribute('role', 'tab'); tab.setAttribute('aria-controls', `pane-${id}`);
+    const pane = el('div', null, 'tab-pane'); pane.id = `pane-${id}`; pane.setAttribute('role', 'tabpanel'); pane.setAttribute('aria-labelledby', tab.id); pane.tabIndex = 0;
+    buttons.push(tab); panes[id] = pane; nav.append(tab);
+    tab.addEventListener('keydown', event => {
+      const index = buttons.indexOf(tab); const next = event.key === 'ArrowRight' ? (index + 1) % 4 : event.key === 'ArrowLeft' ? (index + 3) % 4 : event.key === 'Home' ? 0 : event.key === 'End' ? 3 : null;
+      if (next !== null) { event.preventDefault(); choose(buttons[next].dataset.target, true); }
+    });
+  }
+  main.append(nav, ...Object.values(panes)); choose(currentTab);
+  return { ...panes, choose };
+}
+
+async function manageRun(run, accountId, action) {
+  const dialog = el('dialog', null, 'manage-dialog'); const notice = message();
+  const close = button('Voltar', () => dialog.close(), 'secondary');
+  dialog.append(el('h2', action === 'duplicate' ? 'Duplicar execução' : 'Excluir execução'), notice);
+  const selections = [];
+  if (action === 'duplicate') {
+    dialog.append(el('p', 'Selecione as entradas da nova execução. Confirme novamente o acesso antes de testar. Decisões, credenciais e resultados não serão copiados.'));
+    for (const [index, artifact] of (run.artifacts || []).entries()) {
+      const input = checkboxField(dialog, `copy-artifact-${index}`, artifact.name, { optional: true }); input.input.checked = true;
+      selections.push({ id: artifact.id, input: input.input });
+    }
+    if (!selections.length) dialog.append(message('Esta execução não possui entradas disponíveis para duplicação.'));
+  } else dialog.append(el('p', `Excluir “${run.name}” e todos os seus arquivos, capturas e credenciais locais? Esta ação não pode ser desfeita.`));
+  const key = crypto.randomUUID();
+  const confirm = button(action === 'duplicate' ? 'Criar cópia' : 'Excluir definitivamente', async () => {
+    const artifactIds = selections.filter(item => item.input.checked).map(item => item.id);
+    if (action === 'duplicate' && !artifactIds.length) { tell(notice, 'Selecione ao menos uma entrada.', true); return; }
+    confirm.disabled = true; tell(notice, action === 'duplicate' ? 'Criando nova execução…' : 'Excluindo os dados…');
+    try {
+      await sameAccount(accountId);
+      const result = await api(`/runs/${encodeURIComponent(run.id)}${action === 'duplicate' ? '/duplicate' : ''}`, { accountId,
+        method: action === 'duplicate' ? 'POST' : 'DELETE', headers: action === 'duplicate' ? { 'Idempotency-Key': key } : {},
+        body: JSON.stringify(action === 'duplicate' ? { artifactIds } : { confirmed: true }) });
+      if (user?.id !== accountId) return;
+      location.assign(action === 'duplicate' ? `/execucoes/${encodeURIComponent(result.id)}` : '/execucoes');
+    } catch (error) { if (user?.id === accountId) tell(notice, errorText(error), true); confirm.disabled = false; }
+  }, action === 'delete' ? 'danger' : '');
+  const actions = el('div', null, 'actions'); actions.append(confirm, close); dialog.append(actions);
+  document.body.append(dialog); dialog.addEventListener('close', () => dialog.remove(), { once: true }); dialog.showModal();
+}
+
+function runManagement(run, accountId) {
+  const actions = el('div', null, 'actions run-management');
+  actions.append(button('Duplicar', () => manageRun(run, accountId, 'duplicate'), 'secondary'));
+  if (['completed', 'cancelled', 'interrupted', 'error'].includes(run.status)) actions.append(button('Excluir', () => manageRun(run, accountId, 'delete'), 'secondary danger'));
+  return actions;
+}
+
+const resultNames = { passed: 'Aprovado', failed: 'Reprovado', blocked: 'Bloqueado', inconclusive: 'Inconclusivo', not_run: 'Não executado' };
+function attemptPanel(run, attempt, accountId, observations = run.observations || []) {
+  const detail = el('details', null, 'attempt');
+  detail.append(el('summary', `${attempt.reproducesAttemptId ? 'Reprodução' : 'Tentativa original'} · ${attempt.id} · ${resultNames[attempt.verdict] || attempt.status}`));
+  detail.append(el('p', `${date(attempt.startedAt)}${attempt.finishedAt ? ` → ${date(attempt.finishedAt)}` : ' · Em andamento'}`, 'hint'));
+  if (attempt.current === false) detail.append(message('Tentativa histórica; não compõe a cobertura da revisão atual.'));
+  if (attempt.reproducesAttemptId) detail.append(el('p', `Reproduz a tentativa ${attempt.reproducesAttemptId}`, 'hint'));
+  if (attempt.setupObservation) detail.append(el('h4', 'Preparo observado'), el('p', attempt.setupObservation, 'text-content'));
+  if (attempt.events?.length) detail.append(planSection('Passos observados', attempt.events, event => `${event.at || ''} · ${event.note || event.action || event.tool || ''} · ${event.outcome || event.observation || ''}`));
+  detail.append(el('h4', 'Resultado observado'), el('p', attempt.observed || 'Nenhuma observação registrada.', 'text-content'));
+  if (attempt.reason) detail.append(el('p', attempt.reason, 'text-content'));
+  if (attempt.evidenceGaps?.length) detail.append(planSection('Lacunas de evidência', attempt.evidenceGaps));
+  const evidenceIds = attempt.validatedResult?.evidenceIds || attempt.evidenceIds || [];
+  const images = attempt.evidence || observations.filter(observation => evidenceIds.includes(observation.id) || evidenceIds.includes(observation.assetId));
+  if (images.length) { const gallery = el('div', null, 'evidence-grid'); images.forEach(image => gallery.append(captureFigure(run, image, accountId))); detail.append(gallery); }
+  return detail;
+}
+function coveragePanel(coverage) {
+  const panel = el('section', null, 'panel coverage'); panel.append(el('h2', 'Cobertura por requisito e critério'));
+  for (const requirement of coverage || []) {
+    const item = el('details', null, 'plan-section'); item.append(el('summary', `${requirement.requirementId || requirement.id} · ${requirement.statement}`));
+    for (const rule of requirement.rules || []) { const criterion = el('section', null, 'coverage-rule'); criterion.append(el('h3', rule.ruleId || rule.id), el('p', rule.statement, 'text-content'),
+      el('p', rule.partial ? 'Cobertura parcial.' : rule.selected ? 'Critério selecionado.' : 'Fora do escopo selecionado.', 'hint'),
+      el('p', rule.attemptedCaseIds?.length ? `Casos tentados: ${rule.attemptedCaseIds.join(', ')}` : 'Nenhum caso tentado.', 'hint'),
+      el('p', rule.pendingCaseIds?.length ? `Casos pendentes: ${rule.pendingCaseIds.join(', ')}` : 'Sem casos pendentes.', 'hint'),
+      el('p', rule.caseIds?.length ? `Casos: ${rule.caseIds.join(', ')}` : 'Sem caso associado.', 'hint'),
+      el('p', rule.uncovered ? (rule.limitation || 'Sem cobertura de execução validada.') : `Casos com resultados validados: ${(rule.validatedCaseIds || []).join(', ') || 'Nenhum'}`, 'hint')); item.append(criterion); }
+    panel.append(item);
+  }
+  return panel;
+}
+function publishedReportPanel(run, accountId) {
+  const report = run.report;
+  const article = el('article', null, 'published-report');
+  article.dataset.reportRevision = String(report.revision); article.id = 'published-report';
+  const { snapshot, narrative } = report.payload;
+  article.append(el('p', `Relatório publicado · Revisão ${report.revision} · ${snapshot.mode === 'partial' ? 'Parcial' : 'Final'}`, 'eyebrow'),
+    el('h2', snapshot.name), el('p', snapshot.applicationName, 'lead'), el('p', `${snapshot.runId} · ${date(snapshot.createdAt)}`, 'hint'), el('p', narrative.summary, 'text-content'),
+    el('h3', 'Escopo'), el('p', narrative.scope, 'text-content'), el('p', snapshot.scope.objective, 'text-content'));
+  const totals = el('dl', null, 'metadata report-totals');
+  for (const [key, value] of Object.entries(snapshot.counts)) { const item = el('div'); item.append(el('dt', key === 'total' ? 'Total de casos' : resultNames[key] || key), el('dd', String(value))); totals.append(item); }
+  if (snapshot.scope.current === false) article.append(message('Escopo histórico: última versão validada; revisão posterior pendente.'));
+  article.append(totals, coveragePanel(snapshot.coverage), planSection('Fontes do escopo', snapshot.scope.sources || [], source => `${sourceLabel(source)} — ${source.quote}`), planSection('Exclusões', snapshot.scope.exclusions || [], item => `${item.description} — ${item.reason}`));
+  for (const item of snapshot.cases) {
+    const section = el('section', null, 'report-case'); section.append(el('h3', `${item.caseId} · ${resultNames[item.verdict] || item.verdict}`),
+      el('p', `${item.requirementIds.join(', ')} / ${item.ruleIds.join(', ')}`, 'hint'), el('h4', 'Resultado esperado'), el('p', item.expected, 'text-content'),
+      el('h4', 'Resultado observado'), el('p', item.observed || 'Sem tentativa.', 'text-content'), el('p', item.reason, 'text-content'));
+    if (item.current === false) section.append(message('Caso histórico: última versão validada; revisão posterior pendente.'));
+    if (item.variation) section.append(message(typeof item.variation === 'string' ? item.variation : 'As tentativas apresentaram resultados diferentes; consulte seu histórico.'));
+    section.append(planSection('Pré-condições', item.preconditions || []), el('h4', 'Preparo'), el('p', item.setup || '', 'text-content'));
+    section.append(planSection('Dados utilizados', Object.entries(item.data || {}), ([key, value]) => `${key}: ${JSON.stringify(value)}`), planSection('Fontes do caso', item.sources || [], source => `${sourceLabel(source)} — ${source.quote}`));
+    for (const attempt of item.attempts) section.append(attemptPanel(run, attempt, accountId, []));
+    article.append(section);
+  }
+  article.append(planSection('Pendências', snapshot.pending || [], item => `${item.caseId}: ${item.reason}`),
+    planSection('Perguntas', snapshot.questions || [], item => `${item.id}: ${item.description}`),
+    planSection('Respostas registradas', snapshot.answers || [], item => `${item.questionId}: ${item.text}`),
+    planSection('Limitações', [...new Set([...(snapshot.limitations || []), ...(narrative.limitations || [])])]),
+    planSection('Pareceres utilizados', snapshot.validations || [], item => `${item.outputId} · Revisão ${item.outputRevision} · ${validations[item.status] || item.status}${item.reason ? ` — ${item.reason}` : ''}`),
+    planSection('Referências às versões', snapshot.references || [], item => `${phases[item.phase] || item.phase}: ${item.outputId} · Revisão ${item.revision}${item.current === false ? ' · Histórica' : ''}`),
+    el('h3', 'Conclusão'), el('p', narrative.conclusion, 'text-content'));
+  return article;
+}
+async function printReport(run, accountId, article, notice, action) {
+  action.disabled = true; tell(notice, 'Conferindo a sessão e carregando as capturas da revisão publicada…');
+  const opened = [...article.querySelectorAll('details')].filter(node => !node.open);
+  try {
+    await sameAccount(accountId);
+    opened.forEach(node => { node.open = true; });
+    await Promise.all([...article.querySelectorAll('img')].map(async img => { img.loading = 'eager'; if (img._evidenceReady) await img._evidenceReady; await img.decode(); }));
+    await sameAccount(accountId);
+    if (user?.id !== accountId || !article.isConnected || Number(article.dataset.reportRevision) !== run.report.revision) throw new Error('Relatório alterado.');
+    document.body.classList.add('printing-report');
+    tell(notice, `Revisão ${run.report.revision} pronta para salvar em PDF.`);
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    await window.print();
+  } catch { tell(notice, 'Não foi possível carregar todas as capturas da revisão publicada. Tente novamente antes de salvar em PDF.', true); }
+  finally { document.body.classList.remove('printing-report'); opened.forEach(node => { node.open = false; }); action.disabled = false; }
+}
+function resultsPanel(run, accountId) {
+  const panel = el('section', null, 'panel'); panel.append(el('h2', 'Resultados'));
+  if (run.report) {
+    const notice = message(); const article = publishedReportPanel(run, accountId);
+    const print = button('Salvar em PDF', () => printReport(run, accountId, article, notice, print));
+    panel.append(el('p', `Versão publicada: revisão ${run.report.revision}.`, 'hint'));
+    if (run.report.underReview) panel.append(message('Há uma nova revisão em análise. A versão publicada abaixo permanece disponível.'));
+    panel.append(print, notice, article);
+  } else panel.append(message('Ainda não há relatório publicado. Os resultados validados e as tentativas salvas aparecem abaixo.'));
+  const results = run.executionResults || [];
+  if (results.length) {
+    const interim = el('details', null, 'plan-section'); interim.open = !run.report; interim.append(el('summary', 'Resultados e tentativas atuais'));
+    for (const output of results) {
+      const item = output.payload; const detail = el('details', null, 'plan-section');
+      detail.append(el('summary', `${item.caseId} · ${resultNames[item.verdict] || item.verdict} · Revisão ${output.revision}`), el('p', item.observed, 'text-content'), el('p', item.reason, 'text-content'));
+      const verdict = output.validations?.findLast(value => value.status !== 'error');
+      detail.append(message(verdict?.status === 'approved' ? 'Resultado validado.' : 'Resultado candidato, aguardando validação.'));
+      for (const attempt of (run.attempts || []).filter(attempt => attempt.caseId === item.caseId)) detail.append(attemptPanel(run, attempt, accountId));
+      interim.append(detail);
+    }
+    panel.append(interim);
+  }
+  const represented = new Set(results.map(output => output.payload.caseId));
+  for (const attempt of (run.attempts || []).filter(attempt => !represented.has(attempt.caseId))) panel.append(attemptPanel(run, attempt, accountId));
+  return panel;
+}
+
 function historyPage() {
   const accountId = user.id;
   main.replaceChildren(); heading('Minhas execuções', 'Seu material, seus planos e as decisões de cada revisão.', link('Nova execução', '/execucoes/nova', 'button'));
@@ -290,7 +503,12 @@ function historyPage() {
         for (const run of data.items) {
           const row = el('li', null, 'run-row'); const identification = el('div'); const name = el('h2'); name.append(link(run.name, `/execucoes/${encodeURIComponent(run.id)}`));
           identification.append(name, el('p', run.applicationName)); const state = el('div'); state.append(el('span', statuses[run.status] || run.status, 'badge'), el('p', phases[run.phase] || run.phase));
-          row.append(identification, el('p', date(run.createdAt)), state); list.append(row);
+          const actions = el('div', null, 'actions');
+          for (const [label, operation] of [['Duplicar', 'duplicate'], ...(['completed', 'cancelled', 'interrupted', 'error'].includes(run.status) ? [['Excluir', 'delete']] : [])]) actions.append(button(label, async () => {
+            try { const detail = await api(`/runs/${encodeURIComponent(run.id)}`, { accountId }); if (user?.id === accountId) await manageRun(detail, accountId, operation); }
+            catch (error) { if (user?.id === accountId) results.prepend(message(errorText(error), true)); }
+          }, 'secondary'));
+          identification.append(actions); row.append(identification, el('p', date(run.createdAt)), state); list.append(row);
         } results.append(list);
       }
     } catch (error) { if (user && current === sequence) results.replaceChildren(message(errorText(error), true), button('Tentar novamente', load, 'secondary')); }
@@ -307,18 +525,21 @@ function intakePage() {
   const accountId = user.id;
   main.replaceChildren(); heading('Nova execução', 'Reúna o material que vai orientar a revisão do plano.');
   const split = el('div', null, 'split'); const panel = el('section', null, 'panel');
-  const note = el('aside', null, 'side-note'); note.append(el('span', 'Antes de começar', 'step'), el('h2', 'Um rascunho é o primeiro passo.'), el('p', 'Salvar confirma o recebimento do material. A curadoria e a geração do plano ainda não são iniciadas.'), el('p', 'Neste momento, use texto. Arquivos e acesso à aplicação serão configurados em uma etapa futura.'));
+  const note = el('aside', null, 'side-note'); note.append(el('span', 'Antes de começar', 'step'), el('h2', 'Um rascunho é o primeiro passo.'), el('p', 'Salvar confirma o recebimento do material. A curadoria e a geração do plano ainda não são iniciadas.'), el('p', 'Cole o texto e/ou selecione até cinco arquivos .txt, .md ou PDF com texto, de até 10 MiB cada. As fontes serão preservadas separadamente.'));
   split.append(panel, note); main.append(split);
   const notice = message(); panel.append(notice); const form = el('form'); form.noValidate = true;
   form.append(el('span', '01 / Identificação', 'step')); const pair = el('div', null, 'two-fields'); form.append(pair);
   const fields = { name: field(pair, 'name', 'Nome da execução', { hint: 'Até 120 caracteres.' }), applicationName: field(pair, 'applicationName', 'Aplicação', { hint: 'Até 120 caracteres.' }) };
   fields.objective = field(form, 'objective', 'Objetivo (opcional)', { textarea: true, optional: true, hint: 'Até 2.000 caracteres.' });
   form.append(el('span', '02 / Material de entrada', 'step'));
-  fields.text = field(form, 'text', 'Material de requisitos', { textarea: true, className: 'material', hint: 'Cole histórias, requisitos, critérios ou cenários Gherkin. Gherkin é opcional. Preserve o texto original; dúvidas poderão ser esclarecidas depois.' });
+  fields.text = field(form, 'text', 'Material de requisitos', { textarea: true, optional: true, className: 'material', hint: 'Cole histórias, requisitos, critérios ou cenários Gherkin. Gherkin é opcional. Preserve o texto original; dúvidas poderão ser esclarecidas depois.' });
+  const uploads = field(form, 'files', 'Arquivos de requisitos (opcional)', { optional: true, type: 'file', hint: 'Até cinco .txt, .md ou PDF com texto; até 10 MiB por arquivo. Arquivos ficam selecionados após um erro nesta página; ao recarregar, selecione-os novamente.' });
+  uploads.input.multiple = true; uploads.input.accept = '.txt,.md,.pdf';
+  const received = el('ul', null, 'plain-list'); form.append(received);
   const meter = el('small'); const footer = el('div', null, 'form-footer'); const submit = button('Salvar rascunho'); submit.type = 'submit'; footer.append(meter, submit); form.append(footer); panel.append(form);
   let attempt = null; let sending = false; let blocked = false;
   const body = () => JSON.stringify(Object.fromEntries(Object.entries(fields).map(([name, ref]) => [name, ref.input.value])));
-  const update = () => { meter.textContent = `${bytes(body()).toLocaleString('pt-BR')} / 16.384 bytes do envio completo`; };
+  const update = () => { meter.textContent = `${bytes(body()).toLocaleString('pt-BR')} / 16.384 bytes dos campos de texto`; received.replaceChildren(...[...uploads.input.files].map(file => el('li', `${file.name} · ${(file.size / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} KiB`))); };
   const lock = () => { Object.values(fields).forEach(ref => { ref.input.readOnly = !!attempt?.key; }); submit.textContent = attempt?.key ? 'Tentar confirmar salvamento' : 'Salvar rascunho'; };
   try {
     attempt = readAttempt();
@@ -336,7 +557,7 @@ function intakePage() {
       let first;
       for (const [name, ref] of Object.entries(fields)) {
         const value = ref.input.value.trim(); let problem = '';
-        if (name !== 'objective' && !value) problem = 'Preencha este campo.';
+        if (name !== 'objective' && !value && (name !== 'text' || !uploads.input.files.length)) problem = 'Preencha este campo ou selecione arquivos de requisitos.';
         const max = name === 'objective' ? 2000 : name === 'text' ? Infinity : 120;
         if (count(value) > max) problem = `Use até ${max.toLocaleString('pt-BR')} caracteres.`;
         if (name === 'text' && bytes(body()) > limit) problem = 'O JSON completo excede 16 KiB. Reduza o material ou os demais campos.';
@@ -344,9 +565,14 @@ function intakePage() {
       }
       if (first) { first.focus(); return; }
     }
-    sending = true; submit.disabled = true; tell(notice, 'Conferindo sessão e salvando o rascunho…');
+    const selectedFiles = [...uploads.input.files];
+    const fileProblem = selectedFiles.length > 5 ? 'Selecione no máximo cinco arquivos.' : selectedFiles.some(file => file.size > 10 * 1024 * 1024) ? 'Cada arquivo deve ter até 10 MiB.' : selectedFiles.some(file => !/\.(txt|md|pdf)$/i.test(file.name)) ? 'Use somente .txt, .md ou PDF com texto.' : '';
+    if (invalid(uploads, fileProblem)) { uploads.input.focus(); return; }
+    sending = true; submit.disabled = true; uploads.input.disabled = true; tell(notice, 'Conferindo sessão e salvando o rascunho…');
     try {
-      const candidate = attempt?.key ? attempt : { accountId, key: crypto.randomUUID(), body: body() };
+      const files = await Promise.all(selectedFiles.map(async file => ({ name: file.name, size: file.size, sha256: [...new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()))].map(value => value.toString(16).padStart(2, '0')).join('') })));
+      if (attempt?.key && JSON.stringify(attempt.files || []) !== JSON.stringify(files)) { tell(notice, 'Selecione novamente os mesmos arquivos da tentativa original para confirmar o salvamento. O conteúdo e a chave foram preservados.', true); return; }
+      const candidate = attempt?.key ? attempt : { accountId, key: crypto.randomUUID(), body: body(), ...(files.length ? { files } : {}) };
       // Guardar e reler antes de qualquer POST. Falha local nunca dispara um envio.
       try { saveAttempt(candidate); } catch { tell(notice, 'Não foi possível guardar a tentativa nesta aba. Nenhuma solicitação de salvamento foi enviada. Habilite o armazenamento do navegador e tente novamente.', true); return; }
       attempt = candidate;
@@ -354,7 +580,11 @@ function intakePage() {
       await sameAccount(candidate.accountId);
       if (user?.id !== accountId) return;
       let run;
-      try { run = await api('/runs', { accountId: attempt.accountId, method: 'POST', headers: { 'Idempotency-Key': attempt.key }, body: attempt.body }); }
+      try {
+        let payload = attempt.body;
+        if (selectedFiles.length) { payload = new FormData(); for (const [key, value] of Object.entries(JSON.parse(attempt.body))) payload.append(key, value); selectedFiles.forEach(file => payload.append('files', file)); }
+        run = await api('/runs', { accountId: attempt.accountId, method: 'POST', headers: { 'Idempotency-Key': attempt.key }, body: payload });
+      }
       catch (error) {
         if (!user) return;
         if ([400, 413, 415].includes(error.status)) {
@@ -370,7 +600,7 @@ function intakePage() {
       catch { tell(notice, 'Rascunho salvo, mas não foi possível limpar a recuperação local. Repetir esta tentativa é seguro.', true); panel.append(link('Abrir execução salva', `/execucoes/${encodeURIComponent(run.id)}`, 'button')); return; }
       rememberForm = null; tell(notice, 'Rascunho salvo. Abrindo execução…'); location.assign(`/execucoes/${encodeURIComponent(run.id)}`);
     } catch (error) { if (user) tell(notice, `${errorText(error)}${attempt?.key ? ' Confirme a tentativa original antes de iniciar outra.' : ''}`, true); }
-    finally { sending = false; submit.disabled = blocked; lock(); }
+    finally { sending = false; submit.disabled = blocked; uploads.input.disabled = false; lock(); }
   });
 }
 
@@ -387,17 +617,23 @@ function preservedComment(pending) {
   copy.input.value = pending.comment; copy.input.readOnly = true;
   return panel;
 }
-function curationPanel(curation) {
+function curationPanel(curation, run) {
   const panel = el('details', null, 'panel'); panel.append(el('summary', `Entendimento do material · Revisão ${curation.revision}`));
   for (const requirement of curation.payload.requirements) {
-    panel.append(el('h3', requirement.id), el('p', requirement.statement, 'text-content'));
+    const requirementPanel = el('details', null, 'plan-section');
+    requirementPanel.append(el('summary', `${requirement.id} · ${requirement.statement}`));
     for (const rule of requirement.rules) {
-      panel.append(el('p', `${rule.id}${rule.kind === 'example' ? ' · Exemplo recebido' : ''} — ${rule.statement}`, 'text-content'));
-      for (const example of rule.examples || []) panel.append(planSection(`Exemplo ${example.id}`, [
+      const associated = (run.cases?.payload.testCases || []).filter(item => item.ruleIds.includes(rule.id));
+      requirementPanel.append(el('p', associated.length ? `Casos de ${rule.id}: ${associated.map(item => item.id).join(', ')}` : `${rule.id}: sem caso associado.`, 'hint'));
+      const pending = run.questions.filter(item => item.ruleIds?.includes(rule.id) || item.requirementIds?.includes(requirement.id));
+      if (pending.length) requirementPanel.append(planSection('Pendências', pending, item => item.description));
+      requirementPanel.append(el('p', `${rule.id}${rule.kind === 'example' ? ' · Exemplo recebido' : ''} — ${rule.statement}`, 'text-content'));
+      for (const example of rule.examples || []) requirementPanel.append(planSection(`Exemplo ${example.id}`, [
         ...example.given.map(value => `Dado: ${value}`), ...example.when.map(value => `Quando: ${value}`), ...example.then.map(value => `Então: ${value}`),
       ]));
-      for (const source of rule.sources) panel.append(el('p', `${source.artifactId} · ${source.locator}`, 'hint'), el('blockquote', source.quote, 'text-content'));
+      for (const source of rule.sources) requirementPanel.append(el('p', sourceLabel(source), 'hint'), el('blockquote', source.quote, 'text-content'));
     }
+    panel.append(requirementPanel);
   }
   return panel;
 }
@@ -626,7 +862,7 @@ function casesPanel(run, accountId, pending) {
       planSection('Dados', Object.entries(item.data), ([key, value]) => `${key}: ${JSON.stringify(value)}`),
       planSection('Técnicas', item.techniques, value => `${value.name} — ${value.description}\nValores: ${value.values.map(item => JSON.stringify(item)).join(', ')}`),
       el('h3', 'Resultado esperado'), el('p', item.expected, 'text-content'), el('h3', 'Fontes'));
-    for (const source of item.sources) detail.append(el('p', `${source.artifactId} · ${source.locator}`, 'hint'), el('blockquote', source.quote, 'text-content'));
+    for (const source of item.sources) detail.append(el('p', sourceLabel(source), 'hint'), el('blockquote', source.quote, 'text-content'));
     if (run.routeDetail) detail.append(caseRoute(run, item.id));
     panel.append(detail);
   }
@@ -727,10 +963,13 @@ function captureFigure(run, observation, accountId) {
   const img = el('img');
   img.alt = 'Captura da tela observada'; img.loading = 'lazy';
   if (observation.width && observation.height) { img.width = observation.width; img.height = observation.height; }
-  const caption = el('figcaption', `${observation.at} · ${observation.width}×${observation.height}`);
+  const caption = el('figcaption', [observation.at ? date(observation.at) : '', observation.width && observation.height ? `${observation.width}×${observation.height}` : '', observation.caseId ? `Caso ${observation.caseId} · tentativa ${observation.attemptId}` : ''].filter(Boolean).join(' · '));
   figure.append(img, caption);
-  evidenceUrl(run.id, observation.assetId, accountId).then(url => { img.src = url; })
-    .catch(() => { img.alt = 'Captura indisponível'; caption.textContent = 'Captura indisponível para esta observação.'; });
+  img._evidenceReady = evidenceUrl(run.id, observation.assetId, accountId).then(url => {
+    if (user?.id !== accountId || evidenceRunId !== run.id || !img.isConnected) { URL.revokeObjectURL(url); evidenceUrls.delete(url); throw new Error('Conta alterada.'); }
+    img.src = url;
+  });
+  img._evidenceReady.catch(() => { img.alt = 'Captura indisponível'; caption.textContent = 'Captura indisponível para esta observação.'; });
   return figure;
 }
 function caseRoute(run, caseId) {
@@ -740,8 +979,7 @@ function caseRoute(run, caseId) {
   panel.append(el('h3', 'Percurso do caso'));
   if (!item) { panel.append(message('Caso ausente desta revisão do detalhamento.')); return panel; }
   const quality = routes.validations.filter(value => value.validator === 'output-validator' && value.status !== 'error');
-  const approved = routes.current && quality.length === 1 && quality[0].status === 'approved' &&
-    run.phase === 'route_detail' && ['ready', 'awaiting_input'].includes(run.status);
+  const approved = routes.current && quality.length === 1 && quality[0].status === 'approved';
   panel.append(message(!routes.current ? 'Associação desatualizada.' : approved ? 'Associação validada.' : 'Associação provisória — sem aprovação do validador.'));
   panel.append(el('p', `Casos aprovados: ${item.approvedCaseRevision.outputId} · Revisão ${item.approvedCaseRevision.revision}`, 'hint'));
   if (item.pathId === null) {
@@ -786,9 +1024,10 @@ function routeDetailPanel(run, accountId) {
   const routes = run.routeDetail;
   if (routes) {
     panel.append(el('p', `Revisão ${routes.revision}`, 'eyebrow'));
-    if (routes.ready) panel.append(message('Percursos validados — aguardando execução dos testes'));
+    if (routes.ready && run.phase === 'route_detail') panel.append(message('Percursos validados — aguardando execução dos testes'));
     else if (!routes.current) panel.append(message('Detalhamento desatualizado — as dependências foram alteradas.'));
-    else if (run.status === 'awaiting_input') panel.append(message('Detalhamento com impedimentos. Consulte as pendências e o parecer. A retomada desta etapa ainda não está disponível.'));
+    else if (routes.validations.some(value => value.status === 'approved')) panel.append(message('Detalhamento validado. Consulte os percursos e as pendências de cada caso.'));
+    else if (run.status === 'awaiting_input') panel.append(message('Detalhamento com impedimentos. Responda às perguntas e consulte as opções de retomada.'));
     else panel.append(message('Detalhamento provisório — nenhuma prontidão para execução foi publicada.'));
     panel.append(planSection('Pareceres sobre o detalhamento', routes.validations,
       value => `${validations[value.status] || value.status} · Revisão ${value.outputRevision} · ${value.reason}`));
@@ -905,33 +1144,36 @@ function pendingComment(run, accountId, pending) {
   }
   return pending;
 }
-const canAnswer = run => ['curation', 'planning'].includes(run.phase) && ['awaiting_input', 'awaiting_approval'].includes(run.status);
+const canAnswer = run => run.canAnswer ?? (['curation', 'planning', 'mapping', 'route_detail', 'execution'].includes(run.phase) && ['awaiting_input', 'awaiting_approval', 'ready'].includes(run.status));
 function questionPanel(run, accountId, pending) {
-  const panel = el('section', null, 'panel'); panel.append(el('h2', 'Esclarecimentos do material'),
-    el('p', 'Responda às dúvidas conhecidas e depois retome a preparação. A resposta será preservada como nova fonte e o plano precisará de nova validação.'));
+  const panel = el('section', null, 'panel'); panel.append(el('h2', 'Perguntas e esclarecimentos'),
+    el('p', 'Responda às dúvidas localizadas e retome o trabalho. Mudanças de regra ou escopo exigem nova revisão e as aprovações correspondentes.'));
   const editable = canAnswer(run);
   for (const [index, question] of run.questions.entries()) {
     const item = el('section', null, 'plan-section');
-    const scope = question.ruleIds?.length ? `Critérios afetados: ${question.ruleIds.join(', ')}` : question.requirementIds.length ? `Requisitos afetados: ${question.requirementIds.join(', ')}` : 'Afeta todo o material';
+    const scope = question.caseIds?.length ? `Casos afetados: ${question.caseIds.join(', ')}` : question.ruleIds?.length ? `Critérios afetados: ${question.ruleIds.join(', ')}` : question.requirementIds.length ? `Requisitos afetados: ${question.requirementIds.join(', ')}` : 'Afeta todo o material';
     item.append(el('h3', question.id), el('p', question.description, 'text-content'),
       el('p', `${scope}. ${question.blocking ? 'Bloqueia apenas esse escopo.' : 'Não bloqueia o planejamento.'}`, 'hint'));
-    for (const source of question.sources) item.append(el('p', `${source.artifactId} · ${source.locator}`, 'hint'), el('blockquote', source.quote, 'text-content'));
+    for (const source of question.sources) item.append(el('p', sourceLabel(source), 'hint'), el('blockquote', source.quote, 'text-content'));
     const key = `${accountId}:${run.id}:${question.outputId}:${question.outputRevision}:${question.id}`;
     const answer = run.answers?.find(value => value.id === question.answerId);
     if (answer) {
       if (answerDrafts.get(key)?.text === answer.text) answerDrafts.delete(key);
-      item.append(el('p', `Resposta registrada em ${date(answer.at)}`, 'hint'), el('p', answer.text, 'text-content'));
-    } else if (editable && question.outputId) {
+      item.append(el('p', `Resposta r${answer.revision || 1} registrada em ${date(answer.at)}`, 'hint'), el('p', answer.text, 'text-content'));
+    }
+    if (editable && question.outputId) {
+      const correction = answer ? el('details', null, 'plan-section') : null;
+      if (correction) { correction.append(el('summary', 'Corrigir resposta')); item.append(correction); }
       const form = el('form'); form.noValidate = true;
       const response = field(form, `answer-${index}`, `Resposta para ${question.id}`, { textarea: true, hint: 'Até 4.000 caracteres. Confirme o comportamento esperado; não inclua senhas.' });
-      response.input.value = answerDrafts.get(key)?.text || '';
+      response.input.value = answerDrafts.get(key)?.text ?? answer?.text ?? '';
       const remember = () => answerDrafts.set(key, { text: response.input.value, questionId: question.id, outputRevision: question.outputRevision });
       response.input.addEventListener('input', remember);
-      const notice = message(); const save = button('Registrar resposta'); save.type = 'submit'; form.append(save, notice); item.append(form);
+      const notice = message(); const save = button(answer ? 'Registrar correção' : 'Registrar resposta'); save.type = 'submit'; form.append(save, notice); (correction || item).append(form);
       let sending = false;
       form.addEventListener('submit', async event => {
         event.preventDefault(); if (sending) return;
-        const payload = { outputId: question.outputId, outputRevision: question.outputRevision, questionId: question.id, text: response.input.value };
+        const payload = { outputId: question.outputId, outputRevision: question.outputRevision, questionId: question.id, text: response.input.value, expectedAnswerRevision: answer?.revision ?? 0 };
         const problem = !payload.text.trim() ? 'Informe a resposta.' : count(payload.text) > 4000 ? 'Use até 4.000 caracteres.' : bytes(JSON.stringify(payload)) > limit ? 'O envio excede 16 KiB. Reduza a resposta.' : '';
         if (invalid(response, problem)) { response.input.focus(); return; }
         remember(); const activeComment = pendingComment(run, accountId, pending);
@@ -970,38 +1212,45 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
       if (error.status !== 404) main.append(button('Tentar novamente', () => detailPage(noticeText, isError, pending), 'secondary')); }
     main.setAttribute('aria-busy', 'false'); return;
   }
-  main.setAttribute('aria-busy', 'false'); main.replaceChildren(link('← Minhas execuções', '/execucoes', 'back-link'));
+  main.setAttribute('aria-busy', 'false'); revokeEvidence(); main.replaceChildren(link('← Minhas execuções', '/execucoes', 'back-link'));
+  currentArtifacts = run.artifacts || []; currentAnswerSources = run.answers || [];
   heading(run.name, run.applicationName); if (noticeText) main.append(message(noticeText, isError));
   const metadata = el('dl', null, 'metadata');
   for (const [title, value] of [['Criada em', date(run.createdAt)], ['Etapa', phases[run.phase] || run.phase], ['Situação', statuses[run.status] || run.status]]) { const item = el('div'); item.append(el('dt', title), el('dd', value)); metadata.append(item); }
   const summary = el('section', null, 'panel'); summary.append(metadata, el('p', `Identificação: ${run.id}`, 'run-id')); main.append(summary);
+  summary.append(runManagement(run, accountId));
+  const views = detailTabs(run);
+  views.results.append(resultsPanel(run, accountId));
+  if (run.versions?.length) views.overview.append(planSection('Revisões preservadas', run.versions, item => `${phases[item.phase] || item.phase} · ${item.id} · Revisão ${item.revision}`));
+  if (run.invalidations?.length) views.overview.append(planSection('Revisões invalidadas', run.invalidations, item => `${item.outputId} · Revisão ${item.outputRevision} — ${item.reason}`));
+  if (currentArtifacts.length) views.overview.append(planSection('Fontes recebidas', currentArtifacts, item => `${item.name} · ${item.pages?.length ? `${item.pages.length} páginas · ` : ''}Revisão ${item.version}`));
   if (run.progress?.activeRole || run.progress?.activity) {
     summary.append(message([roles[run.progress.activeRole] || run.progress.activeRole, activities[run.progress.activity] || run.progress.activity].filter(Boolean).join(' · ')));
   }
   if (run.stopReason) main.append(message(run.stopReason.message, ['error', 'interrupted'].includes(run.status)));
-  if (run.targetAccess) main.append(targetAccessPanel(run, accountId));
-  if (run.cases) main.append(casesPanel(run, accountId, pending));
-  if (run.mapping) main.append(mappingPanel(run, accountId));
-  if (run.canDetailRoutes || run.routeDetail || run.phase === 'route_detail') main.append(routeDetailPanel(run, accountId));
-  if (run.curation) main.append(curationPanel(run.curation));
+  if (run.targetAccess) views.overview.append(targetAccessPanel(run, accountId));
+  if (run.cases) views.cases.append(casesPanel(run, accountId, pending));
+  if (run.mapping) views.cases.append(mappingPanel(run, accountId));
+  if (run.canDetailRoutes || run.routeDetail || run.phase === 'route_detail') views.cases.append(routeDetailPanel(run, accountId));
+  if (run.curation) views.overview.append(curationPanel(run.curation, run));
   if (run.questions?.length) main.append(questionPanel(run, accountId, pending));
   for (const [key, draft] of answerDrafts) {
     if (!key.startsWith(`${accountId}:${id}:`) || !draft.text.trim()) continue;
     if (canAnswer(run) && run.questions.some(question => question.outputId && !question.answerId && key === `${accountId}:${id}:${question.outputId}:${question.outputRevision}:${question.id}`)) continue;
-    const copy = el('section', null, 'panel'); copy.append(el('h3', `Texto não enviado · ${draft.questionId} · Curadoria r${draft.outputRevision}`),
+    const copy = el('section', null, 'panel'); copy.append(el('h3', `Texto não enviado · ${draft.questionId} · Revisão ${draft.outputRevision}`),
       el('p', 'A pergunta ou sua resposta mudou. Este texto foi preservado para consulta e cópia; não será reaplicado.'), el('blockquote', draft.text, 'text-content'),
       button('Descartar este texto não enviado', () => { answerDrafts.delete(key); copy.remove(); }, 'secondary'));
     main.append(copy);
   }
-  if (run.answers?.length) main.append(planSection('Histórico de esclarecimentos', run.answers,
-    value => `${value.questionId} · Curadoria r${value.outputRevision} · ${date(value.at)} — ${value.text}`));
+  if (run.answers?.length) views.overview.append(planSection('Histórico de esclarecimentos', run.answers,
+    value => `${value.questionId} · Resposta r${value.revision || 1} · Revisão da saída ${value.outputRevision} · ${date(value.at)} — ${value.text}`));
   if (run.canResume) {
-    const notice = message(); const resume = button('Retomar preparação com as respostas', async () => {
+    const notice = message(); const resume = button(['curation', 'planning'].includes(run.phase) ? 'Retomar preparação com as respostas' : 'Retomar com as respostas', async () => {
       if ([...answerDrafts].some(([key, draft]) => key.startsWith(`${accountId}:${id}:`) && draft.text.trim())) {
         tell(notice, 'Há uma resposta digitada que ainda não foi registrada. Registre-a ou apague o texto antes de retomar.', true); return;
       }
       const activeComment = pendingComment(run, accountId, pending);
-      resume.disabled = true; tell(notice, 'Solicitando nova curadoria e planejamento…');
+      resume.disabled = true; tell(notice, 'Solicitando análise das respostas e retomada…');
       try {
         await sameAccount(accountId); if (user?.id !== accountId) return;
         await api(`/runs/${encodeURIComponent(id)}/resume`, { accountId, method: 'POST', body: '{}' });
@@ -1010,9 +1259,9 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
     });
     summary.append(resume, notice);
   }
-  if ((run.status === 'draft' && run.phase === 'intake') || run.status === 'running') {
+  if ((run.status === 'draft' && run.phase === 'intake') || (run.canCancel ?? ['running', 'ready', 'awaiting_input', 'awaiting_approval'].includes(run.status))) {
     const operation = run.status === 'draft' ? 'start' : 'cancel';
-    const notice = message(); const action = button(operation === 'start' ? 'Preparar plano' : 'Cancelar preparação', async () => {
+    const notice = message(); const action = button(operation === 'start' ? 'Preparar plano' : run.status === 'running' && ['curation', 'planning'].includes(run.phase) ? 'Cancelar preparação' : 'Cancelar execução', async () => {
       action.disabled = true; clearTimeout(detailTimer); detailSequence++;
       tell(notice, operation === 'start' ? 'Solicitando a preparação do plano…' : 'Solicitando cancelamento…');
       try {
@@ -1025,6 +1274,22 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
     }, operation === 'cancel' ? 'secondary' : '');
     summary.append(action, notice);
   }
+  const nextActions = [
+    [run.canExecute, 'Executar testes', 'continue', run.routeDetail ? { outputId: run.routeDetail.id, outputRevision: run.routeDetail.revision, expectedAccessRevision: run.targetAccess.revision } : {}],
+    [run.canWriteReport, 'Gerar relatório', 'report', {}],
+    [run.canClosePending && !run.canWriteReport, 'Encerrar com pendências', 'finish-with-pending', {}],
+    [run.canPartialReport, 'Gerar relatório parcial', 'partial-report', {}],
+    [run.canAnalyzeFeedback, 'Aplicar alterações solicitadas', 'continue', (() => { const decision = run.approvals.findLast(item => item.decision === 'changes_requested' && [run.plan, run.cases].some(output => output?.id === item.outputId && output.revision === item.outputRevision)); return decision ? { outputId: decision.outputId, outputRevision: decision.outputRevision } : {}; })()],
+  ];
+  for (const [available, label, operation, body] of nextActions) {
+    if (!available) continue;
+    const notice = message(); const action = button(label, async () => {
+      action.disabled = true; tell(notice, 'Solicitando continuidade…');
+      try { await sameAccount(accountId); await api(`/runs/${encodeURIComponent(id)}/${operation}`, { accountId, method: 'POST', body: JSON.stringify(body) }); await detailPage('Solicitação aceita. Acompanhe o progresso.'); }
+      catch (error) { if (user?.id === accountId) await detailPage(errorText(error), true); }
+    }); summary.append(action, notice);
+  }
+  if (run.questions?.length) summary.append(button('Ver perguntas e respostas', () => views.choose('overview'), 'secondary'));
   if (run.canCreateCases && run.plan) {
     const notice = message(); const generate = button('Gerar casos de teste', async () => {
       generate.disabled = true; tell(notice, 'Solicitando a geração dos casos de teste…');
@@ -1060,7 +1325,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   panel.append(planSection('Requisitos referenciados', content.requirementIds), planSection('Critérios referenciados', content.ruleIds), planSection('Prioridades', content.priorities, item => `${item.ruleId} — ${item.reason}`), planSection('Exclusões', content.exclusions, item => `${item.description} — ${item.reason}`), planSection('Abordagem', content.approach), planSection('Pré-condições', content.preconditions));
   const sources = el('section', null, 'plan-section'); sources.append(el('h3', 'Fontes'));
   if (!content.sources.length) sources.append(el('p', 'Nenhuma fonte informada.', 'hint'));
-  for (const source of content.sources) { sources.append(el('p', `${source.artifactId} · ${source.locator}`, 'text-content'), el('blockquote', source.quote, 'text-content')); }
+  for (const source of content.sources) { sources.append(el('p', sourceLabel(source), 'text-content'), el('blockquote', source.quote, 'text-content')); }
   panel.append(sources, planSection('Situação da validação', plan.validations, value => `${validations[value.status] || value.status} · Revisão ${value.outputRevision} · ${value.validator}`));
   const planDecisions = run.approvals.filter(value => value.outputId === plan.id);
   const decisions = el('section', null, 'plan-section'); decisions.append(el('h3', 'Decisões registradas'));
@@ -1069,21 +1334,21 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
     const item = el('div', null, 'decision'); item.append(el('p', `${decision.decision === 'approved' ? 'Plano aprovado' : 'Alterações solicitadas'} · Revisão ${decision.outputRevision}`), el('p', date(decision.at), 'hint'));
     if (decision.comment) item.append(el('p', decision.comment, 'text-content')); decisions.append(item);
   }
-  panel.append(decisions); main.append(panel);
+  panel.append(decisions); views.plan.append(panel);
   const currentDecisions = planDecisions.filter(value => value.outputRevision === plan.revision);
   const verdicts = plan.validations.filter(value => value.validator === 'output-validator' && value.status !== 'error');
   const eligible = run.status === 'awaiting_approval' && run.phase === 'planning' && verdicts.length === 1 && verdicts[0].status === 'approved' && currentDecisions.length === 0;
   if (!eligible) {
     const waiting = run.status === 'awaiting_approval' && run.phase === 'planning';
-    main.append(message(currentDecisions.length ? `A decisão desta revisão está registrada.${waiting ? ' A execução permanece em espera; a continuidade ainda não foi iniciada.' : ''}` : 'A revisão está disponível para consulta. Uma decisão exige a etapa de aprovação e um parecer aprovado do validador.'));
-    if (restorePlanComment) main.append(preservedComment(pending));
-    main.append(button('Atualizar consulta', () => detailPage('', false, pendingComment(run, accountId, pending)), 'secondary')); return;
+    views.plan.append(message(currentDecisions.length ? `A decisão desta revisão está registrada.${waiting ? ' A execução permanece em espera; a continuidade ainda não foi iniciada.' : ''}` : 'A revisão está disponível para consulta. Uma decisão exige a etapa de aprovação e um parecer aprovado do validador.'));
+    if (restorePlanComment) views.plan.append(preservedComment(pending));
+    summary.append(button('Atualizar consulta', () => detailPage('', false, pendingComment(run, accountId, pending)), 'secondary')); return;
   }
   const review = el('section', null, 'panel'); review.append(el('h2', `Decidir sobre a revisão ${plan.revision}`), el('p', 'Aprovar registra sua decisão e mantém a execução em espera. O servidor confere a revisão e suas dependências antes de aceitar.'));
   const notice = message(); review.append(notice); const form = el('form'); form.noValidate = true;
   const comment = field(form, 'comment', 'Comentário', { optional: true, textarea: true, hint: 'Obrigatório ao solicitar alterações. Até 4.000 caracteres.' });
   if (restorePlanComment) comment.input.value = pending.comment;
-  const actions = el('div', null, 'actions'); const approve = button('Aprovar plano'); const change = button('Solicitar alterações', null, 'secondary'); actions.append(approve, change); form.append(actions); review.append(form); main.append(review);
+  const actions = el('div', null, 'actions'); const approve = button('Aprovar plano'); const change = button('Solicitar alterações', null, 'secondary'); actions.append(approve, change); form.append(actions); review.append(form); views.plan.append(review);
   form.addEventListener('submit', event => event.preventDefault()); let submitting = false;
   const decide = async changes => {
     if (submitting) return;
@@ -1115,6 +1380,7 @@ async function boot() {
     navigation();
     if (location.pathname === '/execucoes') historyPage();
     else if (location.pathname === '/execucoes/nova') intakePage();
+    else if (location.pathname === '/perfil') profilePage();
     else await detailPage();
     if (!user) return;
     sessionTimer = setInterval(() => { if (!document.hidden) void sessionCheck(); }, 30000);

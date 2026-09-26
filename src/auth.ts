@@ -225,6 +225,27 @@ export class AuthService {
     return this.startSession(account);
   }
 
+  async updateProfile(userId: string, input: Record<string, unknown>): Promise<PublicUser> {
+    if (Object.keys(input).some(key => !['name', 'teamName'].includes(key)) ||
+      typeof input.name !== 'string' || !validText(input.name.trim()) ||
+      (input.teamName !== undefined && (typeof input.teamName !== 'string' ||
+        input.teamName.trim() !== '' && !validText(input.teamName.trim())))) throw invalidInput();
+    const name = input.name.trim();
+    const teamName = typeof input.teamName === 'string' ? input.teamName.trim() : undefined;
+    return locked(async () => {
+      const accounts = await this.read();
+      const account = accounts.users.find(account => account.id === userId);
+      if (!account || !this.allowedEmails.has(account.email)) throw invalidSession();
+      account.name = name;
+      if (teamName) account.teamName = teamName;
+      else if (input.teamName !== undefined) delete account.teamName;
+      await this.save(accounts);
+      const user = publicUser(account);
+      for (const session of this.sessions.values()) if (session.user.id === userId) session.user = { ...user };
+      return user;
+    });
+  }
+
   private token(cookieHeader: string | undefined): string | undefined {
     const values = (cookieHeader ?? '').split(';').map(cookie => cookie.trim())
       .filter(cookie => cookie.startsWith(`${COOKIE}=`));

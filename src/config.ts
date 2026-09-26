@@ -98,7 +98,14 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
       ...(thinkingLevel ? { thinkingLevel } : {}),
     };
   }
+  const reportProvider = env.PI_REPORT_PROVIDER?.trim() ?? '';
+  const reportModel = env.PI_REPORT_MODEL?.trim() ?? '';
+  const reportThinking = env.PI_REPORT_THINKING_LEVEL?.trim() || 'low';
+  const reportConfigError = Boolean(reportProvider) !== Boolean(reportModel) || !VALID_THINKING_LEVELS.has(reportThinking)
+    ? 'Configure PI_REPORT_PROVIDER/MODEL juntos e PI_REPORT_THINKING_LEVEL válido.' : undefined;
   return {
+    reportModel: { provider: reportProvider, model: reportModel, thinkingLevel: reportThinking as ThinkingLevel },
+    reportConfigError,
     environment,
     port,
     host: env.HOST ?? '127.0.0.1',
@@ -154,4 +161,12 @@ export function resolvePreparationModels(config: ReturnType<typeof readConfig>):
     };
   }
   return resolved;
+}
+
+/** O redator só é exigido quando o usuário solicita o relatório. */
+export function resolveReportModels(config: ReturnType<typeof readConfig>) {
+  if (config.reportConfigError || !config.reportModel.provider || !config.reportModel.model) {
+    throw new Error(config.reportConfigError ?? 'Configure PI_REPORT_PROVIDER e PI_REPORT_MODEL para gerar o relatório.');
+  }
+  return { ...resolvePreparationModels(config), 'report-writer': config.reportModel };
 }

@@ -1,5 +1,72 @@
 # Operação dos ambientes
 
+## Candidato T9.1 — execução e relatório
+
+O estado efetivo das verificações está no [fechamento da sprint](evidencias/fechamento-sprint/README.md).
+Matheus realizará a validação manual, incluindo ensaios reais e aceite das
+capturas/PDF. Testes automatizados com modelos substituídos não contam como R1–R5.
+As seções T4–T6/T8 abaixo preservam o histórico dos recortes anteriores.
+
+O redator exige perfil explícito, conferido só ao iniciar relatório:
+
+```dotenv
+PI_REPORT_PROVIDER=deepseek
+PI_REPORT_MODEL=deepseek-flash
+PI_REPORT_THINKING_LEVEL=low
+```
+
+Não torna a preparação dependente da configuração do redator. Projetista/análise
+de alterações e validador textual usam `deepseek-v4-pro/high`; executor/validador
+visual usam `deepseek-flash/high`; curador/redator usam `deepseek-flash/low`.
+Não há fallback silencioso. Variáveis entram pelo `env_file` já existente; atualizar
+somente o arquivo privado autorizado e recriar o container daquele ambiente, sem
+alterar outros serviços da VPS nem expor chaves. Confirmar os perfis antes do ensaio.
+
+Com Node.js 24 e `npm ci` usando o lockfile:
+
+```sh
+npm run check
+npm test
+npm run build
+python3 -m unittest discover -s deploy -p 'test_*.py'
+```
+
+Na imagem candidata, executar os smokes existentes e `npm run smoke:execution`.
+Esse smoke usa navegador/ferramentas/armazenamento reais e respostas de modelo
+substituídas explicitamente, sem cobrança de LLM. Não substituir o executor por
+consultas à API, banco, seletores ou JavaScript do alvo.
+
+O ensaio completo mantém os comandos anteriores e acrescenta:
+
+```sh
+npm run eval:flow:real -- --run
+```
+
+O comando corresponde a `eval-mapping-real.mjs --with-execution-report`. Usar o
+artefato de requisitos sintético; o gabarito/modo do alvo pertence exclusivamente
+ao avaliador. Aprovações de plano e casos devem ser humanas e efetivas. IDs,
+capturas, prompts, registros, consumo e relatórios brutos ficam na pasta privada
+do ensaio, fora do Git. Versionar somente relato sanitizado, referências e limites.
+Preservar tentativas malsucedidas e explicar divergências; não repetir até ficar
+verde apagando histórico. Detalhes R1–R5 estão na matriz de fechamento.
+
+Uploads preservam originais privados e texto extraído, com linhas/páginas. PDF
+sem texto exige outra entrada; não há OCR. Duplicação cria novos IDs sem credencial,
+aprovações ou conclusões. Exclusão remove somente dados locais da execução;
+backups existentes seguem seu procedimento e retenção próprios.
+
+Após reinício, não retomar interação interrompida automaticamente. Cada caso tem
+uma tentativa original e no máximo uma reprodução; sessão nova não restaura dados
+do servidor. Confirmar o preparo pela interface autorizada. Com erro/interrupção,
+relatório parcial é uma ação explícita e conserva o estado técnico. Cancelamento
+ou orçamento esgotado não dispara relatório nem outra inferência.
+
+Para PDF, abrir Resultados e usar **Salvar em PDF** da revisão publicada. A página
+busca capturas com sessão e `X-Expected-User-Id`, cria Blob URLs e aguarda imagens
+antes da impressão. Conferir 1366 px, 390 px, teclado, paginação, fontes e mesma
+revisão web/PDF. Publicação em desenvolvimento e promoção da mesma imagem seguem
+o procedimento abaixo; este documento não registra publicação ainda não realizada.
+
 ## Inventário
 
 Servidor: Ubuntu 24.04, 2 vCPU, cerca de 8 GiB RAM; SSH `matheus@76.13.175.64`.

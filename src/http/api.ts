@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { AuthError, AuthService } from '../auth.js';
 import { executeApprovalCommand, executePlanCommand, getPlanReview, publicPlanDecisions } from '../application/plan-approval.js';
 import { configureTargetAccess } from '../application/target-access.js';
-import { createRun, listRuns, RunInputError } from '../application/runs.js';
+import { readMultipart, ArtifactInputError, type UploadedFile } from '../application/artifacts.js';
+import { createRun, duplicateRun, listRuns, RunInputError } from '../application/runs.js';
 import { PreparationError, type PreparationCoordinator } from '../application/prepare-plan.js';
 import { MappingError } from '../application/map-application.js';
 import type { readConfig } from '../config.js';
@@ -72,9 +73,9 @@ export async function handleApi(
     const collection = path === '/api/runs';
     const account = /^\/api\/auth\/(register|login|logout|me)$/.exec(path)?.[1];
     const evidence = /^\/api\/runs\/([^/]+)\/evidence\/([^/]+)$/.exec(path);
-    const run = /^\/api\/runs\/([^/]+)(?:\/(approve|request-changes|start|cancel|answer|resume|continue))?$/.exec(path);
+    const run = /^\/api\/runs\/([^/]+)(?:\/(approve|request-changes|start|cancel|answer|resume|continue|duplicate|report|finish-with-pending|partial-report))?$/.exec(path);
     if (!account && !run && !evidence && !collection) throw new HttpError(404, 'NOT_FOUND', 'Rota não encontrada.');
-    const methods = collection ? ['GET', 'POST'] : evidence ? ['GET'] : run && !run[2] ? ['GET', 'PATCH'] : account === 'me' ? ['GET'] : ['POST'];
+    const methods = collection ? ['GET', 'POST'] : evidence ? ['GET'] : run && !run[2] ? ['GET', 'PATCH', 'DELETE'] : account === 'me' ? ['GET', 'PATCH'] : ['POST'];
     if (!methods.includes(request.method!)) {
       response.setHeader('Allow', methods.join(', '));
       throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'Método não permitido.');
@@ -82,11 +83,19 @@ export async function handleApi(
     const method = request.method;
     auth.ensureConfigured();
     let body: Record<string, unknown> = {};
-    if (method === 'POST' || method === 'PATCH') {
+    let files: UploadedFile[] = [];
+    if (method === 'POST' || method === 'PATCH' || method === 'DELETE') {
       if (request.headers.origin !== config.appOrigin) {
         throw new HttpError(403, 'ORIGIN_REJECTED', 'Origem não permitida.');
       }
-      body = await readJson(request);
+      if (collection && method === 'POST' && request.headers['content-type']?.toLowerCase().startsWith('multipart/form-data')) {
+        // Autorizar antes de ler arquivos evita trabalho de extração anônimo.
+        const uploadSession = auth.authenticate(request.headers.cookie);
+        const expected = request.headersDistinct['x-expected-user-id'] ?? [];
+        if (expected.length !== 1 || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(expected[0]!)) throw new HttpError(400, 'INVALID_EXPECTED_USER_ID', 'Informe um único X-Expected-User-Id com UUID v4.');
+        if (expected[0]!.toLowerCase() !== uploadSession.userId) throw new HttpError(409, 'ACCOUNT_CHANGED', 'A conta da sessão mudou.');
+        ({ body, files } = await readMultipart(request));
+      } else body = await readJson(request);
     }
     if (account === 'register' || account === 'login') {
       fields(body, account === 'register' ? ['name', 'email', 'password', 'teamName'] : ['email', 'password']);
@@ -101,7 +110,7 @@ export async function handleApi(
       return;
     }
     const session = auth.authenticate(request.headers.cookie);
-    if (account === 'me') { json(response, 200, { user: session.user }); return; }
+    if (account === 'me' && method === 'GET') { json(response, 200, { user: session.user }); return; }
     const expectedUsers = request.headersDistinct['x-expected-user-id'] ?? [];
     if (expectedUsers.length !== 1 || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(expectedUsers[0]!)) {
       throw new HttpError(400, 'INVALID_EXPECTED_USER_ID', 'Informe um único X-Expected-User-Id com UUID v4.');
@@ -109,6 +118,11 @@ export async function handleApi(
     // Precondição da interface; propriedade e autoria continuam vindo somente da sessão.
     if (expectedUsers[0]!.toLowerCase() !== session.userId) {
       throw new HttpError(409, 'ACCOUNT_CHANGED', 'A conta da sessão mudou. Entre novamente na conta original.');
+    }
+    if (account === 'me' && method === 'PATCH') {
+      fields(body, ['name', 'teamName']);
+      json(response, 200, { user: await auth.updateProfile(session.userId, body) });
+      return;
     }
     if (account === 'logout') {
       fields(body, []);
@@ -146,7 +160,7 @@ export async function handleApi(
         json(response, 200, { items: await listRuns(runs, url.searchParams, { userId: session.userId }) });
       } else {
         if (url.search) throw invalid();
-        const result = await createRun(runs, body, request.headersDistinct['idempotency-key'] ?? [], { userId: session.userId });
+        const result = await createRun(runs, body, request.headersDistinct['idempotency-key'] ?? [], { userId: session.userId }, files);
         response.setHeader('Location', `/api/runs/${result.run.id}`);
         json(response, result.created ? 201 : 200, result.run);
       }
@@ -159,6 +173,25 @@ export async function handleApi(
       if (!result.ok) serviceError(result.error);
       json(response, 200, result.review);
       return;
+    }
+    if (method === 'DELETE') {
+      fields(body, ['confirmed']);
+      if (url.search || body.confirmed !== true) throw invalid();
+      if (preparation.isActive(runId)) throw new HttpError(409, 'RUN_ACTIVE', 'Aguarde o encerramento do trabalho ativo.');
+      await runs.remove(runId, session.userId);
+      response.writeHead(204).end(); return;
+    }
+    if (run![2] === 'duplicate') {
+      const result = await duplicateRun(runs, runId, body, request.headersDistinct['idempotency-key'] ?? [], { userId: session.userId });
+      json(response, result.created ? 201 : 200, result.run); return;
+    }
+    if (['report', 'finish-with-pending', 'partial-report'].includes(run![2] ?? '')) {
+      fields(body, []);
+      if (url.search) throw invalid();
+      const { accepted } = await preparation.report(runId, session.userId, run![2] === 'partial-report' ? 'partial' : 'final');
+      const result = await getPlanReview(runs, runId, { userId: session.userId }, config);
+      if (!result.ok) serviceError(result.error);
+      json(response, accepted ? 202 : 200, result.review); return;
     }
     if (method === 'PATCH') {
       if (url.search) throw invalid();
@@ -180,9 +213,11 @@ export async function handleApi(
       return;
     }
     if (run![2] === 'answer') {
-      fields(body, ['outputId', 'outputRevision', 'questionId', 'text']);
+      fields(body, ['outputId', 'outputRevision', 'questionId', 'text', 'expectedAnswerRevision']);
       if (url.search || !Number.isSafeInteger(body.outputRevision) || (body.outputRevision as number) < 1) throw invalid();
+      if (body.expectedAnswerRevision !== undefined && (!Number.isSafeInteger(body.expectedAnswerRevision) || (body.expectedAnswerRevision as number) < 0)) throw invalid();
       await preparation.answer(runId, session.userId, {
+        ...(body.expectedAnswerRevision !== undefined ? { expectedAnswerRevision: body.expectedAnswerRevision as number } : {}),
         outputId: string(body, 'outputId', 1, 128), outputRevision: body.outputRevision as number,
         questionId: string(body, 'questionId', 1, 128), text: string(body, 'text', 1, 4000, false),
       });
@@ -222,11 +257,11 @@ export async function handleApi(
     json(response, 200, { status: result.status, phase: result.phase, approvals: publicPlanDecisions(result.approvals) });
   } catch (error) {
     // Não devolve mensagens de exceções de IO, caminhos, cookies ou conteúdo privado.
-    const failure = error instanceof HttpError || error instanceof AuthError || error instanceof PreparationError || error instanceof MappingError ? error
+    const failure = error instanceof ArtifactInputError || error instanceof HttpError || error instanceof AuthError || error instanceof PreparationError || error instanceof MappingError ? error
       : error instanceof StorageError && ['RUN_NOT_FOUND', 'INVALID_RUN_ID'].includes(error.code)
         ? new HttpError(error.code === 'RUN_NOT_FOUND' ? 404 : 400, error.code, error.message)
       : error instanceof RunInputError ? new HttpError(400, error.code, error.message)
-      : error instanceof StorageError && error.code === 'IDEMPOTENCY_CONFLICT' ? new HttpError(409, error.code, error.message)
+      : error instanceof StorageError && ['IDEMPOTENCY_CONFLICT', 'RUN_ACTIVE'].includes(error.code) ? new HttpError(409, error.code, error.message)
       : new HttpError(503, 'STORAGE_FAILURE', 'Não foi possível concluir a operação.');
     if (!request.complete) {
       response.setHeader('Connection', 'close');
