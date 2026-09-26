@@ -28,13 +28,14 @@ revisão humana, que não são substituídos por testes determinísticos.
 | Dependências | `npm ci`, versões do `package-lock.json`, sem alteração do lockfile |
 | `npm run check` | Aprovado no candidato local |
 | `npm run build` | Aprovado no candidato local |
-| `npm test` | Aprovado: 227 testes, zero falhas, zero ignorados (31 testes novos) |
+| `npm test` | Aprovado: 228 testes, zero falhas, zero ignorados, incluindo o ajuste de preservação de evidências |
 | Smoke web local | Aprovado com navegador Chromium baseado em Brave, modelos explicitamente simulados; capturas finais abaixo |
-| Smokes na imagem candidata | Consultar [checks do PR #30](https://github.com/mh131105/akcit-qa-agent/pull/30/checks): quatro smokes na imagem `akcit-qa:ci`; Docker local recusou acesso e sudo requer senha |
+| Smokes na imagem candidata | [CI 36260383016 aprovado](https://github.com/mh131105/akcit-qa-agent/actions/runs/36260383016): runtime, web, alvo e mapeamento na mesma imagem; 228 testes da aplicação e seis de infraestrutura aprovados |
 | `npm run eval:routes:real -- --run` | Tentativa recusada antes da inferência: `EVAL_HUMAN_DIR` não configurado |
 | Inferência real / revisão humana | Pendente; não há aprovação humana, controle negativo real ou qualidade semântica comprovada nesta entrega ainda |
-| Commit da implementação | `090f42f8847a9f56002c55dfbfe65a569bcb2371`; candidato com correções isoladas dos smokes em `f68455846c732e297de655df928e8c7c415d4c6e`; evidências em commit posterior, sem mudança funcional |
-| Imagem | Nenhum digest foi atestado localmente; o CI constrói e testa a imagem candidata |
+| Commit da implementação | `090f42f8847a9f56002c55dfbfe65a569bcb2371`; candidato validado em `4bc2c0b6abcb9e762ebd3e1c3645cd5d4ea3bd0c` |
+| Checkout testado pelo CI | Merge temporário do PR `fa90b469de348c90c382cdd92a0c29f2af6773de` contra `develop` em `58a6311`; isso não integra o PR à branch de destino |
+| Imagem testada pelo CI | `akcit-qa:ci`, ID `sha256:9e5e747dc8ee5a31ee33bc4fa2ebe8cd803c3ad458e166f04af7727ecf755223`; imagem local ao runner, sem publicação ou promoção para produção |
 
 Os perfis exigidos são projetista e validador textual `deepseek-v4-pro` / `high`.
 Os testes conferem seleção da tarefa, perfil aplicado e isolamento das sessões.
@@ -101,8 +102,9 @@ aberta quanto exatamente uma aba no contexto. A proteção do produto é preserv
 Durante o trabalho, Matheus publicou `edb9c10`, preservando os dados privados e
 exportando evidências de ensaios com falha. Essa atualização foi incorporada sem
 sobrescrita e acrescenta um teste, totalizando 228 no candidato; o resultado
-atualizado está nos checks do PR. Os 227 da tabela correspondem à execução local
-anterior a essa integração.
+atualizado está nos checks do PR. A suíte local também foi repetida após essa
+integração, com os 228 aprovados. O registro final das evidências é uma atualização
+de documentação sobre o candidato testado acima, sem mudança funcional.
 
 ### Capturas e comando local
 
