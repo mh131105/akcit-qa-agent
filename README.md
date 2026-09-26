@@ -1,4 +1,8 @@
-# AKCIT QA Agent
+# QAtron
+
+QAtron é o nome do produto. O repositório e os identificadores de infraestrutura
+continuam como `akcit-qa-agent`. A [identidade visual](docs/brand/README.md) inclui
+a logo e o símbolo em SVG.
 
 Base de desenvolvimento para um sistema de testes caixa preta com Pi, um
 orquestrador e cinco especialistas: curadoria, planejamento, execução, relatório e

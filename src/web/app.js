@@ -54,7 +54,7 @@ function tell(node, text, error = false) {
   node.setAttribute('role', error ? 'alert' : 'status'); node.textContent = text;
 }
 function heading(title, subtitle, action) {
-  document.title = `${title} · AKCIT`;
+  document.title = `${title} · QAtron`;
   const header = el('div', null, 'page-heading'); const copy = el('div');
   copy.append(el('p', 'Workspace / Qualidade de software', 'eyebrow'), el('h1', title));
   if (subtitle) copy.append(el('p', subtitle, 'lead'));
@@ -226,9 +226,9 @@ function navigation() {
 }
 
 function access(serviceMessage = '') {
-  main.replaceChildren(); document.title = 'Acesso · AKCIT';
+  main.replaceChildren(); document.title = 'Acesso · QAtron';
   const layout = el('div', null, 'auth-layout'); const story = el('section', null, 'auth-story');
-  story.append(el('p', 'AKCIT / Qualidade de software', 'eyebrow'), el('h1', 'Seu próximo teste começa com o comportamento esperado.'), el('p', 'Reúna histórias, requisitos ou exemplos do comportamento esperado. Salve o material e revise o plano quando estiver disponível.', 'lead'));
+  story.append(el('p', 'QAtron / Qualidade de software', 'eyebrow'), el('h1', 'Seu próximo teste começa com o comportamento esperado.'), el('p', 'Reúna histórias, requisitos ou exemplos do comportamento esperado. Salve o material e revise o plano quando estiver disponível.', 'lead'));
   const steps = el('div', null, 'auth-steps');
   for (const [number, title] of [['01', 'Reúna o material'], ['02', 'Salve a execução'], ['03', 'Revise o plano']]) { const step = el('div'); step.append(el('strong', number), el('span', title)); steps.append(step); }
   story.append(steps); const panel = el('section', null, 'panel'); layout.append(story, panel); main.append(layout);
