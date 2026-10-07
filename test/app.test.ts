@@ -69,22 +69,23 @@ test('páginas e arquivos locais usam lista explícita, cabeçalhos seguros e ca
     assert.match(html, /href=["']\/web\/styles\.css["']/);
     assert.match(html, /src=["']\/web\/app\.js["']/);
     assert.doesNotMatch(html, /<script\b(?![^>]*\bsrc=)/i);
-    for (const [path, mime] of [['styles.css', 'text/css'], ['app.js', 'text/javascript']]) {
+    for (const [path, mime] of [['styles.css', 'text/css; charset=utf-8'], ['app.js', 'text/javascript; charset=utf-8'], ['qatron-mark.png', 'image/png']]) {
       const result = await fetch(`${url}/web/${path}`);
       assert.equal(result.status, 200);
-      assert.equal(result.headers.get('content-type'), `${mime}; charset=utf-8`);
+      assert.equal(result.headers.get('content-type'), mime);
       assert.equal(result.headers.get('cache-control'), 'no-store');
       assert.equal(result.headers.get('x-content-type-options'), 'nosniff');
-      assert.equal(await result.text(), await readFile(new URL(`../src/web/${path}`, import.meta.url), 'utf8'));
+      assert.deepEqual(Buffer.from(await result.arrayBuffer()), await readFile(new URL(`../src/web/${path}`, import.meta.url)));
       const head = await fetch(`${url}/web/${path}`, { method: 'HEAD' });
       assert.equal(head.status, 200);
+      assert.equal(head.headers.get('content-type'), mime);
       assert.equal(head.headers.get('content-length'), result.headers.get('content-length'));
       assert.equal(await head.text(), '');
     }
     const head = await fetch(`${url}/execucoes/run-demo-001`, { method: 'HEAD' });
     assert.equal(head.status, 200);
     assert.equal(await head.text(), '');
-    for (const path of ['/.env', '/package.json', '/web/index.html', '/src/web/index.html', '/web/app.js.map', '/web/app.js/extra', '/execucoes/demo/extra', '/execucoes/', '/desconhecido']) {
+    for (const path of ['/.env', '/package.json', '/web/index.html', '/src/web/index.html', '/web/app.js.map', '/web/app.js/extra', '/web/qatron-mark.png/extra', '/execucoes/demo/extra', '/execucoes/', '/desconhecido']) {
       const result = await fetch(`${url}${path}`);
       assert.equal(result.status, 404, path);
       assert.deepEqual(await result.json(), { error: 'not-found' });

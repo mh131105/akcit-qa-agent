@@ -311,6 +311,7 @@ async function submitAccess(targetPage, operation, label) {
   const path = `**/api/auth/${operation}`;
   let identity;
   const capture = async route => {
+    assert.equal(await targetPage.getByRole('button', { name: label, exact: true }).getAttribute('aria-busy'), 'true', 'Envio de acesso anuncia que está em andamento.');
     const response = await route.fetch();
     assert.equal(response.status(), operation === 'register' ? 201 : 200);
     identity = (await response.json()).user; // Capturar antes da navegação, sem consultar /me.
@@ -340,8 +341,55 @@ async function api(context, path, accountId) {
   return response.json();
 }
 async function noMarkup(scope = page) {
-  assert.equal(await scope.locator('img, svg[data-smoke]').count(), 0, 'Conteúdo recebido deve ser texto.');
+  const unexpectedImages = await scope.locator('img').evaluateAll(images => images.filter(image =>
+    !image.matches('body > .site-header > .brand > img.brand-mark, #main > .auth-layout > .auth-story > .auth-visual > .auth-emblem > img.auth-monogram') ||
+    image.getAttribute('src') !== '/web/qatron-mark.png' || image.src !== new URL('/web/qatron-mark.png', location.origin).href ||
+    image.hasAttribute('srcset') || [...image.attributes].some(attribute => attribute.name.startsWith('on'))
+  ).map(image => image.getAttribute('src')));
+  assert.deepEqual(unexpectedImages, [], 'Somente a imagem estática conhecida do produto é permitida.');
+  assert.equal(await scope.locator('svg[data-smoke]').count(), 0, 'Conteúdo recebido deve ser texto.');
   assert.equal(await page.evaluate(() => globalThis.smokeInjected), undefined);
+}
+async function accessInteractions() {
+  await page.waitForFunction(() => [...document.querySelectorAll('img.brand-mark,img.auth-monogram')]
+    .every(image => image.complete && image.naturalWidth > 0));
+  assert.equal(await page.locator('img.brand-mark,img.auth-monogram').count(), 2, 'Cabeçalho e acesso usam a logo raster do produto.');
+  await noMarkup();
+  const storageBefore = await page.evaluate(() => JSON.stringify([localStorage, sessionStorage]));
+  const email = page.getByLabel('E-mail', { exact: true });
+  const password = page.getByLabel('Senha', { exact: true });
+  await email.fill(accounts[0].email); await password.fill(accounts[0].password);
+  const show = page.getByRole('button', { name: 'Mostrar senha', exact: true });
+  assert.equal(await show.getAttribute('aria-controls'), 'password');
+  assert.equal(await show.getAttribute('aria-pressed'), 'false');
+  await show.focus(); await page.keyboard.press('Space');
+  assert.equal(await password.getAttribute('type'), 'text');
+  assert.equal(await password.inputValue(), accounts[0].password);
+  assert.equal(await page.getByRole('button', { name: 'Ocultar senha', exact: true }).getAttribute('aria-pressed'), 'true');
+  await password.evaluate(input => { window.smokePasswordNode = input; });
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+  assert.equal(await page.evaluate(() => window.smokePasswordNode === document.getElementById('password')), true, 'Clicar no modo ativo conserva o formulário.');
+  await page.evaluate(() => { delete window.smokePasswordNode; });
+  assert.equal(await password.inputValue(), accounts[0].password);
+  await page.getByRole('button', { name: 'Ocultar senha', exact: true }).focus(); await page.keyboard.press('Enter');
+  assert.equal(await password.getAttribute('type'), 'password');
+  assert.equal(await password.inputValue(), accounts[0].password);
+  await page.getByRole('button', { name: 'Criar conta', exact: true }).click();
+  assert.equal(await email.inputValue(), accounts[0].email);
+  assert.equal(await password.inputValue(), '');
+  assert.equal(await password.getAttribute('type'), 'password');
+  await password.fill(accounts[0].password);
+  await page.getByRole('button', { name: 'Mostrar senha', exact: true }).click();
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+  assert.equal(await email.inputValue(), accounts[0].email);
+  assert.equal(await password.inputValue(), '');
+  assert.equal(await password.getAttribute('type'), 'password');
+  assert.equal(await page.getByRole('button', { name: 'Mostrar senha', exact: true }).getAttribute('aria-pressed'), 'false');
+  assert.equal(await page.evaluate(() => JSON.stringify([localStorage, sessionStorage])), storageBefore, 'A recuperação do e-mail entre modos usa somente memória.');
+  await page.reload(); await visible(page.getByRole('button', { name: 'Entrar na conta', exact: true }));
+  assert.equal(await email.inputValue(), '');
+  assert.equal(await password.inputValue(), '');
+  checked.push('Refinamento do acesso: logo raster local → mostrar/ocultar senha por Espaço/Enter e clique conserva valor → modo ativo conserva DOM → troca de modo preserva e-mail somente em memória e limpa senha');
 }
 async function screenshot(filename, width) {
   await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
@@ -352,6 +400,13 @@ async function screenshot(filename, width) {
   if (artifactDir) await page.screenshot({ path: join(artifactDir, filename), fullPage: true, animations: 'disabled' });
 }
 async function visualAccessibility() {
+  // Medir os estados finais: cores interpoladas durante transições variam entre
+  // versões do Chromium e podem usar um espaço de cor diferente do CSS final.
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await Promise.all(document.getAnimations().filter(animation => animation.playState === 'running' &&
+      animation.effect?.getComputedTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => {})));
+  });
   const failures = await page.evaluate(() => {
     const rgba = value => {
       const numbers = value.match(/[-+]?(?:\d*\.)?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
@@ -1165,6 +1220,7 @@ try {
   await page.goto('/');
   await page.waitForURL('**/acesso*');
   await visible(page.getByRole('button', { name: 'Entrar na conta', exact: true }));
+  await accessInteractions();
   await visualAccessibility();
   await screenshot('web-login-desktop.png', 1366); await screenshot('web-login-mobile.png', 390);
   await page.setViewportSize({ width: 1366, height: 900 });

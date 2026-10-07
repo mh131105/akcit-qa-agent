@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40" role="img" aria-labelledby="title">
-  <title id="title">Símbolo QAtron: Q com sinal de verificação</title>
-  <rect width="40" height="40" rx="11" fill="#214d43"/>
-  <circle cx="18" cy="18" r="10.5" fill="none" stroke="#fff" stroke-width="3"/>
-  <path d="m25.5 25.5 5 5" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
-  <path d="m13.5 18.2 3.5 3.5 6-7" fill="none" stroke="#d7edaa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>

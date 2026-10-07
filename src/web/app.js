@@ -240,24 +240,43 @@ function navigation() {
 function access(serviceMessage = '') {
   main.replaceChildren(); document.title = 'Acesso · QAtron';
   const layout = el('div', null, 'auth-layout'); const story = el('section', null, 'auth-story');
-  story.append(el('p', 'QAtron / Qualidade de software', 'eyebrow'), el('h1', 'Seu próximo teste começa com o comportamento esperado.'), el('p', 'Reúna histórias, requisitos ou exemplos do comportamento esperado. Salve o material e revise o plano quando estiver disponível.', 'lead'));
-  const steps = el('div', null, 'auth-steps');
-  for (const [number, title] of [['01', 'Reúna o material'], ['02', 'Salve a execução'], ['03', 'Revise o plano']]) { const step = el('div'); step.append(el('strong', number), el('span', title)); steps.append(step); }
-  story.append(steps); const panel = el('section', null, 'panel'); layout.append(story, panel); main.append(layout);
-  let register = false;
+  const title = el('h1', 'Bons testes começam '); title.append(el('span', 'com clareza.'));
+  story.append(el('p', 'Qualidade, com contexto', 'eyebrow'), title, el('p', 'Do primeiro requisito à evidência final, acompanhe cada etapa e decida quando avançar.', 'lead'));
+  const visual = el('div', null, 'auth-visual'); const emblem = el('div', null, 'auth-emblem');
+  const mark = el('img', null, 'auth-monogram'); mark.src = '/web/qatron-mark.png'; mark.alt = ''; mark.width = 112; mark.height = 112;
+  emblem.append(mark);
+  const steps = el('ol', null, 'auth-steps');
+  for (const [number, label, detail] of [['01', 'Requisitos', 'O contexto vem primeiro'], ['02', 'Plano de teste', 'Sua revisão orienta o caminho'], ['03', 'Evidências', 'Cada decisão tem uma base']]) {
+    const step = el('li'); const copy = el('div'); copy.append(el('strong', label), el('span', detail));
+    step.append(el('span', number, 'auth-step-number'), copy); steps.append(step);
+  }
+  visual.append(emblem, steps); story.append(visual, el('p', 'Seu critério. Agentes ao seu lado.', 'auth-signature'));
+  const panel = el('section', null, 'panel auth-panel'); layout.append(story, panel); main.append(layout);
+  let register = false; let email = '';
   const render = () => {
     panel.replaceChildren(); const tabs = el('div', null, 'auth-switch');
     for (const [label, value] of [['Entrar', false], ['Criar conta', true]]) {
-      const tab = button(label, () => { register = value; render(); panel.querySelector('input').focus(); }, 'secondary');
+      const tab = button(label, () => {
+        if (register === value) return;
+        email = panel.querySelector('#email').value;
+        register = value; render(); panel.querySelector('input').focus();
+      }, 'secondary');
       tab.setAttribute('aria-pressed', String(register === value)); tabs.append(tab);
     }
-    panel.append(tabs, el('h2', register ? 'Participe do piloto' : 'Bem-vindo de volta'));
+    panel.append(tabs, el('p', register ? 'Seu primeiro passo' : 'Vamos continuar?', 'eyebrow'), el('h2', register ? 'Participe do piloto' : 'Bem-vindo de volta'), el('p', register ? 'Crie sua conta para organizar testes e acompanhar decisões.' : 'Entre para retomar suas execuções e acompanhar os próximos passos.', 'auth-intro'));
     const cleanupMessage = new URLSearchParams(location.search).has('cleanup') ? 'Saída confirmada, mas não foi possível limpar a recuperação local desta aba. Feche a aba ou limpe o armazenamento do navegador.' : '';
     const notice = message(cleanupMessage || serviceMessage || (new URLSearchParams(location.search).has('expired') ? 'Sua sessão expirou ou mudou. Entre novamente. Conteúdo pendente só será recuperado para a mesma conta.' : ''), !!serviceMessage || !!cleanupMessage); panel.append(notice);
     const form = el('form'); form.noValidate = true; const fields = {};
     if (register) fields.name = field(form, 'name', 'Nome', { autocomplete: 'name', hint: 'Até 120 caracteres.' });
     fields.email = field(form, 'email', 'E-mail', { type: 'email', autocomplete: 'username' });
+    fields.email.input.value = email; fields.email.input.placeholder = 'voce@equipe.com.br'; fields.email.input.spellcheck = false; fields.email.input.autocapitalize = 'none';
     fields.password = field(form, 'password', 'Senha', { type: 'password', autocomplete: register ? 'new-password' : 'current-password', hint: 'De 15 a 128 caracteres. Espaços fazem parte da senha.' });
+    const passwordControl = el('div', null, 'password-control'); fields.password.input.before(passwordControl); passwordControl.append(fields.password.input);
+    const reveal = button('Mostrar', () => {
+      const visible = fields.password.input.type === 'password'; fields.password.input.type = visible ? 'text' : 'password';
+      reveal.textContent = visible ? 'Ocultar' : 'Mostrar'; reveal.setAttribute('aria-label', visible ? 'Ocultar senha' : 'Mostrar senha'); reveal.setAttribute('aria-pressed', String(visible));
+    }, 'password-reveal secondary');
+    reveal.setAttribute('aria-label', 'Mostrar senha'); reveal.setAttribute('aria-pressed', 'false'); reveal.setAttribute('aria-controls', 'password'); passwordControl.append(reveal);
     if (register) fields.teamName = field(form, 'teamName', 'Nome da equipe (opcional)', { optional: true, autocomplete: 'organization', hint: 'Até 120 caracteres.' });
     const submit = button(register ? 'Cadastrar e entrar' : 'Entrar na conta', null, 'auth-submit'); submit.type = 'submit'; form.append(submit);
     form.addEventListener('submit', async event => {
@@ -272,13 +291,15 @@ function access(serviceMessage = '') {
       if (first) { first.focus(); return; }
       const body = { email: fields.email.input.value.trim(), password: fields.password.input.value };
       if (register) { body.name = fields.name.input.value.trim(); if (fields.teamName.input.value.trim()) body.teamName = fields.teamName.input.value.trim(); }
-      submit.disabled = true; tabs.querySelectorAll('button').forEach(node => { node.disabled = true; }); tell(notice, 'Conferindo seu acesso…');
+      submit.disabled = true; submit.setAttribute('aria-busy', 'true'); tabs.querySelectorAll('button').forEach(node => { node.disabled = true; }); tell(notice, 'Conferindo seu acesso…');
       try {
         await api(`/auth/${register ? 'register' : 'login'}`, { method: 'POST', body: JSON.stringify(body) });
         fields.password.input.value = ''; await api('/auth/me'); location.replace(target());
-      } catch (error) { tell(notice, errorText(error), true); submit.disabled = false; tabs.querySelectorAll('button').forEach(node => { node.disabled = false; }); }
+      } catch (error) { tell(notice, errorText(error), true); submit.disabled = false; submit.removeAttribute('aria-busy'); tabs.querySelectorAll('button').forEach(node => { node.disabled = false; }); }
     });
-    panel.append(form, el('p', 'Esta é a conta do produto. O acesso usado pelo agente na aplicação testada será configurado separadamente.', 'auth-help'), el('p', 'Precisa recuperar o acesso? Procure a equipe responsável pelo piloto.', 'auth-help'));
+    const help = el('div', null, 'auth-support');
+    help.append(el('p', 'Precisa recuperar o acesso?', 'auth-support-title'), el('p', 'Procure a equipe responsável pelo piloto.', 'auth-help'));
+    panel.append(form, help, el('p', 'Esta é a conta do produto. O acesso usado pelo agente na aplicação testada será configurado separadamente.', 'auth-help auth-account-note'));
   }; render();
 }
 
