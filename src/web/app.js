@@ -20,17 +20,22 @@ let detailTimer;
 let detailSequence = 0;
 let evidenceRunId = null;
 const answerDrafts = new Map();
-// URLs blob: das capturas; revogadas ao sair da execução para não reter dados privados.
-const evidenceUrls = new Set();
-function revokeEvidence() { for (const url of evidenceUrls) URL.revokeObjectURL(url); evidenceUrls.clear(); }
+// URLs blob: das capturas, reaproveitadas na mesma execução e revogadas ao sair dela
+// para não reter dados privados. A atualização periódica não baixa as capturas de novo.
+const evidenceUrls = new Map();
+function revokeEvidence() { for (const url of evidenceUrls.values()) URL.revokeObjectURL(url); evidenceUrls.clear(); }
 async function evidenceUrl(runId, assetId, accountId) {
+  const key = `${accountId}:${runId}:${assetId}`;
+  if (evidenceUrls.has(key)) return evidenceUrls.get(key);
   const response = await fetch(`/api/runs/${encodeURIComponent(runId)}/evidence/${encodeURIComponent(assetId)}`, {
     credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(20000),
     headers: { 'X-Expected-User-Id': accountId },
   });
   if (!response.ok) throw new Error('Evidência indisponível.');
-  const url = URL.createObjectURL(await response.blob());
-  evidenceUrls.add(url);
+  const blob = await response.blob();
+  if (evidenceUrls.has(key)) return evidenceUrls.get(key);
+  const url = URL.createObjectURL(blob);
+  evidenceUrls.set(key, url);
   return url;
 }
 
@@ -1067,7 +1072,13 @@ function captureFigure(run, observation, accountId) {
   const caption = el('figcaption', [referenceLabel(observation.id || observation.assetId, 'Captura'), observation.at ? date(observation.at) : '', observation.caseId ? `${referenceLabel(observation.caseId, 'Caso')} · ${referenceLabel(observation.attemptId, 'Tentativa')}` : ''].filter(Boolean).join(' · '));
   figure.append(img, caption);
   img._evidenceReady = evidenceUrl(run.id, observation.assetId, accountId).then(url => {
-    if (user?.id !== accountId || evidenceRunId !== run.id || !img.isConnected) { URL.revokeObjectURL(url); evidenceUrls.delete(url); throw new Error('Conta alterada.'); }
+    if (user?.id !== accountId || evidenceRunId !== run.id) {
+      const key = `${accountId}:${run.id}:${observation.assetId}`;
+      if (evidenceUrls.get(key) === url) evidenceUrls.delete(key);
+      URL.revokeObjectURL(url); throw new Error('Conta alterada.');
+    }
+    // Imagem substituída por uma atualização: a URL segue em cache para a nova.
+    if (!img.isConnected) throw new Error('Captura substituída.');
     img.src = url;
   });
   img._evidenceReady.catch(() => { img.alt = 'Captura indisponível'; caption.textContent = 'Captura indisponível para esta observação.'; });
@@ -1296,13 +1307,15 @@ function questionPanel(run, accountId, pending) {
   }
   return panel;
 }
-async function detailPage(noticeText = '', isError = false, pending = null) {
+async function detailPage(noticeText = '', isError = false, pending = null, refresh = false) {
   if (!user) return;
   clearTimeout(detailTimer); const sequence = ++detailSequence;
   const accountId = user.id;
   const focusedTab = document.activeElement?.getAttribute('role') === 'tab' ? document.activeElement.id : null;
   selectDetailTab = null;
-  main.replaceChildren(); main.append(message('Carregando execução…')); main.setAttribute('aria-busy', 'true');
+  // A atualização periódica mantém a tela atual até a resposta chegar; limpar antes
+  // encolhe a página, leva a rolagem ao topo e faz a tela piscar.
+  if (!refresh) { main.replaceChildren(); main.append(message('Carregando execução…')); main.setAttribute('aria-busy', 'true'); }
   const id = location.pathname.split('/')[2]; let run;
   if (pending && (pending.accountId !== accountId || pending.runId !== id)) pending = null;
   // Capturas da execução anterior são revogadas ao trocar de execução.
@@ -1310,12 +1323,26 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   evidenceRunId = id;
   try { run = await api(`/runs/${encodeURIComponent(id)}`, { accountId }); if (user?.id !== accountId || sequence !== detailSequence) return; }
   catch (error) {
+    // ponytail: falha transitória na atualização mantém a tela e tenta no próximo ciclo.
+    if (refresh && error.status !== 404 && user?.id === accountId && sequence === detailSequence) {
+      detailTimer = setTimeout(() => detailPage(noticeText, isError, pending, true), 2000); return;
+    }
     if (user && sequence === detailSequence) { main.replaceChildren(link('← Minhas execuções', '/execucoes', 'back-link'), message([noticeText, errorText(error)].filter(Boolean).join(' '), true));
       if (pending) main.append(preservedComment(pending));
       if (error.status !== 404) main.append(button('Tentar novamente', () => detailPage(noticeText, isError, pending), 'secondary')); }
     main.setAttribute('aria-busy', 'false'); return;
   }
-  main.setAttribute('aria-busy', 'false'); revokeEvidence(); main.replaceChildren(link('← Minhas execuções', '/execucoes', 'back-link'));
+  if (refresh) {
+    // A reconstrução abaixo é síncrona; a microtarefa roda depois dela e antes da pintura.
+    const scroll = scrollY;
+    const details = new Map([...main.querySelectorAll('details > summary')].map(node => [node.textContent, node.parentElement.open]));
+    queueMicrotask(() => {
+      if (sequence !== detailSequence) return;
+      for (const node of main.querySelectorAll('details > summary')) if (details.has(node.textContent)) node.parentElement.open = details.get(node.textContent);
+      scrollTo(0, scroll);
+    });
+  }
+  main.setAttribute('aria-busy', 'false'); main.replaceChildren(link('← Minhas execuções', '/execucoes', 'back-link'));
   currentArtifacts = run.artifacts || []; currentAnswerSources = run.answers || []; prepareReferenceNames(run);
   heading(run.name, run.applicationName); if (noticeText) main.append(message(noticeText, isError));
   const metadata = el('dl', null, 'metadata');
@@ -1436,7 +1463,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
     const poll = () => {
       if (user?.id !== accountId || sequence !== detailSequence) return;
       if (document.hidden) detailTimer = setTimeout(poll, 2000);
-      else void detailPage('', false, pending);
+      else void detailPage('', false, pending, true);
     };
     detailTimer = setTimeout(poll, 2000);
   }
