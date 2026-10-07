@@ -21,6 +21,13 @@ ENVIRONMENTS = {
     'production': {'project': 'akcit-qa-prod', 'port': '3102', 'cpus': '1.0', 'memory': '3g'},
 }
 
+def compose_command(environment, env_file):
+    command = ['docker', 'compose', '-p', ENVIRONMENTS[environment]['project'],
+               '--env-file', str(env_file), '-f', str(ROOT / 'ops' / 'compose.yml')]
+    if environment == 'production':
+        command += ['-f', str(ROOT / 'ops' / 'compose.production.yml')]
+    return command
+
 def validate_command(environment, original):
     parts = shlex.split(original)
     expected = 'deploy' if environment == 'development' else 'promote'
@@ -71,7 +78,7 @@ def execute(environment, original, token):
                 raise ValueError('Produção exige exatamente a árvore validada em desenvolvimento.')
             digest = dev['digest']
             source_commit = dev['source_commit']
-            dev_health = subprocess.check_output(['docker', 'compose', '-p', 'akcit-qa-dev', '--env-file', str(ROOT / 'development' / 'current.env'), '-f', str(ROOT / 'ops' / 'compose.yml'), 'ps', '-q', 'app'], text=True).strip()
+            dev_health = subprocess.check_output(compose_command('development', ROOT / 'development' / 'current.env') + ['ps', '-q', 'app'], text=True).strip()
             health = subprocess.check_output(['docker', 'inspect', '--format', '{{.State.Health.Status}}', dev_health], text=True).strip()
             if health != 'healthy': raise ValueError('Desenvolvimento não está saudável.')
         else:
@@ -98,14 +105,14 @@ def execute(environment, original, token):
                 'RUNTIME_ENV_FILE=' + str(target / 'runtime.env'),
             ]) + '\n')
             candidate.chmod(0o600)
-            base = ['docker', 'compose', '-p', settings['project'], '--env-file', str(candidate), '-f', str(ROOT / 'ops' / 'compose.yml')]
+            base = compose_command(environment, candidate)
             current = target / 'current.env'
             try:
                 command(base + ['up', '-d', '--wait', '--wait-timeout', '120', '--pull', 'never'])
                 command(base + ['exec', '-T', '-e', 'SMOKE_RESULT_FILE=/data/runtime-smoke.json', 'app', 'node', 'scripts/smoke-runtime.mjs'])
             except Exception:
                 if current.exists():
-                    rollback = ['docker', 'compose', '-p', settings['project'], '--env-file', str(current), '-f', str(ROOT / 'ops' / 'compose.yml')]
+                    rollback = compose_command(environment, current)
                     command(rollback + ['up', '-d', '--wait', '--wait-timeout', '120', '--pull', 'never'])
                 else:
                     command(base + ['down'])

@@ -26,7 +26,7 @@ critérios para considerar o protótipo pronto.
 ## Começar na própria máquina
 
 Requisitos: Git e Docker Desktop/Engine com Compose 2.24 ou posterior. O container
-instala Node.js 24, Pi 0.87.0 e as dependências; não é preciso instalá-los no host.
+instala Node.js 24.21.0, npm 12.2.0, Pi 0.87.0 e as dependências; não é preciso instalá-los no host.
 Há suporte às arquiteturas ARM64 (Mac Apple Silicon) e AMD64 (Linux/Windows).
 
 ```sh
@@ -51,8 +51,11 @@ docker compose down
 ```
 
 O último comando preserva o volume. `docker compose down -v` **apaga os dados locais**.
-Para trabalhar fora do container: Node.js 24, `npm ci`, `npm run dev`. As ferramentas
-de tela e vídeo devem ser executadas no container Linux.
+Para trabalhar fora do container, use Node.js **24.21.0** (fixado em `.nvmrc`) e
+npm **12.2.0**: `nvm install && nvm use`, `npm install --global npm@12.2.0`,
+`npm ci` e `npm run dev`. O npm fixado preserva as versões do lockfile também
+nas dependências empacotadas pelo Pi. As ferramentas de tela e vídeo devem ser
+executadas no container Linux.
 
 ## Fluxo da equipe
 
@@ -76,7 +79,7 @@ operadores de confiança. Nunca use a chave pessoal da VPS como secret do GitHub
 
 ## Acessar desenvolvimento remoto sem domínio
 
-Para integrantes com chave pública autorizada, use Node.js 24 na máquina local:
+Para integrantes com chave pública autorizada, use Node.js 24.21.0 e npm 12.2.0 na máquina local:
 
 ```sh
 npm run dev:remote
@@ -94,8 +97,11 @@ O responsável já tem acesso administrativo e pode usar o túnel convencional:
 ssh -N -L 3111:127.0.0.1:3101 -L 3112:127.0.0.1:3102 matheus@76.13.175.64
 ```
 
-Desenvolvimento: http://127.0.0.1:3111. Produção: http://127.0.0.1:3112.
-O domínio e HTTPS público serão conectados ao Traefik quando a equipe os fornecer.
+Desenvolvimento: http://127.0.0.1:3111, a origem configurada para esse ambiente.
+A porta http://127.0.0.1:3112 de produção serve somente para diagnóstico: a origem
+de autenticação é https://qatron.mhvps.site, portanto cadastro/login pelo endereço
+local são recusados. A rota pelo Traefik e o registro DNS estão descritos em
+[Operação](docs/OPERACAO.md#domínio-de-produção-e-dns).
 
 ## Estrutura
 

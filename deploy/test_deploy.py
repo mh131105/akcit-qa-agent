@@ -25,6 +25,17 @@ class RestrictedCommandTests(unittest.TestCase):
             for environment in deploy.ENVIRONMENTS:
                 with self.assertRaises(ValueError): deploy.validate_command(environment, command)
 
+class ComposeCommandTests(unittest.TestCase):
+    def test_public_route_is_only_applied_to_production(self):
+        with patch.object(deploy, 'ROOT', Path('/qa-operations')):
+            development = deploy.compose_command('development', Path('/dev.env'))
+            production = deploy.compose_command('production', Path('/prod.env'))
+        self.assertEqual(development, ['docker', 'compose', '-p', 'akcit-qa-dev',
+                         '--env-file', '/dev.env', '-f', '/qa-operations/ops/compose.yml'])
+        self.assertEqual(production, ['docker', 'compose', '-p', 'akcit-qa-prod',
+                         '--env-file', '/prod.env', '-f', '/qa-operations/ops/compose.yml',
+                         '-f', '/qa-operations/ops/compose.production.yml'])
+
 class PromotionTests(unittest.TestCase):
     commit = 'a' * 40
     tree = 'b' * 40
@@ -37,6 +48,55 @@ class PromotionTests(unittest.TestCase):
         if path == '/git/ref/heads/main':
             return {'object': {'sha': self.commit}}
         raise AssertionError(path)
+
+    def test_promotion_and_rollback_keep_production_route_and_validated_digest(self):
+        for fail_smoke in [False, True]:
+            with self.subTest(fail_smoke=fail_smoke), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / 'development').mkdir()
+                (root / 'production').mkdir()
+                digest = 'sha256:' + 'c' * 64
+                source = 'd' * 40
+                (root / 'development/release.json').write_text(json.dumps({
+                    'tree': self.tree, 'runtime_smoke': 'passed', 'digest': digest, 'source_commit': source}))
+                current = root / 'production/current.env'
+                current.write_text('previous-release')
+                calls = []
+
+                def command(arguments, **kwargs):
+                    calls.append(arguments)
+                    if fail_smoke and 'exec' in arguments:
+                        raise RuntimeError('synthetic smoke failure')
+
+                def output(arguments, **kwargs):
+                    if arguments[:2] == ['docker', 'compose']:
+                        self.assertNotIn(str(root / 'ops/compose.production.yml'), arguments)
+                        return 'development-container'
+                    if arguments[3] == '{{.State.Health.Status}}':
+                        return 'healthy'
+                    return json.dumps({'io.akcit.git-tree': self.tree, 'org.opencontainers.image.revision': source})
+
+                with patch.object(deploy, 'ROOT', root), patch.object(deploy, 'github', self.github), \
+                     patch.object(deploy.subprocess, 'run', command), patch.object(deploy.subprocess, 'check_output', output), \
+                     patch('builtins.print'):
+                    if fail_smoke:
+                        with self.assertRaisesRegex(RuntimeError, 'synthetic smoke failure'):
+                            deploy.execute('production', f'promote {self.commit} {self.tree} 123', 'synthetic-token')
+                    else:
+                        deploy.execute('production', f'promote {self.commit} {self.tree} 123', 'synthetic-token')
+                self.assertIn(['docker', 'pull', deploy.IMAGE + '@' + digest], calls)
+                compose_calls = [call for call in calls if call[:2] == ['docker', 'compose']]
+                self.assertTrue(compose_calls)
+                for call in compose_calls:
+                    self.assertIn(str(root / 'ops/compose.production.yml'), call)
+                if fail_smoke:
+                    self.assertIn(str(current), compose_calls[-1])
+                    self.assertEqual(current.read_text(), 'previous-release')
+                    self.assertFalse((root / 'production/release.json').exists())
+                else:
+                    release = json.loads((root / 'production/release.json').read_text())
+                    self.assertEqual(release['digest'], digest)
+                    self.assertEqual(release['source_commit'], source)
 
     def test_production_refuses_tree_not_validated_in_development(self):
         with tempfile.TemporaryDirectory() as directory:

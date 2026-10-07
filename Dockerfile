@@ -1,4 +1,5 @@
 FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS dependencies
+RUN npm install --global npm@12.2.0
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
@@ -8,6 +9,7 @@ COPY agents ./agents
 RUN npm run build
 
 FROM node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS runtime
+RUN npm install --global npm@12.2.0
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 DATA_DIR=/data \
     PI_CODING_AGENT_DIR=/data/pi DISPLAY=:99 CHROMIUM_PATH=/usr/bin/chromium \
     PATH=/app/node_modules/.bin:$PATH

@@ -1,0 +1,19 @@
+# Somente produção: usar depois de compose.yml, preservando o acesso local.
+services:
+  app:
+    networks:
+      - default
+      - web
+    labels:
+      traefik.enable: 'true'
+      traefik.docker.network: web
+      traefik.http.routers.qatron.rule: Host(`qatron.mhvps.site`)
+      traefik.http.routers.qatron.entrypoints: websecure
+      traefik.http.routers.qatron.tls: 'true'
+      traefik.http.routers.qatron.tls.certresolver: lets-encrypt
+      traefik.http.routers.qatron.service: qatron
+      traefik.http.services.qatron.loadbalancer.server.port: '3000'
+networks:
+  web:
+    external: true
+    name: web
