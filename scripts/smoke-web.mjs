@@ -186,11 +186,107 @@ async function visualCall(task) {
   return { payload: { status: 'approved', reason: 'Mapa sustentado pelas imagens (simulado).', findings: [] }, metadata, calls };
 }
 async function visible(locator) {
-  const target = locator.first(); await target.waitFor({ state: 'attached' });
-  const pane = await target.evaluate(node => node.closest('[role=tabpanel]')?.id);
-  if (pane && !await target.isVisible()) await target.page().locator(`[role=tab][aria-controls="${pane}"]`).click();
+  const target = locator.and(locator.page().locator(':not([hidden], [hidden] *)')).first();
+  await target.waitFor({ state: 'attached' });
   for (const detail of await target.locator('xpath=ancestor::details').all()) if (await detail.getAttribute('open') === null) await detail.locator('summary').first().click();
   await target.waitFor({ state: 'visible' });
+}
+const runTabs = [
+  ['overview', 'Visão geral', '#visao-geral'], ['plan', 'Plano', '#plano'],
+  ['cases', 'Casos', '#casos'], ['map', 'Mapa', '#mapa'], ['results', 'Resultados', '#resultados'],
+];
+async function selectedTab(id, targetPage = page) {
+  const tab = targetPage.locator(`#tab-${id}`);
+  await targetPage.waitForFunction(id => document.getElementById(`tab-${id}`)?.getAttribute('aria-selected') === 'true', id);
+  assert.equal(await tab.getAttribute('aria-controls'), `pane-${id}`);
+  assert.equal(await targetPage.locator(`#pane-${id}`).getAttribute('aria-labelledby'), `tab-${id}`);
+  assert.equal(await targetPage.getByRole('tab', { selected: true }).count(), 1);
+  assert.equal(await targetPage.getByRole('tabpanel').count(), 1, 'Somente o painel selecionado fica visível.');
+  assert.equal(await targetPage.locator(`#pane-${id}`).isVisible(), true);
+}
+async function openTab(id, targetPage = page) {
+  const definition = runTabs.find(([key]) => key === id);
+  assert.ok(definition, `Aba conhecida: ${id}`);
+  const tab = targetPage.getByRole('tab', { name: definition[1], exact: true });
+  await tab.waitFor({ state: 'visible' });
+  if (await tab.getAttribute('aria-selected') !== 'true') await tab.click();
+  await selectedTab(id, targetPage);
+}
+async function tabNavigationJourney(id) {
+  await page.goto(`/execucoes/${id}?smoke=abas`);
+  await selectedTab('overview');
+  assert.equal(await page.getByRole('tab').count(), 5);
+  assert.equal(await page.locator('[role=tabpanel]').count(), 5, 'Painéis ocultos permanecem no DOM.');
+  for (const [key, , hash] of runTabs) {
+    await page.goto(`/execucoes/${id}?smoke=abas${hash}`);
+    await selectedTab(key);
+    await page.reload();
+    await selectedTab(key);
+    assert.equal(new URL(page.url()).hash, hash);
+  }
+  const guestContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
+  try {
+    const guest = await guestContext.newPage();
+    await guest.goto(`/execucoes/${id}#mapa`); await guest.waitForURL('**/acesso*');
+    assert.equal(new URL(guest.url()).searchParams.get('next'), `/execucoes/${id}#mapa`, 'Acesso sem sessão conserva a aba solicitada no retorno.');
+    await guest.getByLabel('E-mail', { exact: true }).fill(accounts[0].email);
+    await guest.getByLabel('Senha', { exact: true }).fill(accounts[0].password);
+    await submitAccess(guest, 'login', 'Entrar na conta'); await selectedTab('map', guest);
+    assert.equal(new URL(guest.url()).hash, '#mapa');
+    await guest.goto('/acesso?next=https%3A%2F%2Fexample.invalid%2Fexecucoes%23mapa');
+    await guest.waitForURL('**/execucoes');
+    assert.equal(new URL(guest.url()).origin, new URL(page.url()).origin, 'O retorno externo é recusado.');
+  } finally { await guestContext.close(); }
+  await page.goto(`/execucoes/${id}?smoke=abas#inexistente`);
+  await selectedTab('overview');
+  const requests = [];
+  const capture = request => { if (new URL(request.url()).pathname.startsWith('/api/')) requests.push(request.url()); };
+  page.on('request', capture);
+  try {
+    await openTab('plan'); await openTab('map');
+    assert.equal(new URL(page.url()).search, '?smoke=abas');
+    await page.goBack(); await selectedTab('plan');
+    assert.equal(new URL(page.url()).hash, '#plano');
+    await page.goForward(); await selectedTab('map');
+    assert.equal(new URL(page.url()).hash, '#mapa');
+    await page.locator('#tab-map').focus();
+    await page.keyboard.press('Home');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'tab-overview');
+    await selectedTab('map');
+    await page.keyboard.press('End');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'tab-results');
+    await selectedTab('map');
+    await page.keyboard.press('ArrowRight');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'tab-overview');
+    await page.keyboard.press('ArrowLeft');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'tab-results');
+    await selectedTab('map');
+    await page.keyboard.press('Enter'); await selectedTab('results');
+    await page.keyboard.press('ArrowLeft'); await selectedTab('results');
+    await page.keyboard.press('Space'); await selectedTab('map');
+    await openTab('plan');
+    await page.locator('#tab-plan').focus(); await page.keyboard.press('ArrowRight');
+    await visualAccessibility();
+    for (const width of [1366, 960, 959, 390]) await screenshot(`web-tabs-${width}.png`, width);
+    assert.deepEqual(requests, [], 'Clique, teclado e histórico das abas não consultam nem alteram a API.');
+  } finally { page.off('request', capture); }
+  checked.push('Repaginação: cinco abas sem API → hashes diretos/recarga/hash inválido → login conserva hash e recusa next externo → voltar/avançar → setas/Home/End movem apenas foco, Enter/Espaço selecionam');
+}
+async function preserveTabDrafts(fields, returnTab) {
+  const before = await Promise.all(fields.map(async label => [label, await page.getByLabel(label, { exact: true }).inputValue()]));
+  await page.evaluate(labels => {
+    window.smokeDraftNodes = labels.map(label => [...document.querySelectorAll('label')].find(node => node.textContent === label)?.control);
+  }, fields);
+  const requests = [];
+  const capture = request => { if (new URL(request.url()).pathname.startsWith('/api/')) requests.push(request.url()); };
+  page.on('request', capture);
+  try {
+    for (const [key] of runTabs) await openTab(key);
+    await openTab(returnTab);
+    for (const [label, value] of before) assert.equal(await page.getByLabel(label, { exact: true }).inputValue(), value, `Trocar abas preserva literalmente ${label}.`);
+    assert.ok(await page.evaluate(() => window.smokeDraftNodes.every(node => node?.isConnected)), 'Trocar abas mantém os mesmos campos no DOM.');
+    assert.deepEqual(requests, [], 'Trocar abas com formulários em edição não envia solicitações.');
+  } finally { page.off('request', capture); await page.evaluate(() => { delete window.smokeDraftNodes; }); }
 }
 async function bodyIncludes(value) { await visible(page.getByText(value, { exact: false })); }
 async function history() {
@@ -249,10 +345,72 @@ async function noMarkup(scope = page) {
 }
 async function screenshot(filename, width) {
   await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.evaluate(() => document.fonts.ready);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
     `A página não deve transbordar horizontalmente em ${width}px.`);
   if (artifactDir) await page.screenshot({ path: join(artifactDir, filename), fullPage: true, animations: 'disabled' });
+}
+async function visualAccessibility() {
+  const failures = await page.evaluate(() => {
+    const rgba = value => {
+      const numbers = value.match(/[-+]?(?:\d*\.)?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
+      const scale = value.startsWith('color(srgb ') ? 255 : 1;
+      return [(numbers[0] || 0) * scale, (numbers[1] || 0) * scale, (numbers[2] || 0) * scale, numbers[3] ?? 1];
+    };
+    const over = (front, back) => front.slice(0, 3).map((value, index) => value * front[3] + back[index] * (1 - front[3]));
+    const background = node => {
+      const ancestors = []; for (let current = node; current; current = current.parentElement) ancestors.unshift(current);
+      return ancestors.reduce((color, current) => over(rgba(getComputedStyle(current).backgroundColor), color), [255, 255, 255]);
+    };
+    const luminance = color => color.map(value => value / 255).map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4)
+      .reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+    const ratio = (front, back) => { const a = luminance(front), b = luminance(back); return (Math.max(a, b) + .05) / (Math.min(a, b) + .05); };
+    const shown = node => node.getClientRects().length && !node.closest('[hidden]') && getComputedStyle(node).visibility !== 'hidden';
+    const failures = [];
+    for (const node of document.querySelectorAll('h1,h2,h3,p,a,dt,dd,summary,li,label,small,.hint,.badge,.status-badge,.account-name,button,.button,input,textarea,select,[role=tab]')) {
+      if (!shown(node) || node.disabled || (!node.textContent.trim() && !node.matches('input,textarea,select'))) continue;
+      const style = getComputedStyle(node), bg = background(node), size = parseFloat(style.fontSize);
+      const minimum = size >= 24 || (size >= 18.66 && Number(style.fontWeight) >= 700) ? 3 : 4.5;
+      const actual = ratio(over(rgba(style.color), bg), bg);
+      if (actual + .01 < minimum) failures.push(`Texto ${node.id || node.className || node.tagName}: ${actual.toFixed(2)} < ${minimum}`);
+    }
+    for (const node of document.querySelectorAll('input:not([type=checkbox]):not([type=file]),textarea,select')) {
+      if (!shown(node) || node.disabled) continue;
+      const style = getComputedStyle(node), bg = background(node.parentElement);
+      const actual = ratio(over(rgba(style.borderTopColor), bg), bg);
+      if (parseFloat(style.borderTopWidth) < 1 || actual + .01 < 3) failures.push(`Borda ${node.id}: ${actual.toFixed(2)} < 3`);
+    }
+    const active = document.activeElement;
+    if (active?.matches('input,textarea,select,button,[role=tab]')) {
+      const style = getComputedStyle(active), bg = background(active.parentElement);
+      const actual = ratio(over(rgba(style.outlineColor), bg), bg);
+      if (style.outlineStyle === 'none' || parseFloat(style.outlineWidth) < 2 || actual + .01 < 3) failures.push(`Foco ${active.id}: ${actual.toFixed(2)} < 3 ou contorno ausente`);
+    }
+    return failures;
+  });
+  assert.deepEqual(failures, [], 'Textos, bordas dos campos e foco têm contraste acessível.');
+}
+async function visualPreferencesJourney() {
+  await page.getByLabel('Nome da execução', { exact: true }).focus(); await page.keyboard.press('Tab');
+  await visualAccessibility();
+  const colors = () => page.evaluate(() => ['html', 'body', '.site-header', '.panel', 'input'].map(selector => {
+    const style = getComputedStyle(document.querySelector(selector)); return [style.color, style.backgroundColor, style.colorScheme];
+  }));
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'no-preference' });
+  const light = await colors();
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+  assert.deepEqual(await colors(), light, 'Preferência escura do sistema conserva as cores do tema claro.');
+  assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme), 'light');
+  const moving = await page.evaluate(() => [...document.querySelectorAll('*')].filter(node => {
+    const style = getComputedStyle(node);
+    const durations = `${style.animationDuration},${style.transitionDuration}`.split(',').map(value => parseFloat(value) * (value.trim().endsWith('ms') ? 1 : 1000));
+    return durations.some(value => value > 10) || style.scrollBehavior === 'smooth';
+  }).map(node => node.id || node.className || node.tagName));
+  assert.deepEqual(moving, [], 'Movimento reduzido desativa animações, transições e rolagem suave.');
+  for (const width of [1366, 960, 959, 390]) await screenshot(`web-light-reduced-${width}.png`, width);
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'no-preference' });
+  checked.push('Repaginação: contraste de texto/foco/bordas → tema claro sob OS escuro → movimento reduzido → 1366/960/959/390 sem overflow');
 }
 
 const attemptFor = accountId => page.evaluate(id => JSON.parse(sessionStorage.getItem(`akcit.intake.v1:${id}`)), accountId);
@@ -439,7 +597,7 @@ async function logoutRecovery(context, store, owner) {
   await page.getByRole('button', { name: 'Sair', exact: true }).click();
   assert.equal((await cleanFailure).status(), 204);
   await bodyIncludes(/limpar|limpeza/i);
-  assert.equal(await page.getByRole('button', { name: 'Sair', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Sair', exact: true, includeHidden: true }).count(), 0);
   assert.equal(await page.getByLabel('Material de requisitos', { exact: true }).count(), 0);
   assert.equal((await context.request.get('/api/auth/me')).status(), 401);
   assert.deepEqual(await attemptFor(owner.id), retained);
@@ -455,6 +613,7 @@ async function commentRecovery(context, store, owner) {
     const id = `recovery-comment-${mode}`;
     await store.create(waiting(id, owner.id, `Recuperação do comentário ${mode}`));
     await page.goto(`/execucoes/${id}`);
+    await openTab('plan');
     await page.getByLabel('Comentário', { exact: true }).fill(literal);
     let posts = 0; let failQuery = mode === 'query';
     await page.route(`**/api/runs/${id}`, async route => {
@@ -562,11 +721,14 @@ async function preparationJourney(context, store, owner) {
   assert.equal(repeated.status(), 200);
   assert.deepEqual(preparationCalls, ['artifact-curator']);
   holdPreparation = false; releasePreparation();
+  await openTab('plan');
   await visible(page.getByRole('button', { name: 'Aprovar plano', exact: true }));
   assert.deepEqual(preparationCalls, ['artifact-curator', 'output-validator', 'test-designer', 'output-validator']);
+  await openTab('overview');
   await bodyIncludes('Qual é o limite da observação opcional?');
+  await openTab('plan');
   await bodyIncludes('US-02 / CA-02: observação opcional.');
-  assert.equal(await page.getByRole('button', { name: 'Cancelar preparação', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Cancelar preparação', exact: true, includeHidden: true }).count(), 0);
   const review = await api(context, `/api/runs/${id}`, owner.id);
   assert.equal(review.status, 'awaiting_approval'); assert.equal(review.phase, 'planning');
   assert.equal(review.questions.length, 2); assert.deepEqual(review.approvals, []);
@@ -589,15 +751,18 @@ async function preparationJourney(context, store, owner) {
   const firstAnswer = '  A observação é opcional e aceita até 120 caracteres.\n  ';
   const localAnswer = '  Minha resposta ainda não registrada.\n  ';
   const concurrentAnswer = 'A observação pode ser consultada nos detalhes da reserva.';
+  await openTab('overview');
   await page.getByLabel('Resposta para Q-01', { exact: true }).fill(firstAnswer);
   await page.getByLabel('Resposta para Q-02', { exact: true }).fill(localAnswer);
+  await preserveTabDrafts(['Comentário', 'Resposta para Q-01', 'Resposta para Q-02'], 'overview');
+  checked.push('Repaginação: comentário do plano e duas respostas em edição preservam texto literal e nós DOM nas cinco abas, sem API');
   const answerResponse = page.waitForResponse(response => response.url().endsWith(`/api/runs/${id}/answer`));
   await answerForm('Q-01').getByRole('button', { name: 'Registrar resposta', exact: true }).click();
   assert.equal((await answerResponse).status(), 200);
   await bodyIncludes('Resposta registrada. Confira as demais dúvidas antes de retomar.');
   assert.equal(await page.getByLabel('Resposta para Q-02', { exact: true }).inputValue(), localAnswer);
   assert.equal(await page.getByLabel('Comentário preservado da revisão 1', { exact: true }).inputValue(), 'Comentário em edição preservado.');
-  assert.equal(await page.getByRole('button', { name: 'Aprovar plano', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Aprovar plano', exact: true, includeHidden: true }).count(), 0);
   const answered = await api(context, `/api/runs/${id}`, owner.id);
   assert.equal(answered.status, 'awaiting_input'); assert.equal(answered.phase, 'curation');
   assert.equal(answered.canResume, true); assert.equal(answered.answers[0].text, firstAnswer);
@@ -641,6 +806,7 @@ async function preparationJourney(context, store, owner) {
   await visible(page.getByRole('button', { name: 'Cancelar preparação', exact: true }));
   await waitForPreparationHeld();
   holdPreparation = false; releasePreparation();
+  await openTab('plan');
   await visible(page.getByRole('button', { name: 'Aprovar plano', exact: true }));
   await bodyIncludes('Plano de testes / Revisão 2');
   assert.equal(await page.getByLabel('Comentário', { exact: true }).inputValue(), '', 'Não aplicar comentário da revisão antiga na revisão nova.');
@@ -673,6 +839,8 @@ async function preparationJourney(context, store, owner) {
   holdPreparation = false; releasePreparation();
   await bodyIncludes('Validando os casos de teste');
   await waitForPreparationHeld();
+  await selectedTab('plan');
+  await openTab('cases');
   await bodyIncludes('Conteúdo provisório — a validação desta revisão ainda não foi aprovada.');
   holdCaseValidation = false; releasePreparation();
   await bodyIncludes('Conjunto validado. Disponível para revisão humana');
@@ -691,7 +859,7 @@ async function preparationJourney(context, store, owner) {
   assert.deepEqual(savedCases.payload, cases.cases.payload);
   await screenshot('web-cases.png', 1366); await screenshot('web-cases-mobile.png', 390);
   await page.reload(); await bodyIncludes('Conjunto validado. Disponível para revisão humana');
-  assert.equal(await page.getByRole('button', { name: 'Gerar casos de teste', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Gerar casos de teste', exact: true, includeHidden: true }).count(), 0);
 
   // T6.2: Verificações de decisão humana sobre os casos de teste
   await visible(page.getByRole('button', { name: 'Aprovar casos de teste', exact: true }));
@@ -707,6 +875,8 @@ async function preparationJourney(context, store, owner) {
   // CA-08: recuperação de falha de rede/resposta incerta preserva comentário
   const caseCommentText = 'Revisar o resultado esperado do caso CT-03.';
   await page.getByLabel('Comentário sobre os casos', { exact: true }).fill(caseCommentText);
+  await preserveTabDrafts(['Comentário sobre os casos'], 'cases');
+  checked.push('Repaginação: comentário dos casos permanece literal ao navegar entre cinco abas, sem API');
   let casePosts = 0;
   const countCasePosts = request => {
     if (request.method() === 'POST' && /\/(approve|request-changes)$/.test(new URL(request.url()).pathname)) casePosts++;
@@ -739,8 +909,8 @@ async function preparationJourney(context, store, owner) {
   // CA-05: persistência após recarregar página
   await page.reload();
   await bodyIncludes('Casos aprovados. Configure o acesso à aplicação antes do mapeamento.');
-  assert.equal(await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true }).count(), 0);
-  assert.equal(await page.getByRole('button', { name: 'Solicitar alterações nos casos', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true, includeHidden: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Solicitar alterações nos casos', exact: true, includeHidden: true }).count(), 0);
   await screenshot('web-cases-persisted.png', 1366);
 
   // CA-09: conferência de que nenhum mapeamento ou navegação foi iniciado
@@ -766,8 +936,8 @@ async function preparationJourney(context, store, owner) {
   await bodyIncludes('Casos desatualizados — as dependências desta revisão foram alteradas.');
   await bodyIncludes('Casos aprovados · Revisão 1 · Conteúdo desatualizado');
   assert.equal(await page.getByText('Casos aprovados. O mapeamento ainda não foi iniciado.', { exact: true }).count(), 0);
-  assert.equal(await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true }).count(), 0);
-  assert.equal(await page.getByRole('button', { name: 'Solicitar alterações nos casos', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true, includeHidden: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Solicitar alterações nos casos', exact: true, includeHidden: true }).count(), 0);
   const staleCases = await api(context, `/api/runs/${id}`, owner.id);
   assert.equal(staleCases.cases.current, false); assert.equal(staleCases.canDecideCases, false);
   assert.deepEqual(staleCases.approvals, runAfterApproval.approvals, 'A aprovação original permanece intacta.');
@@ -783,6 +953,7 @@ async function preparationJourney(context, store, owner) {
   await store.create(changesRun);
 
   await page.goto('/execucoes/run-cases-changes');
+  await openTab('cases');
   await bodyIncludes('Conjunto validado. Disponível para revisão humana');
   assert.equal(await page.getByLabel('Comentário sobre os casos', { exact: true }).inputValue(), '', 'Outra execução não herda o comentário.');
   let changesPosts = 0;
@@ -865,7 +1036,7 @@ async function preparationJourney(context, store, owner) {
   const cancelled = await api(context, `/api/runs/${cancelledId}`, owner.id);
   assert.equal(cancelled.status, 'cancelled'); assert.equal(cancelled.plan, null);
   assert.equal(preparationCalls.length, callsBefore + 1);
-  assert.equal(await page.getByRole('button', { name: 'Preparar plano', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Preparar plano', exact: true, includeHidden: true }).count(), 0);
   checked.push('T4.1: cancelar pelo site conserva identidade e estado cancelado, aborta a chamada e impede planejamento posterior');
   // Snapshot com casos aprovados e dependências vigentes (antes da adulteração
   // sintética do BUG-T6.2-01): sustenta a jornada de mapeamento a seguir.
@@ -941,12 +1112,18 @@ async function completionInterfaceJourney(context, store, owner, origin, source,
   run.validations.push({ outputId: report.id, outputRevision: 1, validator: 'output-validator', status: 'approved' }, { outputId: report.id, outputRevision: 2, validator: 'output-validator', status: 'changes_requested' });
   run.publishedReport = { outputId: report.id, revision: 1 };
   await store.create(run); await page.goto(`/execucoes/${run.id}`);
+  await selectedTab('overview');
+  await openTab('results');
   await bodyIncludes('Resumo publicado da revisão 1.'); await bodyIncludes('Há uma nova revisão em análise.');
   assert.ok(!(await page.locator('body').innerText()).includes('REVISÃO REJEITADA NÃO PUBLICAR'));
   await page.getByRole('tab', { name: 'Resultados', exact: true }).focus(); await page.keyboard.press('Home');
-  assert.equal(await page.getByRole('tab', { name: 'Visão geral', exact: true }).getAttribute('aria-selected'), 'true');
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'tab-overview');
+  await selectedTab('results');
+  await page.keyboard.press('Enter'); await selectedTab('overview');
   await page.keyboard.press('End');
-  assert.equal(await page.getByRole('tab', { name: 'Resultados', exact: true }).getAttribute('aria-selected'), 'true');
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'tab-results');
+  await selectedTab('overview');
+  await page.keyboard.press('Space'); await selectedTab('results');
   await screenshot('22-relatorio-desktop.png', 1366); await screenshot('23-relatorio-mobile.png', 390);
   await page.exposeFunction('recordPrint', async () => {
     assert.equal(await page.locator('#published-report').getAttribute('data-report-revision'), '1');
@@ -987,6 +1164,10 @@ try {
   page.on('pageerror', error => pageErrors.push(error.message));
   await page.goto('/');
   await page.waitForURL('**/acesso*');
+  await visible(page.getByRole('button', { name: 'Entrar na conta', exact: true }));
+  await visualAccessibility();
+  await screenshot('web-login-desktop.png', 1366); await screenshot('web-login-mobile.png', 390);
+  await page.setViewportSize({ width: 1366, height: 900 });
   const owner = await register(accounts[0]);
   const otherContext = await browser.newContext({ baseURL: origin });
   const otherPage = await otherContext.newPage();
@@ -1163,7 +1344,7 @@ try {
   await login(accounts[1]);
   assert.equal(await page.getByLabel('Material de requisitos', { exact: true }).inputValue(), '');
   assert.equal(await page.getByLabel('Nome da execução', { exact: true }).inputValue(), '');
-  assert.equal(await page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true, includeHidden: true }).count(), 0);
   assert.deepEqual(await page.evaluate(id => JSON.parse(sessionStorage.getItem(`akcit.intake.v1:${id}`)), owner.id), storedAttempt);
   clock += 8 * 60 * 60 * 1000 + 1;
   await page.reload();
@@ -1216,7 +1397,7 @@ try {
     ['plan-stale', 'Plano com nova revisão'], ['plan-conflict', 'Plano com decisão concorrente']]) {
     await store.create(waiting(id, owner.id, label));
   }
-  await page.goto('/execucoes/plan-approve');
+  await tabNavigationJourney('plan-approve');
   await bodyIncludes('Conferir os limites de reservas com dados fictícios.');
   await bodyIncludes('<svg data-smoke onload="globalThis.smokeInjected=true">Fonte literal</svg>');
   await noMarkup();
@@ -1244,6 +1425,7 @@ try {
   checked.push('decisão histórica de execução concluída não exibe espera falsa');
 
   await page.goto('/execucoes/plan-changes');
+  await openTab('plan');
   const comment = '  Incluir o CA-02. <b>Comentário literal</b>  ';
   let decisions = 0;
   page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/request-changes')) decisions++; });
@@ -1270,6 +1452,7 @@ try {
   checked.push('planos sintéticos: conteúdo, fontes literais, aprovação e alteração da revisão 1 persistidos; espera mantida');
 
   await page.goto('/execucoes/plan-stale');
+  await openTab('plan');
   await visible(page.getByRole('button', { name: 'Aprovar plano', exact: true }));
   await store.update('plan-stale', record => {
     record.run.outputs.push({ ...structuredClone(record.run.outputs[1]), revision: 2 });
@@ -1285,9 +1468,11 @@ try {
   checked.push('revisão desatualizada recusada, consulta atualizada e nenhuma aprovação reaplicada');
 
   await page.goto('/execucoes/plan-conflict');
+  await openTab('plan');
   await visible(page.getByRole('button', { name: 'Aprovar plano', exact: true }));
   const concurrent = await context.newPage();
   await concurrent.goto('/execucoes/plan-conflict');
+  await openTab('plan', concurrent);
   const concurrentResponse = concurrent.waitForResponse(response => response.url().endsWith('/plan-conflict/approve'));
   await concurrent.getByRole('button', { name: 'Aprovar plano', exact: true }).click();
   assert.equal((await concurrentResponse).status(), 200);
@@ -1344,6 +1529,7 @@ try {
   assert.notEqual(focus.outline, 'none');
   assert.ok(focus.width >= 2, 'A navegação por Tab precisa mostrar o foco.');
   checked.push('navegação por Tab entre campos com foco visível');
+  await visualPreferencesJourney();
   const beforeOversize = creationCount;
   const oversized = 'á'.repeat(8200);
   await page.getByLabel('Material de requisitos', { exact: true }).fill(oversized);
@@ -1381,12 +1567,15 @@ try {
     return { save: true, value: null };
   });
   await page.goto('/execucoes/run-mapping-smoke');
+  await openTab('cases');
   await bodyIncludes('Casos aprovados. Pronto para mapear a aplicação.');
   const mappingPost = page.waitForResponse(response => response.url().endsWith('/api/runs/run-mapping-smoke/continue'));
   await page.getByRole('button', { name: 'Mapear aplicação', exact: true }).click();
   const acceptedMapping = await mappingPost;
   assert.equal(acceptedMapping.status(), 202);
   assert.deepEqual(acceptedMapping.request().postDataJSON(), { outputId: journey.savedCases.id, outputRevision: 1, expectedAccessRevision: 1 });
+  await selectedTab('cases');
+  await openTab('map');
   await bodyIncludes('Mapa validado — aguardando detalhamento dos percursos.');
   await bodyIncludes('Mapa de navegação / Revisão 1');
   await bodyIncludes('Telas observadas (3)');
@@ -1440,6 +1629,7 @@ try {
   // T6.3 — a associação é simulada; API, interface, persistência e isolamento são reais.
   const beforeRoutes = await store.read(mappingId);
   await page.goto('/execucoes/' + mappingId);
+  await openTab('cases');
   await bodyIncludes('a associação de percursos é uma etapa separada');
   await bodyIncludes('Casos lógicos — mapa disponível, aguardando associação dos percursos.');
   holdRouteValidation = true;
@@ -1483,7 +1673,7 @@ try {
   assert.equal(repeatRoutes.status(), 200);
   const foreignRoutes = await foreignContext.request.get(`/api/runs/${mappingId}`, { headers: { 'X-Expected-User-Id': other.id } });
   assert.equal(foreignRoutes.status(), 404);
-  assert.equal(await page.getByRole('button', { name: 'Executar testes', exact: true }).count(), 1);
+  assert.equal(await page.getByRole('button', { name: 'Executar testes', exact: true, includeHidden: true }).count(), 1);
   await completionInterfaceJourney(context, store, owner, origin, afterRoutes.run, foreignContext, other);
   await foreignContext.close();
   checked.push('T6.3: detalhar pela interface → andamento/provisório → percursos validados e pendências por caso → snapshots/aprovações preservados → recarga/idempotência/isolamento → desktop e mobile');
