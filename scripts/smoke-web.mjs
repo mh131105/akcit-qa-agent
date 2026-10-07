@@ -16,10 +16,10 @@ const artifactDir = process.env.SMOKE_ARTIFACT_DIR;
 const started = Date.now();
 const checked = [];
 const accounts = [
-  { name: 'Pessoa de teste', email: 'web-one@example.test', password: 'Senha fictícia longa 2026!', teamName: 'Piloto sintético' },
-  { name: 'Outra pessoa', email: 'web-two@example.test', password: 'Outra senha fictícia 2026!' },
+  { name: 'Pessoa de teste', email: 'web-one@example.test', password: 'ÁBC1234!', teamName: 'Equipe sintética' },
+  { name: 'Outra pessoa', email: 'web-two@example.test', password: ' É12345🙂 ' },
 ];
-const text = '  US-01: Como pessoa, quero reservar um item.\nCA-01: Aceitar de 1 a 10 itens.\n<script>globalThis.smokeInjected = true</script>\n  ';
+const text = '  US-01: Como pessoa, quero reservar um item no protótipo do cliente.\nCA-01: Aceitar de 1 a 10 itens.\n<script>globalThis.smokeInjected = true</script>\n  ';
 const name = '<img src=x onerror="globalThis.smokeInjected=true"> Reservas';
 const pendingName = 'Resposta perdida — recuperação';
 const pendingText = '  US-02: Confirmar uma única execução.\nCA-02: Repetir sem duplicar.\n  ';
@@ -203,6 +203,7 @@ async function selectedTab(id, targetPage = page) {
   assert.equal(await targetPage.getByRole('tab', { selected: true }).count(), 1);
   assert.equal(await targetPage.getByRole('tabpanel').count(), 1, 'Somente o painel selecionado fica visível.');
   assert.equal(await targetPage.locator(`#pane-${id}`).isVisible(), true);
+  await productionCopy(targetPage);
 }
 async function openTab(id, targetPage = page) {
   const definition = runTabs.find(([key]) => key === id);
@@ -228,6 +229,9 @@ async function tabNavigationJourney(id) {
   try {
     const guest = await guestContext.newPage();
     await guest.goto(`/execucoes/${id}#mapa`); await guest.waitForURL('**/acesso*');
+    await guest.getByRole('button', { name: 'Entrar na conta', exact: true }).waitFor();
+    assert.equal(new URL(guest.url()).searchParams.has('expired'), false, 'Primeiro acesso pede login sem anunciar sessão expirada.');
+    assert.equal(await guest.getByText('Sua sessão expirou ou mudou.', { exact: false }).count(), 0);
     assert.equal(new URL(guest.url()).searchParams.get('next'), `/execucoes/${id}#mapa`, 'Acesso sem sessão conserva a aba solicitada no retorno.');
     await guest.getByLabel('E-mail', { exact: true }).fill(accounts[0].email);
     await guest.getByLabel('Senha', { exact: true }).fill(accounts[0].password);
@@ -289,6 +293,16 @@ async function preserveTabDrafts(fields, returnTab) {
   } finally { page.off('request', capture); await page.evaluate(() => { delete window.smokeDraftNodes; }); }
 }
 async function bodyIncludes(value) { await visible(page.getByText(value, { exact: false })); }
+async function productionCopy(targetPage = page) {
+  // Dados dos usuários e conclusões dos agentes são literais, não texto editorial do produto.
+  const copy = await targetPage.evaluate(() => {
+    const body = document.body.cloneNode(true);
+    body.querySelectorAll('script,style,noscript,input,textarea,.text-content,blockquote,.account-name,.run-row h2,.page-heading h1').forEach(node => node.remove());
+    return body.textContent;
+  });
+  assert.doesNotMatch(copy, /\b(?:piloto|prot[oó]tipo|experimental|workspace)\b|JSON completo|servidor confere|registro seguro|preservada literalmente|pointer|keyboard_scroll|fill_credential|observe_screen|PI_[A-Z_]+/i,
+    'Telas e abas não exibem rótulos experimentais nem detalhes internos nos textos do produto.');
+}
 async function history() {
   await page.getByRole('link', { name: 'Minhas execuções', exact: true }).first().click();
   await page.waitForURL('**/execucoes');
@@ -325,6 +339,7 @@ async function submitAccess(targetPage, operation, label) {
     // enquanto o novo documento ainda carrega o script, a sessão ou os dados.
     await visible(targetPage.getByRole('button', { name: 'Sair', exact: true }));
     await targetPage.waitForFunction(() => !document.querySelector('[aria-busy="true"]'));
+    await productionCopy(targetPage);
     return identity;
   } finally { await targetPage.unroute(path, capture); }
 }
@@ -332,7 +347,7 @@ async function fillRun(runName, content) {
   await page.getByLabel('Nome da execução', { exact: true }).fill(runName);
   await page.getByLabel('Aplicação', { exact: true }).fill('Reservas de exemplo');
   await page.getByLabel('Objetivo (opcional)', { exact: true }).fill('Verificar os limites documentados.');
-  await page.getByLabel('Material de requisitos', { exact: true }).fill(content);
+  await page.getByLabel('Requisitos', { exact: true }).fill(content);
 }
 async function api(context, path, accountId) {
   assert.ok(accountId, 'A consulta conserva a identidade obtida no cadastro/login.');
@@ -391,12 +406,99 @@ async function accessInteractions() {
   assert.equal(await password.inputValue(), '');
   checked.push('Refinamento do acesso: logo raster local → mostrar/ocultar senha por Espaço/Enter e clique conserva valor → modo ativo conserva DOM → troca de modo preserva e-mail somente em memória e limpa senha');
 }
+async function passwordPolicyJourney() {
+  const hint = 'De 8 a 128 caracteres, com pelo menos uma letra maiúscula, um número e um caractere especial.';
+  await page.getByRole('button', { name: 'Criar conta', exact: true }).click();
+  await visible(page.getByRole('heading', { name: 'Crie sua conta', exact: true }));
+  await page.getByLabel('Nome', { exact: true }).fill('Pessoa de teste de senha');
+  await page.getByLabel('E-mail', { exact: true }).fill('senha-sem-convite@example.test');
+  await productionCopy();
+  const password = page.getByLabel('Senha', { exact: true });
+  const submit = page.getByRole('button', { name: 'Cadastrar e entrar', exact: true });
+  const submitted = [];
+  const rejectPassword = async route => {
+    submitted.push(route.request().postDataJSON());
+    await route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ error: { code: 'INVALID_PASSWORD', message: hint } }) });
+  };
+  await page.route('**/api/auth/register', rejectPassword);
+  try {
+    for (const value of ['', 'A1!aaaa', 'abcde12!', 'Abcdefg!', 'Abcd1234', 'Abcd123 ', 'Á1!🙂🙂🙂🙂', `A1!${'a'.repeat(126)}`]) {
+      await password.fill(value); await submit.click();
+      assert.equal(await page.locator('#password-error').textContent(), hint);
+      assert.equal(await password.getAttribute('aria-invalid'), 'true');
+      assert.equal(await page.evaluate(() => document.activeElement.id), 'password');
+      assert.equal(submitted.length, 0, 'Senha fora da regra é recusada junto ao campo antes do envio.');
+    }
+    for (const value of [accounts[0].password, accounts[1].password, `A1!${'🙂'.repeat(125)}`]) {
+      await password.fill(value);
+      const response = page.waitForResponse('**/api/auth/register'); await submit.click(); await response;
+      await bodyIncludes('Confira a senha para criar sua conta.');
+      assert.equal(submitted.at(-1).password, value, 'Senha válida é enviada literalmente, incluindo espaços e Unicode.');
+      assert.equal(await password.inputValue(), value);
+      assert.equal(await password.getAttribute('aria-invalid'), 'true', 'INVALID_PASSWORD do servidor identifica o campo.');
+      assert.equal(await page.evaluate(() => document.activeElement.id), 'password');
+      await page.waitForFunction(() => !document.querySelector('.auth-submit').disabled);
+    }
+    assert.equal(submitted.length, 3, 'A regra permite 8 e 128 caracteres Unicode, sem exigir minúscula.');
+  } finally { await page.unroute('**/api/auth/register', rejectPassword); }
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+  assert.equal(await page.locator('#password-hint').textContent(), '', 'A tela de login não repete a regra de criação.');
+  let loginCalls = 0;
+  const rejectLogin = async route => {
+    loginCalls++; assert.equal(route.request().postDataJSON().password, 'x');
+    await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'INVALID_CREDENTIALS' } }) });
+  };
+  await page.route('**/api/auth/login', rejectLogin);
+  try {
+    for (const value of ['', 'a'.repeat(129)]) {
+      await password.fill(value); await page.getByRole('button', { name: 'Entrar na conta', exact: true }).click();
+      assert.equal(await password.getAttribute('aria-invalid'), 'true'); assert.equal(loginCalls, 0);
+    }
+    await password.fill('x'); const response = page.waitForResponse('**/api/auth/login');
+    await page.getByRole('button', { name: 'Entrar na conta', exact: true }).click(); await response;
+    await bodyIncludes('E-mail ou senha incorretos.'); assert.equal(loginCalls, 1, 'Login não impõe complexidade à senha informada.');
+  } finally { await page.unroute('**/api/auth/login', rejectLogin); }
+  await page.reload(); await visible(page.getByRole('button', { name: 'Entrar na conta', exact: true }));
+  checked.push('Cadastro aberto: regra 8–128 por caractere Unicode, maiúscula/número/símbolo, sem minúscula obrigatória nem trim; erros locais e INVALID_PASSWORD do servidor junto ao campo; login valida somente presença/tamanho');
+}
+async function accessStatusJourney(mapping) {
+  await openTab('overview');
+  await bodyIncludes('Acesso à aplicação confirmado.');
+  const address = `**/api/runs/${mapping.id}`;
+  for (const adjust of [
+    data => { data.mapping = null; },
+    data => { data.mapping.current = false; },
+    data => { data.mapping.payload.accessRevision++; },
+    data => { data.mapping.payload.authentication = { status: 'not_authenticated', observationId: null }; },
+    data => { data.mapping.validations = []; },
+    data => { data.mapping.validations[0].status = 'changes_requested'; },
+  ]) {
+    const candidate = structuredClone(mapping); adjust(candidate);
+    const project = route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(candidate) });
+    await page.route(address, project);
+    try {
+      await page.reload(); await bodyIncludes('Acesso salvo. A conexão será verificada no mapeamento.');
+      assert.equal(await page.getByText('Acesso à aplicação confirmado.', { exact: true }).count(), 0);
+      await productionCopy();
+    } finally { await page.unroute(address, project); }
+  }
+  const technical = route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...mapping,
+    stopReason: { code: 'MODEL_NOT_CONFIGURED', message: 'Configure PI_PROVIDER e PI_MODEL no piloto.' } }) });
+  await page.route(address, technical);
+  try {
+    await page.reload(); await bodyIncludes('Não foi possível iniciar o processamento. Tente novamente mais tarde.');
+    await productionCopy();
+  } finally { await page.unroute(address, technical); }
+  await page.reload(); await bodyIncludes('Acesso à aplicação confirmado.'); await openTab('map');
+  checked.push('Acesso confirmado somente com mapa atual, autenticado, validado e ligado à revisão do acesso; ausência, revisão divergente e validação pendente não confirmam login; falha técnica é apresentada sem configuração interna');
+}
 async function screenshot(filename, width) {
   await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.evaluate(() => document.fonts.ready);
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
     `A página não deve transbordar horizontalmente em ${width}px.`);
+  await productionCopy();
   if (artifactDir) await page.screenshot({ path: join(artifactDir, filename), fullPage: true, animations: 'disabled' });
 }
 async function visualAccessibility() {
@@ -544,10 +646,10 @@ async function accountRace(context, store, owner, other) {
     if (response.status !== 200) throw new Error('Login de A falhou.');
   }, { email: accounts[0].email, password: accounts[0].password });
   await page.reload();
-  await visible(page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }));
+  await visible(page.getByRole('button', { name: 'Confirmar salvamento', exact: true }));
   assert.deepEqual(await attemptFor(owner.id), original);
   const recovered = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/api/runs'));
-  await page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirmar salvamento', exact: true }).click();
   const saved = await recovered;
   assert.equal(saved.status(), 201); assert.deepEqual(sentAttempt(saved.request()), original);
   assert.equal((await store.read(runResult.body.id)).run.ownerId, owner.id);
@@ -573,7 +675,7 @@ async function logoutRecovery(context, store, owner) {
     await fillRun(label, `  ${label}\nTexto literal preservado.  `);
     loseSave = true;
     await page.getByRole('button', { name: 'Salvar rascunho', exact: true }).click();
-    await visible(page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }));
+    await visible(page.getByRole('button', { name: 'Confirmar salvamento', exact: true }));
     await bodyIncludes('O salvamento ainda não foi confirmado.');
     const attempt = await attemptFor(owner.id);
     assert.equal(attempt.accountId, owner.id);
@@ -593,10 +695,10 @@ async function logoutRecovery(context, store, owner) {
     await bodyIncludes('Não foi possível confirmar a saída. Sua tentativa de salvamento foi preservada.');
     await page.unroute('**/api/auth/logout');
     await page.reload();
-    await visible(page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }));
+    await visible(page.getByRole('button', { name: 'Confirmar salvamento', exact: true }));
     assert.deepEqual(await attemptFor(owner.id), original);
   }
-  await page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirmar salvamento', exact: true }).click();
   await page.waitForURL(`**/execucoes/${savedId}`);
   await bodyIncludes('Material recebido. O processamento ainda não foi iniciado.');
   assert.deepEqual(sent.at(-1), original);
@@ -617,9 +719,9 @@ async function logoutRecovery(context, store, owner) {
   assert.ok(!(await page.locator('body').innerText()).includes('Texto literal preservado.'));
   assert.deepEqual(await attemptFor(owner.id), lostLogout);
   await login(accounts[0]);
-  await visible(page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }));
+  await visible(page.getByRole('button', { name: 'Confirmar salvamento', exact: true }));
   assert.deepEqual(await attemptFor(owner.id), lostLogout);
-  await page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirmar salvamento', exact: true }).click();
   await page.waitForURL(`**/execucoes/${savedId}`);
   await bodyIncludes('Material recebido. O processamento ainda não foi iniciado.');
   assert.deepEqual(sent.at(-1), lostLogout);
@@ -653,7 +755,7 @@ async function logoutRecovery(context, store, owner) {
   assert.equal((await cleanFailure).status(), 204);
   await bodyIncludes(/limpar|limpeza/i);
   assert.equal(await page.getByRole('button', { name: 'Sair', exact: true, includeHidden: true }).count(), 0);
-  assert.equal(await page.getByLabel('Material de requisitos', { exact: true }).count(), 0);
+  assert.equal(await page.getByLabel('Requisitos', { exact: true }).count(), 0);
   assert.equal((await context.request.get('/api/auth/me')).status(), 401);
   assert.deepEqual(await attemptFor(owner.id), retained);
   await page.evaluate(() => dispatchEvent(new Event('pagehide')));
@@ -762,7 +864,7 @@ async function preparationJourney(context, store, owner) {
     assert.equal(accepted.request().headers()['x-expected-user-id'], owner.id);
     assert.deepEqual(accepted.request().postDataJSON(), {});
     await visible(page.getByRole('button', { name: 'Cancelar preparação', exact: true }));
-    await bodyIncludes('Curador');
+    await bodyIncludes('Organizando requisitos e fontes');
     await waitForPreparationHeld();
   };
 
@@ -896,10 +998,10 @@ async function preparationJourney(context, store, owner) {
   await waitForPreparationHeld();
   await selectedTab('plan');
   await openTab('cases');
-  await bodyIncludes('Conteúdo provisório — a validação desta revisão ainda não foi aprovada.');
+  await bodyIncludes('Casos em revisão. Aguarde a validação para aprová-los.');
   holdCaseValidation = false; releasePreparation();
-  await bodyIncludes('Conjunto validado. Disponível para revisão humana');
-  await bodyIncludes('Casos lógicos — percurso ainda não mapeado.');
+  await bodyIncludes('Casos validados. Prontos para sua revisão');
+  await bodyIncludes('O percurso será definido após o mapeamento.');
   await page.getByText('CT-01 · CA-01', { exact: true }).click();
   await bodyIncludes('1 é o limite inferior inclusivo do domínio inteiro informado.');
   await noMarkup();
@@ -913,7 +1015,7 @@ async function preparationJourney(context, store, owner) {
   const savedCases = (await store.read(id)).run.outputs.find(output => output.phase === 'case_design');
   assert.deepEqual(savedCases.payload, cases.cases.payload);
   await screenshot('web-cases.png', 1366); await screenshot('web-cases-mobile.png', 390);
-  await page.reload(); await bodyIncludes('Conjunto validado. Disponível para revisão humana');
+  await page.reload(); await bodyIncludes('Casos validados. Prontos para sua revisão');
   assert.equal(await page.getByRole('button', { name: 'Gerar casos de teste', exact: true, includeHidden: true }).count(), 0);
 
   // T6.2: Verificações de decisão humana sobre os casos de teste
@@ -988,7 +1090,7 @@ async function preparationJourney(context, store, owner) {
     return { save: true, value: null };
   });
   await page.getByRole('button', { name: 'Atualizar consulta', exact: true }).click();
-  await bodyIncludes('Casos desatualizados — as dependências desta revisão foram alteradas.');
+  await bodyIncludes('Estes casos precisam ser atualizados após as alterações anteriores.');
   await bodyIncludes('Casos aprovados · Revisão 1 · Conteúdo desatualizado');
   assert.equal(await page.getByText('Casos aprovados. O mapeamento ainda não foi iniciado.', { exact: true }).count(), 0);
   assert.equal(await page.getByRole('button', { name: 'Aprovar casos de teste', exact: true, includeHidden: true }).count(), 0);
@@ -1009,7 +1111,7 @@ async function preparationJourney(context, store, owner) {
 
   await page.goto('/execucoes/run-cases-changes');
   await openTab('cases');
-  await bodyIncludes('Conjunto validado. Disponível para revisão humana');
+  await bodyIncludes('Casos validados. Prontos para sua revisão');
   assert.equal(await page.getByLabel('Comentário sobre os casos', { exact: true }).inputValue(), '', 'Outra execução não herda o comentário.');
   let changesPosts = 0;
   await page.route('**/api/runs/run-cases-changes/request-changes', async route => {
@@ -1161,7 +1263,7 @@ async function completionInterfaceJourney(context, store, owner, origin, source,
   const { buildReportSnapshot } = await import('../dist/domain/test-report.js');
   const snapshot = buildReportSnapshot(run, 'final');
   const report = { id: 'report-ui-published', phase: 'report', revision: 1, dependsOn: [], payload: { snapshot, narrative: {
-    summary: 'Resumo publicado da revisão 1.', scope: 'Escopo sintético da interface.', limitations: ['Este smoke usa conclusões e validações substituídas.'], conclusion: 'Conclusão publicada da revisão 1.',
+    summary: 'Resumo publicado da revisão 1. O protótipo do cliente foi avaliado.', scope: 'Escopo sintético da interface.', limitations: ['Este smoke usa conclusões e validações substituídas.'], conclusion: 'Conclusão publicada da revisão 1.',
   } } };
   run.outputs.push(report, { ...structuredClone(report), revision: 2, payload: { ...structuredClone(report.payload), narrative: { ...report.payload.narrative, summary: 'REVISÃO REJEITADA NÃO PUBLICAR' } } });
   run.validations.push({ outputId: report.id, outputRevision: 1, validator: 'output-validator', status: 'approved' }, { outputId: report.id, outputRevision: 2, validator: 'output-validator', status: 'changes_requested' });
@@ -1170,6 +1272,7 @@ async function completionInterfaceJourney(context, store, owner, origin, source,
   await selectedTab('overview');
   await openTab('results');
   await bodyIncludes('Resumo publicado da revisão 1.'); await bodyIncludes('Há uma nova revisão em análise.');
+  await bodyIncludes('O protótipo do cliente foi avaliado.');
   assert.ok(!(await page.locator('body').innerText()).includes('REVISÃO REJEITADA NÃO PUBLICAR'));
   await page.getByRole('tab', { name: 'Resultados', exact: true }).focus(); await page.keyboard.press('Home');
   assert.equal(await page.evaluate(() => document.activeElement.id), 'tab-overview');
@@ -1198,7 +1301,7 @@ async function completionInterfaceJourney(context, store, owner, origin, source,
 
 try {
   if (artifactDir) await mkdir(artifactDir, { recursive: true });
-  const config = readConfig({ DATA_DIR: root, PILOT_ALLOWED_EMAILS: accounts.map(account => account.email).join(','),
+  const config = readConfig({ DATA_DIR: root,
     PI_PROVIDER: 'test-only', PI_MODEL: 'scripted', TARGET_ALLOWED_ORIGINS: 'https://alvo.exemplo.test' });
   server = await createApp(config, { now: () => clock, modelCall, modelPreflight: async () => {}, visualCall, visualPreflight: async () => visualModels });
   server.listen(0, '127.0.0.1');
@@ -1221,6 +1324,7 @@ try {
   await page.waitForURL('**/acesso*');
   await visible(page.getByRole('button', { name: 'Entrar na conta', exact: true }));
   await accessInteractions();
+  await passwordPolicyJourney();
   await visualAccessibility();
   await screenshot('web-login-desktop.png', 1366); await screenshot('web-login-mobile.png', 390);
   await page.setViewportSize({ width: 1366, height: 900 });
@@ -1266,18 +1370,18 @@ try {
   await bodyIncludes('Acesso pendente. Configure o endereço e a conta de teste antes do mapeamento.');
 
   // Erro de envio: destino não autorizado
-  await page.getByLabel('URL inicial', { exact: true }).fill('https://nao-autorizado.exemplo.test');
+  await page.getByLabel('Endereço da aplicação', { exact: true }).fill('https://nao-autorizado.exemplo.test');
   await page.getByLabel('Perfil de acesso', { exact: true }).fill('Operador de reservas');
   await page.getByLabel('Preparação necessária', { exact: true }).fill('Iniciar com a lista de reservas vazia.');
   await page.getByLabel('Usuário da conta de teste', { exact: true }).fill('operador-reserva');
   await page.getByLabel('Senha da conta de teste', { exact: true }).fill('senha-secreta-alvo-123!');
   await page.getByLabel('Confirmo que tenho autorização para testar esta aplicação', { exact: true }).check();
   await page.getByRole('button', { name: 'Salvar acesso', exact: true }).click();
-  await bodyIncludes('O endereço informado não pertence às origens autorizadas pela equipe do piloto.');
+  await bodyIncludes('Este endereço não está autorizado para testes.');
   assert.equal(await page.getByLabel('Senha da conta de teste', { exact: true }).inputValue(), '', 'Senha limpa após erro de validação.');
 
   // Erro de envio: resposta perdida / falha de rede
-  await page.getByLabel('URL inicial', { exact: true }).fill('https://alvo.exemplo.test');
+  await page.getByLabel('Endereço da aplicação', { exact: true }).fill('https://alvo.exemplo.test');
   await page.getByLabel('Senha da conta de teste', { exact: true }).fill('senha-secreta-alvo-123!');
   await page.route(`**/api/runs/${draftId}`, async route => {
     if (route.request().method() === 'PATCH') await route.abort('connectionreset');
@@ -1306,7 +1410,7 @@ try {
   await bodyIncludes('Acesso pendente. Configure o endereço e a conta de teste antes do mapeamento.');
 
   // Salvamento com sucesso da configuração inicial completa
-  await page.getByLabel('URL inicial', { exact: true }).fill('https://alvo.exemplo.test');
+  await page.getByLabel('Endereço da aplicação', { exact: true }).fill('https://alvo.exemplo.test');
   await page.getByLabel('Perfil de acesso', { exact: true }).fill('Operador de reservas');
   await page.getByLabel('Preparação necessária', { exact: true }).fill('Iniciar com a lista de reservas vazia.');
   await page.getByLabel('Usuário da conta de teste', { exact: true }).fill('operador-reserva');
@@ -1314,7 +1418,7 @@ try {
   await page.getByLabel('Confirmo que tenho autorização para testar esta aplicação', { exact: true }).check();
   await page.getByRole('button', { name: 'Salvar acesso', exact: true }).click();
 
-  await bodyIncludes('Acesso configurado. O login ainda não foi verificado pelo navegador.');
+  await bodyIncludes('Acesso salvo. A conexão será verificada no mapeamento.');
   await bodyIncludes('https://alvo.exemplo.test');
   await bodyIncludes('Operador de reservas');
   await bodyIncludes('Iniciar com a lista de reservas vazia.');
@@ -1331,7 +1435,7 @@ try {
 
   // Recarregar e conferir resumo persistido
   await page.reload();
-  await bodyIncludes('Acesso configurado. O login ainda não foi verificado pelo navegador.');
+  await bodyIncludes('Acesso salvo. A conexão será verificada no mapeamento.');
   await bodyIncludes('https://alvo.exemplo.test');
   await bodyIncludes('Operador de reservas');
   await bodyIncludes('Credencial cadastrada');
@@ -1376,7 +1480,7 @@ try {
     await heldResponse;
     await route.abort('connectionreset');
   });
-  const savingButton = page.getByRole('button', { name: /Salvar rascunho|Tentar confirmar salvamento/ });
+  const savingButton = page.getByRole('button', { name: /Salvar rascunho|Confirmar salvamento/ });
   await savingButton.dblclick({ delay: 30 });
   assert.equal(await savingButton.isDisabled(), true, 'Botão desabilitado enquanto a resposta não chega.');
   await persistedResponse;
@@ -1384,31 +1488,31 @@ try {
   // Esse rótulo já aparece durante o envio; aguardar a falha ser processada
   // antes de consultar o registro e testar sua recuperação.
   await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button =>
-    button.textContent === 'Tentar confirmar salvamento' && !button.disabled));
+    button.textContent === 'Confirmar salvamento' && !button.disabled));
   assert.equal((await api(context, '/api/runs', owner.id)).items.length, 2);
   const storedAttempt = await page.evaluate(id => JSON.parse(sessionStorage.getItem(`akcit.intake.v1:${id}`)), owner.id);
   assert.deepEqual(storedAttempt, { accountId: owner.id, key: sent[0].key, body: sent[0].body });
-  assert.equal(await page.getByLabel('Material de requisitos', { exact: true }).inputValue(), pendingText);
+  assert.equal(await page.getByLabel('Requisitos', { exact: true }).inputValue(), pendingText);
   assert.equal(await page.getByLabel('Nome da execução', { exact: true }).isEditable(), false);
   await page.reload();
-  await visible(page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }));
-  assert.equal(await page.getByLabel('Material de requisitos', { exact: true }).inputValue(), pendingText);
+  await visible(page.getByRole('button', { name: 'Confirmar salvamento', exact: true }));
+  assert.equal(await page.getByLabel('Requisitos', { exact: true }).inputValue(), pendingText);
   clock += 8 * 60 * 60 * 1000 + 1;
   await page.reload();
   await page.waitForURL('**/acesso*');
   assert.ok(!(await page.locator('body').innerText()).includes(pendingText));
   await login(accounts[1]);
-  assert.equal(await page.getByLabel('Material de requisitos', { exact: true }).inputValue(), '');
+  assert.equal(await page.getByLabel('Requisitos', { exact: true }).inputValue(), '');
   assert.equal(await page.getByLabel('Nome da execução', { exact: true }).inputValue(), '');
-  assert.equal(await page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true, includeHidden: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Confirmar salvamento', exact: true, includeHidden: true }).count(), 0);
   assert.deepEqual(await page.evaluate(id => JSON.parse(sessionStorage.getItem(`akcit.intake.v1:${id}`)), owner.id), storedAttempt);
   clock += 8 * 60 * 60 * 1000 + 1;
   await page.reload();
   await page.waitForURL('**/acesso*');
   await login(accounts[0]);
-  await visible(page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }));
-  assert.equal(await page.getByLabel('Material de requisitos', { exact: true }).inputValue(), pendingText);
-  await page.getByRole('button', { name: 'Tentar confirmar salvamento', exact: true }).click();
+  await visible(page.getByRole('button', { name: 'Confirmar salvamento', exact: true }));
+  assert.equal(await page.getByLabel('Requisitos', { exact: true }).inputValue(), pendingText);
+  await page.getByRole('button', { name: 'Confirmar salvamento', exact: true }).click();
   await page.waitForURL(url => /^\/execucoes\/run-/.test(url.pathname));
   // A URL muda antes de o novo documento confirmar a sessão e carregar o detalhe.
   // Esperar o estado renderizado antes de avançar o relógio evita expirar o boot.
@@ -1443,7 +1547,7 @@ try {
   assert.ok(!(await page.locator('body').innerText()).includes(name));
   assert.equal((await context.request.get(`/api/runs/${draftId}`, { headers: { 'X-Expected-User-Id': other.id } })).status(), 404);
   await page.goto('/execucoes/nova');
-  assert.equal(await page.getByLabel('Material de requisitos', { exact: true }).inputValue(), '');
+  assert.equal(await page.getByLabel('Requisitos', { exact: true }).inputValue(), '');
   await page.getByRole('button', { name: 'Sair', exact: true }).click();
   await page.waitForURL('**/acesso*');
   await login(accounts[0]);
@@ -1588,11 +1692,11 @@ try {
   await visualPreferencesJourney();
   const beforeOversize = creationCount;
   const oversized = 'á'.repeat(8200);
-  await page.getByLabel('Material de requisitos', { exact: true }).fill(oversized);
+  await page.getByLabel('Requisitos', { exact: true }).fill(oversized);
   await page.getByRole('button', { name: 'Salvar rascunho', exact: true }).click();
-  await bodyIncludes(/JSON completo excede 16 KiB/i);
+  await bodyIncludes(/conteúdo informado excede o limite/i);
   assert.equal(creationCount, beforeOversize, 'JSON acima de 16 KiB não deve ser enviado.');
-  assert.equal(await page.getByLabel('Material de requisitos', { exact: true }).inputValue(), oversized);
+  assert.equal(await page.getByLabel('Requisitos', { exact: true }).inputValue(), oversized);
   checked.push('limite do JSON em bytes bloqueia o envio e preserva o preenchimento');
   await fillRun('Armazenamento indisponível', 'US-04: Preservar o formulário.\nCA-04: Sem storage, não enviar.');
   await page.evaluate(() => {
@@ -1656,6 +1760,7 @@ try {
   assert.ok(!JSON.stringify(mapping.mapping.payload).includes('senha-secreta-alvo-123!'), 'projeção sem a senha do alvo');
   assert.ok(!(await page.locator('body').innerText()).includes('senha-secreta-alvo-123!'));
   assert.ok(!(await page.locator('body').innerText()).includes('caseId'), 'sem contrato de execução no mapa');
+  await accessStatusJourney(mapping);
   // Outra conta não acessa a evidência do proprietário (sessão própria → 404).
   const foreignContext = await browser.newContext({ baseURL: origin });
   const foreignPage = await foreignContext.newPage();
@@ -1686,8 +1791,8 @@ try {
   const beforeRoutes = await store.read(mappingId);
   await page.goto('/execucoes/' + mappingId);
   await openTab('cases');
-  await bodyIncludes('a associação de percursos é uma etapa separada');
-  await bodyIncludes('Casos lógicos — mapa disponível, aguardando associação dos percursos.');
+  await bodyIncludes('O mapa está disponível para definir os percursos');
+  await bodyIncludes('O mapa está disponível. Defina os percursos dos casos para continuar.');
   holdRouteValidation = true;
   const detailPost = page.waitForResponse(response => response.url().endsWith(`/api/runs/${mappingId}/continue`));
   await page.getByRole('button', { name: 'Detalhar percursos', exact: true }).click();

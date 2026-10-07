@@ -784,7 +784,7 @@ export class PreparationCoordinator {
         if (output) {
           const anyRoute = (output.payload as RouteDetailPayload).testCases.some(item => item.pathId !== null);
           await this.finish(active, anyRoute ? 'ready' : 'awaiting_input', anyRoute ? null : {
-            code: 'ROUTES_PENDING', message: 'Nenhum caso possui percurso observado. Consulte as pendências; a retomada desta etapa ainda não está disponível.' });
+            code: 'ROUTES_PENDING', message: 'Os percursos dos casos estão pendentes. Consulte os impedimentos indicados.' });
         }
         return;
       }

@@ -12,8 +12,8 @@ import { RunStore, type RunRecord, type StoredRun } from '../src/storage/runs.js
 const appOrigin = 'http://localhost:3000';
 const targetOrigin = 'http://127.0.0.1:4000';
 const accounts = [
-  { name: 'Pessoa Um', email: 'one@example.test', password: 'senha ficticia longa 1!' },
-  { name: 'Pessoa Dois', email: 'two@example.test', password: 'senha ficticia longa 2!' },
+  { name: 'Pessoa Um', email: 'one@example.test', password: 'Senha ficticia longa 1!' },
+  { name: 'Pessoa Dois', email: 'two@example.test', password: 'Senha ficticia longa 2!' },
 ];
 const cookieOf = (response: Response) => response.headers.get('set-cookie')!.split(';')[0]!;
 
@@ -23,7 +23,6 @@ async function harness(t: TestContext, env: NodeJS.ProcessEnv = {}) {
     DATA_DIR: dataDir,
     APP_ORIGIN: appOrigin,
     TARGET_ALLOWED_ORIGINS: `${targetOrigin},https://target.example.test:8443`,
-    PILOT_ALLOWED_EMAILS: accounts.map(a => a.email).join(','),
     ...env,
   });
   let app = await createApp(config);

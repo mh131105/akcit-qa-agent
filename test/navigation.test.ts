@@ -16,8 +16,8 @@ import { RunStore } from '../src/storage/runs.js';
 const appOrigin = 'http://localhost:3000';
 const targetOrigin = 'http://127.0.0.1:4000';
 const accounts = [
-  { name: 'Pessoa Um', email: 'one@example.test', password: 'senha ficticia longa 1!' },
-  { name: 'Pessoa Dois', email: 'two@example.test', password: 'senha ficticia longa 2!' },
+  { name: 'Pessoa Um', email: 'one@example.test', password: 'Senha ficticia longa 1!' },
+  { name: 'Pessoa Dois', email: 'two@example.test', password: 'Senha ficticia longa 2!' },
 ];
 const cookieOf = (response: Response) => response.headers.get('set-cookie')!.split(';')[0]!;
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
@@ -30,7 +30,6 @@ async function harness(t: TestContext, options: { visualCall?: unknown } = {}) {
   const dataDir = await fs.mkdtemp(join(tmpdir(), 'akcit-navigation-'));
   const config = readConfig({
     DATA_DIR: dataDir, APP_ORIGIN: appOrigin, TARGET_ALLOWED_ORIGINS: targetOrigin,
-    PILOT_ALLOWED_EMAILS: accounts.map(account => account.email).join(','),
   });
   let app = await createApp(config, {
     ...(options.visualCall ? { visualCall: options.visualCall as never } : {}),
@@ -472,7 +471,7 @@ test('orçamento: período encerrado não é somado duas vezes; espera humana n�
     record.targetCredential = { ref: 'cred-1', username: 'demo', password: 'demo1234' };
     return { save: true, value: undefined };
   });
-  const config = readConfig({ DATA_DIR: dataDir, APP_ORIGIN: appOrigin, TARGET_ALLOWED_ORIGINS: targetOrigin, PILOT_ALLOWED_EMAILS: accounts.map(account => account.email).join(',') });
+  const config = readConfig({ DATA_DIR: dataDir, APP_ORIGIN: appOrigin, TARGET_ALLOWED_ORIGINS: targetOrigin });
   const request = { outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1 };
   const record = await store.read('run-budget');
   record.run.preparation!.finishedAt = at;
@@ -681,7 +680,7 @@ test('recarregar preserva mapa, parecer e evidências após novo login', async t
   assert.equal(before.status, 'ready');
   const observation = before.observations[0];
   // Novo processo no mesmo armazenamento: sessões antigas não sobrevivem ao reinício.
-  const restartedConfig = readConfig({ DATA_DIR: h.dataDir, APP_ORIGIN: appOrigin, TARGET_ALLOWED_ORIGINS: targetOrigin, PILOT_ALLOWED_EMAILS: accounts.map(account => account.email).join(',') });
+  const restartedConfig = readConfig({ DATA_DIR: h.dataDir, APP_ORIGIN: appOrigin, TARGET_ALLOWED_ORIGINS: targetOrigin });
   const restarted = await createApp(restartedConfig, { visualCall: async () => { throw new Error('não deve ser chamado'); }, visualPreflight: async () => visualModels });
   restarted.listen(0, '127.0.0.1');
   await once(restarted, 'listening');

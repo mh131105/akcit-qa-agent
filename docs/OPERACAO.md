@@ -150,6 +150,98 @@ separado. Copie backups para fora da VPS antes de armazenar dados importantes.
 Backups manuais ficam em `backups/`, com permissões restritas. Não há agendamento
 nem retenção automática: a política de dados e evidências será definida pela equipe.
 
+## Transição única para cadastro aberto
+
+Esta versão prepara o procedimento; publicar o código não autoriza executá-lo
+sobre dados reais. O arquivamento deve acontecer na janela de manutenção da
+primeira publicação de cada ambiente, com todos os escritores parados. Instale
+`deploy/reset_accounts.py` como `ops/reset_accounts.py` junto das ferramentas
+operacionais revisadas. Python 3.11 ou posterior e somente sua biblioteca padrão
+são necessários; nenhum serviço adicional é instalado.
+
+O procedimento cria um diretório privado novo com `manifest.json` e `data/`, copia
+**somente `auth/`, `runs/`, `artifacts/` e `media/`**, registra tamanho e SHA-256,
+reconstrói uma cópia temporária e compara todos os bytes antes de remover os dados
+ativos. Credenciais de alvos estão nos registros de execução e são incluídas.
+Configurações, `pi/`, OAuth dos provedores e os demais arquivos de `/data` permanecem
+intactos. O arquivo privado nunca fica dentro de `DATA_DIR`, do repositório ou de
+um local público; pai e arquivo usam `0700`, arquivos internos `0600`. Links,
+arquivos especiais, banco SQLite existente, destino reaproveitado ou verificação
+divergente interrompem a operação. Falha antes da remoção conserva os originais;
+uma falha durante a remoção exige recuperação pelo arquivo já verificado.
+
+Exemplo **para o operador executar apenas no ambiente escolhido**, na VPS, a partir
+do diretório operacional existente. Não execute enquanto houver trabalho ativo.
+O backup completo inicial guarda também os metadados da imagem anterior; o arquivo
+verificado de transição é adicional. A confirmação `--service-stopped` é uma
+asserção do operador, não uma descoberta automática do estado do container.
+
+```sh
+bash <<'BASH'
+set -euo pipefail
+qa_environment=development
+qa_project=akcit-qa-dev
+# Para produção, usar production e akcit-qa-prod explicitamente.
+./ops/backup.sh "$qa_environment"
+docker compose -p "$qa_project" --env-file "$qa_environment/current.env" \
+  -f ops/compose.yml stop -t 30 app
+qa_container=$(docker compose -p "$qa_project" --env-file "$qa_environment/current.env" -f ops/compose.yml ps -a -q app)
+test "$(docker inspect --format '{{.State.Running}}' "$qa_container")" = false
+qa_data_dir=$(docker volume inspect --format '{{.Mountpoint}}' "${qa_project}_app_data")
+qa_archive_parent="$PWD/backups/account-transition"
+sudo install -d -m 0700 "$qa_archive_parent"
+qa_archive_dir="$qa_archive_parent/$qa_environment-$(date -u +%Y%m%dT%H%M%SZ)"
+sudo python3 ops/reset_accounts.py archive --service-stopped \
+  --data-dir "$qa_data_dir" --archive-dir "$qa_archive_dir"
+printf 'Arquivo verificado em %s\n' "$qa_archive_dir"
+BASH
+```
+
+O bloco aborta se backup, parada ou confirmação de parada falharem; suas variáveis
+ficam apenas nesse processo. Guarde o caminho de arquivo impresso ao concluir.
+Copie esse arquivo privado para armazenamento externo protegido. Não reinicie a
+imagem antiga após o reset: publique a candidata validada para que crie o SQLite
+vazio. Contas e históricos anteriores ficam somente no arquivo, sem reatribuição
+por e-mail; todos criam novas contas. O procedimento recusa repetição após a criação
+do SQLite. Não acrescentá-lo ao entrypoint, workflow ou rotina de backup.
+A promoção dev → prod continua usando o mesmo digest já validado em desenvolvimento.
+
+**Recuperação:** pare o ambiente; preserve primeiro qualquer dado criado após a
+transição em backup separado. O rollback automático de imagem não desfaz o reset.
+Restaure conjuntamente a imagem/release anterior e seus dados. Para usar o arquivo
+de transição, os quatro diretórios ativos devem estar ausentes: mova os dados novos
+para uma localização privada separada, sem sobrescrevê-los. A restauração recusa
+destino ocupado e confere o manifesto antes de publicar os diretórios reconstruídos.
+
+```sh
+bash <<'BASH'
+set -euo pipefail
+qa_environment=development
+qa_project=akcit-qa-dev
+qa_archive_dir=/caminho/privado/exato/do/arquivo-verificado
+# Preencher o caminho impresso na transição e o mesmo ambiente escolhido.
+docker compose -p "$qa_project" --env-file "$qa_environment/current.env" \
+  -f ops/compose.yml stop -t 30 app
+qa_container=$(docker compose -p "$qa_project" --env-file "$qa_environment/current.env" -f ops/compose.yml ps -a -q app)
+test "$(docker inspect --format '{{.State.Running}}' "$qa_container")" = false
+qa_data_dir=$(docker volume inspect --format '{{.Mountpoint}}' "${qa_project}_app_data")
+sudo python3 ops/reset_accounts.py restore --service-stopped \
+  --data-dir "$qa_data_dir" --archive-dir "$qa_archive_dir"
+for qa_part in auth runs artifacts media; do
+  if sudo test -d "$qa_data_dir/$qa_part"; then
+    sudo chown -R 1000:1000 "$qa_data_dir/$qa_part"
+  fi
+done
+BASH
+```
+
+Reinicie somente a imagem anterior compatível com essas contas, seguindo os
+metadados de release guardados no backup, e verifique healthcheck, login e histórico.
+Alternativamente restaure o backup completo do volume e a imagem correspondente.
+Não inicie a nova imagem sobre `users.json`. Nenhuma restauração reassocia históricos
+a contas recém-criadas. O teste sintético do procedimento é
+`python3 -m unittest discover -s deploy -p 'test_reset_accounts.py'`.
+
 ## Dados das execuções
 
 `DATA_DIR` configura o diretório de dados (`.data` por padrão no ambiente local).
@@ -210,7 +302,7 @@ JSON
 curl -sS -c "$qa_demo_dir/cookies" -o "$qa_demo_dir/account.json" \
   http://127.0.0.1:3000/api/auth/login \
   -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
-  --data '{"email":"ana@example.invalid","password":"Senha ficticia de exemplo 123"}'
+  --data '{"email":"ana@example.invalid","password":"Senha ficticia de exemplo 123!"}'
 qa_demo_expected=$(node --input-type=module -e 'import fs from "node:fs"; console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).user.id)' "$qa_demo_dir/account.json")
 curl -sS -D "$qa_demo_dir/headers" -o "$qa_demo_dir/created.json" \
   -b "$qa_demo_dir/cookies" http://127.0.0.1:3000/api/runs \
@@ -243,14 +335,13 @@ ainda aguarda curadoria: criar não reconhece requisitos, inicia agentes ou cons
 modelo. Upload de arquivos, edição e exclusão permanecem pendentes. O acesso
 pelo site está documentado em [T2.1](#jornada-pelo-navegador--t21).
 
-## Acesso dos participantes do piloto
+## Contas e cadastro aberto
 
 Configure no ambiente da aplicação as variáveis documentadas em
 [`.env.example`](../.env.example). Exemplo local com dados fictícios:
 
 ```dotenv
 APP_ORIGIN=http://127.0.0.1:3000
-PILOT_ALLOWED_EMAILS=ana@example.invalid,bruno@example.invalid
 TARGET_ALLOWED_ORIGINS=http://127.0.0.1:4000,https://alvo.exemplo.test
 ```
 
@@ -272,31 +363,33 @@ são aceitos. Uma lista vazia ou não configurada não impede a preparação tex
 mas recusa a configuração de qualquer alvo na rota `PATCH /api/runs/:id` (`403 / TARGET_NOT_ALLOWED`).
 Alvos locais (como o alvo de demonstração T7) precisam estar explicitamente listados.
 
-`PILOT_ALLOWED_EMAILS` recebe e-mails separados por vírgulas. Espaços externos são
-removidos e letras convertidas para minúsculas, como no cadastro e no login. Lista
-vazia desabilita acesso por contas. Apenas contas da lista podem cadastrar-se e
-entrar; remover um e-mail revoga seu acesso. A lista **habilita cadastro, mas não
-verifica titularidade do e-mail**. Mantenha o piloto no acesso controlado existente;
-incluir um endereço não substitui verificar quem recebeu acesso ao túnel.
-Não comite os dados reais dos participantes. Na VPS, configure somente o
-`runtime.env` do ambiente pretendido e recrie seu container, preservando os outros
-serviços e o fluxo de promoção da imagem validada em desenvolvimento.
+Qualquer e-mail válido pode criar uma conta, sem convite ou autorização prévia.
+Cadastro bem-sucedido inicia a sessão imediatamente. Não há confirmação de e-mail
+nem recuperação de senha por e-mail nesta entrega. A antiga variável de lista de
+participantes deixou de ser utilizada e pode ser removida do ambiente privado.
 
-As contas ficam em `DATA_DIR/auth/users.json`, com envelope versionado
-`{schemaVersion: 1, users: [...]}`. Cada conta possui ID interno, nome, e-mail
-normalizado, equipe opcional, criação UTC e hash scrypt com parâmetros e salt;
-senhas não são salvas em texto. O diretório usa `0700`, o arquivo `0600`, e a
-gravação é atômica. Cadastros serializam leitura, unicidade e escrita no processo.
-Assim como execuções, isso pressupõe **um único processo escritor por ambiente**;
-não edite as contas com o serviço ativo.
+A senha de cadastro tem de 8 a 128 caracteres Unicode e exige pelo menos uma letra
+maiúscula, um dígito `0–9` e uma pontuação ou símbolo. Espaço não conta como caractere
+especial; minúscula não é obrigatória. A senha é preservada literalmente.
 
-No container, o arquivo é `/data/auth/users.json`, dentro do mesmo volume que as
-execuções, e integra automaticamente o backup já descrito nesta página. Preserve
-proprietário e permissões ao restaurá-lo; trate backups de contas como dados
-privados. `runtime.env` continua no cofre separado. Reiniciar, inclusive pelo
-backup, **invalida todas as sessões**, mas preserva contas e execuções: os
-participantes entram novamente e reencontram suas decisões. A sessão fica em
-memória, expira em oito horas e é invalidada no logout.
+As contas ficam em `DATA_DIR/auth/users.sqlite`, com SQLite nativo do Node.js 24,
+ID UUID v4 aleatório, nome, e-mail normalizado único, equipe opcional, criação UTC e
+hash Argon2id. Parâmetros: versão 19, 19.456 KiB, duas passagens, paralelismo 1, salt
+aleatório de 16 bytes e saída de 32 bytes. Senhas nunca são salvas em texto. O
+diretório usa `0700` e o banco `0600`. As restrições do SQLite protegem a unicidade.
+Mantenha um único processo escritor por ambiente, como no armazenamento das execuções.
+
+No container, o banco é `/data/auth/users.sqlite`, dentro do volume das execuções.
+O backup existente para o serviço antes de copiar o volume e inclui o banco.
+Preserve proprietário e permissões ao restaurar; arquivos de contas e backups são
+privados. `runtime.env` continua no cofre separado. Reiniciar, inclusive pelo backup,
+invalida todas as sessões, mas preserva contas e execuções. Sessões ficam em memória,
+expiram em oito horas e são invalidadas no logout.
+
+Contas anteriores não são migradas automaticamente. A presença de `auth/users.json`
+impede iniciar a nova aplicação. Execute uma única vez o procedimento de arquivo
+verificado abaixo antes da primeira publicação; não faça limpeza automática na
+inicialização. Falha de banco impede a inicialização sem substituir os dados.
 
 A propriedade da execução usa o **ID interno da conta**, conferido pela sessão;
 nunca o e-mail enviado no cadastro ou login. Execuções antigas não são atribuídas
@@ -316,7 +409,9 @@ em uma consulta posterior nem repita automaticamente a operação com outra cont
 Cadastro/login compartilham limite de dez tentativas por e-mail e trinta por
 endereço de conexão em quinze minutos. O endereço é o da conexão direta, sem
 confiar em `X-Forwarded-For`; participantes que chegam pelo mesmo relay podem
-compartilhar esse limite. O excesso responde `429`. Não registre senhas, cookies
+compartilhar esse limite. O mesmo vale para um proxy reverso: antes de publicar o
+domínio, validar o acesso pelo ingresso real; este trabalho não configura confiança
+em cabeçalhos nem altera o Traefik. O excesso responde `429`. Não registre senhas, cookies
 ou hashes para investigar problemas de acesso.
 
 A jornada e os erros estão em
@@ -331,20 +426,19 @@ são preparados exclusivamente nos testes; nenhuma fixture é carregada pela apl
 
 ## Jornada pelo navegador — T2.1
 
-Configure `APP_ORIGIN` e `PILOT_ALLOWED_EMAILS` conforme a seção anterior. Com
+Configure `APP_ORIGIN` conforme a seção anterior. Com
 Node.js 24 e dependências do `package-lock.json`, um ambiente local fictício pode
 ser iniciado assim:
 
 ```sh
 npm ci
 APP_ENV=local HOST=127.0.0.1 PORT=3000 DATA_DIR=.data \
-  APP_ORIGIN=http://127.0.0.1:3000 \
-  PILOT_ALLOWED_EMAILS=ana@example.invalid,bruno@example.invalid npm run dev
+  APP_ORIGIN=http://127.0.0.1:3000 npm run dev
 ```
 
 Abra [o site local](http://127.0.0.1:3000); a raiz leva ao histórico e solicita
-entrada se necessário. Use `/acesso` para cadastrar uma das contas habilitadas,
-com nome, e-mail, senha de 15 a 128 caracteres e equipe opcional. Esta é a conta
+entrada se necessário. Use `/acesso` para criar uma conta
+com nome, e-mail, senha de 8 a 128 caracteres (maiúscula, número e especial) e equipe opcional. Esta é a conta
 do produto; o acesso usado pelos agentes na aplicação testada será configurado
 separadamente. No ambiente pelo túnel, abra sua origem configurada seguida de
 `/acesso`; a porta do navegador pode diferir da porta interna do container.
@@ -529,7 +623,7 @@ backup privado do volume. `PI_CODING_AGENT_DIR` configura a CLI de login;
 Isso não habilita tools, histórico compartilhado ou escolha automática de modelo.
 
 Localmente, mantenha a configuração em `.env` ignorado, com modo `0600`, incluindo
-`DATA_DIR=.data`, origem local exata e participantes habilitados. O servidor não
+`DATA_DIR=.data` e origem local exata. O servidor não
 lê `.env` sozinho: carregue-o explicitamente pelo Node ou injete as variáveis no
 processo. Após preencher privadamente os pares e a credencial:
 

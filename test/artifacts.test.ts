@@ -110,8 +110,9 @@ test('multipart streaming validates fields and rejects oversized file before ful
 
 test('profile updates only editable fields and every session of same account', async t => {
   const dataDir = await mkdtemp(join(tmpdir(), 'akcit-profile-')); t.after(() => rm(dataDir, { recursive: true, force: true }));
-  const auth = new AuthService(readConfig({ DATA_DIR: dataDir, APP_ORIGIN: 'http://localhost:3000', PILOT_ALLOWED_EMAILS: 'one@example.test' }));
-  const input = { name: 'Original', email: 'one@example.test', password: 'senha fictícia longa para teste', teamName: 'Antiga' };
+  const auth = new AuthService(readConfig({ DATA_DIR: dataDir, APP_ORIGIN: 'http://localhost:3000' }));
+  t.after(() => auth.close());
+  const input = { name: 'Original', email: 'one@example.test', password: 'Senha fictícia longa para teste 1!', teamName: 'Antiga' };
   const first = await auth.register(input, '127.0.0.1'); const second = await auth.login(input, '127.0.0.1');
   const updated = await auth.updateProfile(first.user.id, { name: 'Atualizado', teamName: '' });
   assert.equal(updated.name, 'Atualizado'); assert.equal(updated.teamName, undefined); assert.equal(updated.email, input.email);
@@ -125,12 +126,12 @@ test('HTTP: authenticated upload, profile, duplicate, owner-only media and retry
   const fs = (await import('node:fs/promises')).default;
   const root = await mkdtemp(join(tmpdir(), 'akcit-upload-api-'));
   const origin = 'http://localhost:3000';
-  const server = await createApp(readConfig({ DATA_DIR: root, APP_ORIGIN: origin, PILOT_ALLOWED_EMAILS: 'one@example.test,two@example.test' }));
+  const server = await createApp(readConfig({ DATA_DIR: root, APP_ORIGIN: origin }));
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const address = server.address(); assert.ok(address && typeof address !== 'string'); const base = `http://127.0.0.1:${address.port}`;
   t.after(async () => { server.close(); server.closeAllConnections(); await once(server, 'close'); await rm(root, { recursive: true, force: true }); });
   const register = async (email: string) => {
-    const response = await fetch(`${base}/api/auth/register`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Pessoa', email, password: 'Senha fictícia de testes' }) });
+    const response = await fetch(`${base}/api/auth/register`, { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Pessoa', email, password: 'Senha fictícia de testes 1!' }) });
     assert.equal(response.status, 201); const data = await response.json(); return { cookie: response.headers.get('set-cookie')!.split(';')[0]!, id: data.user.id };
   };
   const owner = await register('one@example.test'), other = await register('two@example.test');

@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import test, { type TestContext } from 'node:test';
 import { createApp } from '../src/app.js';
 import { readConfig } from '../src/config.js';
@@ -12,7 +13,7 @@ import type { PreparationOptions } from '../src/application/prepare-plan.js';
 
 // Somente preparo de testes: nenhuma fixture é carregada pela aplicação.
 const origin = 'http://localhost:3000';
-const password = '  senha fictícia longa  ';
+const password = '  Senha fictícia longa 1!  ';
 const account = { name: 'Pessoa Um', email: 'one@example.test', password, teamName: 'Equipe exemplo' };
 const second = { name: 'Pessoa Dois', email: 'two@example.test', password };
 const reference = { outputId: 'out-plan', outputRevision: 1 };
@@ -47,8 +48,7 @@ function waiting(id: string, ownerId: string): RunRecord {
 
 async function harness(t: TestContext, env: NodeJS.ProcessEnv = {}, preparation: PreparationOptions = {}) {
   const dataDir = await fs.mkdtemp(join(tmpdir(), 'akcit-http-'));
-  const config = readConfig({ DATA_DIR: dataDir, APP_ORIGIN: origin,
-    PILOT_ALLOWED_EMAILS: ' ONE@example.test , two@example.test ', ...env });
+  const config = readConfig({ DATA_DIR: dataDir, APP_ORIGIN: origin, ...env });
   let time = Date.parse('2026-09-23T12:00:00Z');
   let app = await createApp(config, { now: () => time, ...preparation });
   let base = '';
@@ -99,6 +99,14 @@ function error(result: { status: number; body: any }, status: number, code: stri
   assert.equal(result.status, status, JSON.stringify(result.body));
   assert.equal(result.body.error.code, code);
   assert.deepEqual(Object.keys(result.body), ['error']);
+}
+
+function storedUsers(dataDir: string) {
+  const database = new DatabaseSync(join(dataDir, 'auth/users.sqlite'), { readOnly: true });
+  try {
+    assert.equal(database.prepare('PRAGMA user_version').get()!.user_version, 1);
+    return database.prepare('SELECT * FROM users ORDER BY email').all().map(row => ({ ...row, password: JSON.parse(row.password_hash as string) }));
+  } finally { database.close(); }
 }
 
 async function wireRequest(url: string, cookie: string, body: unknown, headers: string[]) {
@@ -178,11 +186,12 @@ test('T3.2: cadastro, consulta própria, aprovação idempotente, logout e retor
   const h = await harness(t);
   const owner = await h.register({ ...account, email: ' ONE@EXAMPLE.TEST ' });
   assert.deepEqual(owner.user, { id: owner.user.id, name: account.name, email: account.email, teamName: account.teamName });
-  assert.match(owner.user.id, /^[a-f0-9-]{36}$/i);
+  assert.match(owner.user.id, /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
   const header = owner.response.headers.get('set-cookie')!;
   for (const attribute of ['HttpOnly', 'SameSite=Lax', 'Path=/', 'Max-Age=28800']) assert.ok(header.includes(attribute));
   assert.doesNotMatch(header, /Domain=|Secure/);
-  error(await h.request('/api/auth/register', { ...account, email: 'outsider@example.test' }), 403, 'REGISTRATION_NOT_ALLOWED');
+  const outsider = await h.register({ ...account, email: 'outsider@example.test' });
+  assert.notEqual(outsider.user.id, owner.user.id);
   error(await h.request('/api/auth/register', account), 409, 'ACCOUNT_EXISTS');
   assert.deepEqual((await h.request('/api/auth/me', undefined, owner.cookie)).body, { user: owner.user });
   await h.store.create(waiting('run-own', owner.user.id));
@@ -358,19 +367,18 @@ test('T3.2: senhas integrais, hash persistido, cookie HTTPS e expiração absolu
   const h = await harness(t, { APP_ORIGIN: 'https://pilot.example.test' });
   const owner = await h.register();
   assert.match(owner.response.headers.get('set-cookie')!, /; Secure/);
-  const raw = await fs.readFile(join(h.dataDir, 'auth/users.json'), 'utf8');
-  assert.ok(!raw.includes(password));
-  const record = JSON.parse(raw);
-  assert.equal(record.schemaVersion, 1);
-  assert.equal(record.users.length, 1);
-  const storedPassword = record.users[0].password;
-  assert.deepEqual(storedPassword, { algorithm: 'scrypt', N: 32768, r: 8, p: 3, maxmem: 64 * 1024 * 1024,
-    keyLength: 64, salt: storedPassword.salt, hash: storedPassword.hash });
+  const raw = await fs.readFile(join(h.dataDir, 'auth/users.sqlite'));
+  assert.ok(!raw.includes(Buffer.from(password)));
+  const users = storedUsers(h.dataDir);
+  assert.equal(users.length, 1);
+  const storedPassword = users[0]!.password;
+  assert.deepEqual(storedPassword, { algorithm: 'argon2id', version: 19, memory: 19456, passes: 2, parallelism: 1,
+    tagLength: 32, salt: storedPassword.salt, hash: storedPassword.hash });
   assert.match(storedPassword.salt, /^[a-f0-9]{32}$/);
-  assert.match(storedPassword.hash, /^[a-f0-9]{128}$/);
+  assert.match(storedPassword.hash, /^[a-f0-9]{64}$/);
   assert.ok(!JSON.stringify(owner.body).includes(storedPassword.hash));
   assert.ok(!JSON.stringify(owner.body).includes(owner.cookie.slice('akcit_session='.length)));
-  assert.equal((await fs.stat(join(h.dataDir, 'auth/users.json'))).mode & 0o777, 0o600);
+  assert.equal((await fs.stat(join(h.dataDir, 'auth/users.sqlite'))).mode & 0o777, 0o600);
   assert.equal((await fs.stat(join(h.dataDir, 'auth'))).mode & 0o777, 0o700);
   const wrong = await h.request('/api/auth/login', { email: account.email, password: password.trim() });
   const absent = await h.request('/api/auth/login', { email: second.email, password });
@@ -382,67 +390,71 @@ test('T3.2: senhas integrais, hash persistido, cookie HTTPS e expiração absolu
   error(await h.request('/api/auth/me', undefined, owner.cookie), 401, 'INVALID_SESSION');
 });
 
-test('T3.2: cadastro concorrente serializa unicidade e preserva contas diferentes', async t => {
+test('Cadastro concorrente usa unicidade do banco e preserva contas diferentes', async t => {
   const h = await harness(t);
   const results = await Promise.all([account, { ...account, email: ' ONE@EXAMPLE.TEST ' }, second]
     .map(input => h.request('/api/auth/register', input)));
   assert.deepEqual(results.map(result => result.status).sort(), [201, 201, 409]);
-  const record = JSON.parse(await fs.readFile(join(h.dataDir, 'auth/users.json'), 'utf8'));
-  assert.deepEqual(record.users.map((user: any) => user.email).sort(), [account.email, second.email]);
-  assert.notEqual(record.users[0].password.salt, record.users[1].password.salt);
-  assert.notEqual(record.users[0].password.hash, record.users[1].password.hash);
+  const users = storedUsers(h.dataDir);
+  assert.deepEqual(users.map(user => user.email), [account.email, second.email]);
+  assert.notEqual(users[0]!.password.salt, users[1]!.password.salt);
+  assert.notEqual(users[0]!.password.hash, users[1]!.password.hash);
+  assert.notEqual(users[0]!.id, users[1]!.id);
   for (const email of [account.email, second.email]) assert.equal((await h.request('/api/auth/login', { email, password })).status, 200);
 });
 
 test('T3.2: limites combinados por e-mail e conexão expiram sem confiar em proxy', async t => {
   const h = await harness(t);
   for (let attempt = 0; attempt < 10; attempt++) {
-    error(await h.request('/api/auth/register', { ...account, email: 'disabled@example.test' }), 403, 'REGISTRATION_NOT_ALLOWED');
+    error(await h.request('/api/auth/login', { email: 'absent@example.test', password }), 401, 'INVALID_CREDENTIALS');
   }
-  error(await h.request('/api/auth/login', { email: ' DISABLED@example.test ', password }), 429, 'TOO_MANY_ATTEMPTS');
+  error(await h.request('/api/auth/register', { ...account, email: ' ABSENT@example.test ' }), 429, 'TOO_MANY_ATTEMPTS');
   h.advance(15 * 60 * 1000);
-  error(await h.request('/api/auth/register', { ...account, email: 'disabled@example.test' }), 403, 'REGISTRATION_NOT_ALLOWED');
+  assert.equal((await h.request('/api/auth/register', { ...account, email: 'absent@example.test' })).status, 201);
   h.advance(15 * 60 * 1000);
   for (let attempt = 0; attempt < 30; attempt++) {
-    error(await h.request('/api/auth/register', { ...account, email: `disabled${attempt}@example.test` }, undefined,
-      { headers: { 'X-Forwarded-For': `198.51.100.${attempt}` } }), 403, 'REGISTRATION_NOT_ALLOWED');
+    error(await h.request('/api/auth/login', { email: `absent${attempt}@example.test`, password }, undefined,
+      { headers: { 'X-Forwarded-For': `198.51.100.${attempt}` } }), 401, 'INVALID_CREDENTIALS');
   }
   error(await h.request('/api/auth/register', account, undefined, { headers: { 'X-Forwarded-For': '203.0.113.1' } }), 429, 'TOO_MANY_ATTEMPTS');
   h.advance(15 * 60 * 1000);
   assert.equal((await h.request('/api/auth/register', account)).status, 201);
 });
 
-test('T3.2: configuração pendente e cadastro desabilitado preservam healthcheck', async t => {
+test('Configuração pendente preserva healthcheck; cadastro dispensa lista de convidados', async t => {
   const pending = await harness(t, { APP_ORIGIN: '' });
   error(await pending.request('/api/auth/login', { email: account.email, password }), 503, 'AUTH_NOT_CONFIGURED');
   assert.equal((await fetch(`${pending.base}/healthz`)).status, 200);
-  const disabled = await harness(t, { PILOT_ALLOWED_EMAILS: '' });
-  error(await disabled.request('/api/auth/register', account), 403, 'REGISTRATION_NOT_ALLOWED');
+  const open = await harness(t);
+  assert.equal((await open.request('/api/auth/register', account)).status, 201);
   for (const appOrigin of ['http://example.test', 'https://example.test/path', 'https://user:pass@example.test', 'null', 'ftp://localhost', 'https://example.test?query', 'https://example.test#fragment']) {
     assert.throws(() => readConfig({ APP_ORIGIN: appOrigin }), /APP_ORIGIN/);
   }
   for (const appOrigin of ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://[::1]:3000', 'https://example.test']) {
     assert.equal(readConfig({ APP_ORIGIN: appOrigin }).appOrigin, appOrigin);
   }
-  assert.deepEqual(readConfig({ PILOT_ALLOWED_EMAILS: ' ONE@example.test, one@example.test, two@example.test ' }).pilotAllowedEmails,
-    [account.email, second.email]);
-  assert.throws(() => readConfig({ PILOT_ALLOWED_EMAILS: 'not-an-email' }), /PILOT_ALLOWED_EMAILS/);
 });
 
-test('T3.2: limites de strings são validados em execução e senha aceita 15 a 128 caracteres intactos', async t => {
+test('Cadastro exige senha de 8 a 128 caracteres com maiúscula, número e símbolo, sem alterar Unicode ou espaços', async t => {
   const h = await harness(t);
   for (const input of [
     { ...account, name: '' }, { ...account, name: 'x'.repeat(121) }, { ...account, name: 42 },
     { ...account, teamName: ' ' }, { ...account, teamName: 'x'.repeat(121) }, { ...account, teamName: [] },
     { ...account, email: 'invalid' }, { ...account, email: `${'x'.repeat(255)}@example.test` },
-    { ...account, password: 'x'.repeat(14) }, { ...account, password: 'x'.repeat(129) },
     { ...account, password: 42 }, { ...account, actorId: 'forged' },
   ]) error(await h.request('/api/auth/register', input), 400, 'INVALID_INPUT');
-  for (const [input, exactPassword] of [[account, ' '.repeat(15)], [second, '🔒'.repeat(128)]] as const) {
-    const result = await h.request('/api/auth/register', { ...input, name: '😀'.repeat(120), password: exactPassword });
-    assert.equal(result.status, 201);
-    assert.equal((await h.request('/api/auth/login', { email: input.email, password: exactPassword })).status, 200);
+  for (const value of ['', 'Abcde1!', `A1!${'x'.repeat(126)}`, 'abcdef1!', 'Abcdefg!', 'Abcdef12', 'Abcdef1 ', ' '.repeat(15), '🔒'.repeat(8)]) {
+    error(await h.request('/api/auth/register', { ...account, password: value }), 400, 'INVALID_PASSWORD');
   }
+  const valid = ['Abcdef1!', `Á1!${'🔒'.repeat(125)}`, 'ABCDEFG1!', 'Ábcdef1!', ' A1! abc '];
+  for (const [index, exactPassword] of valid.entries()) {
+    const email = `policy${index}@example.test`;
+    const result = await h.request('/api/auth/register', { ...account, email, name: '😀'.repeat(120), password: exactPassword });
+    assert.equal(result.status, 201);
+    assert.equal((await h.request('/api/auth/login', { email, password: exactPassword })).status, 200);
+  }
+  error(await h.request('/api/auth/login', { email: 'policy0@example.test', password: 'a' }), 401, 'INVALID_CREDENTIALS');
+  for (const value of ['', 'x'.repeat(129)]) error(await h.request('/api/auth/login', { email: 'policy0@example.test', password: value }), 400, 'INVALID_INPUT');
 });
 
 test('T3.2: versão vigente, parecer, estado e decisão anterior inválida não alteram o registro', async t => {
@@ -477,11 +489,14 @@ test('T3.2: armazenamento indisponível ou corrompido gera erro sem derrubar ser
   error(await h.request('/api/runs/storage', undefined, owner.cookie), 503, 'RUN_INACCESSIBLE');
   await fs.rmdir(file); await fs.writeFile(file, original);
   assert.equal((await h.request('/api/runs/storage', undefined, owner.cookie)).status, 200);
-  const usersFile = join(h.dataDir, 'auth/users.json');
-  await fs.writeFile(usersFile, '{');
+  const database = new DatabaseSync(join(h.dataDir, 'auth/users.sqlite'));
+  database.prepare('UPDATE users SET password_hash = ? WHERE email = ?').run('{', account.email);
+  database.exec(`CREATE TRIGGER unavailable BEFORE INSERT ON users BEGIN SELECT RAISE(ABORT, 'synthetic write failure'); END;`);
   error(await h.request('/api/auth/login', { email: account.email, password }), 503, 'AUTH_STORAGE_UNAVAILABLE');
   error(await h.request('/api/auth/register', second), 503, 'AUTH_STORAGE_UNAVAILABLE');
-  assert.equal(await fs.readFile(usersFile, 'utf8'), '{');
+  assert.equal(database.prepare('SELECT password_hash FROM users WHERE email = ?').get(account.email)!.password_hash, '{');
+  assert.equal(database.prepare('SELECT count(*) AS count FROM users').get()!.count, 1);
+  database.close();
   assert.equal((await fetch(`${h.base}/healthz`)).status, 200);
 });
 
@@ -598,4 +613,3 @@ test('T6.2: endpoints de aprovação e solicitação de alterações nos casos d
   await h.store.create(unvalidated);
   error(await h.request('/api/runs/run-cases-unvalidated/approve', casesRef, owner.cookie), 409, 'INSUFFICIENT_VALIDATION');
 });
-
