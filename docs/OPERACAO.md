@@ -22,7 +22,11 @@ Não há fallback silencioso. Variáveis entram pelo `env_file` já existente; a
 somente o arquivo privado autorizado e recriar o container daquele ambiente, sem
 alterar outros serviços da VPS nem expor chaves. Confirmar os perfis antes do ensaio.
 
-Com Node.js 24 e `npm ci` usando o lockfile:
+Com Node.js **24.21.0** (fixado em `.nvmrc`), npm **12.2.0** e `npm ci` usando
+o lockfile. O container e os workflows fixam ambos; fora do container, selecione
+Node com `nvm install && nvm use` e instale `npm install --global npm@12.2.0`
+antes de `npm ci`. Essa versão do npm mantém o lockfile principal inclusive nas
+dependências empacotadas pelo Pi. Para verificar:
 
 ```sh
 npm run check
@@ -77,7 +81,8 @@ Raiz do projeto: `/home/matheus/akcit-qa-agent`.
 | Desenvolvimento | akcit-qa-dev | 127.0.0.1:3101 | 0,75 vCPU | 2 GiB | akcit-qa-dev_app_data |
 | Produção | akcit-qa-prod | 127.0.0.1:3102 | 1 vCPU | 3 GiB | akcit-qa-prod_app_data |
 
-Cada ambiente tem seu container, rede, volume e arquivo de segredos. Uma sessão de
+Cada ambiente tem seu container, rede, volume e arquivo de segredos. Produção
+participa também da rede externa `web` para o ingresso pelo Traefik existente. Uma sessão de
 navegador por ambiente é o limite inicial de operação. Os especialistas compartilham
 o processo do produto; não há um container por especialista. Os modelos serão
 consumidos por API; esta configuração não dimensiona inferência de LLM local.
@@ -130,14 +135,105 @@ cat development/release.json
 ```
 
 Para produção, troque `akcit-qa-dev` por `akcit-qa-prod` e `development` por
-`production`. Para uma reversão manual, utilize `previous.env`, verifique o
+`production` e acrescente `-f ops/compose.production.yml` depois de
+`-f ops/compose.yml`. Para uma reversão manual, utilize `previous.env`, verifique o
 healthcheck e registre a alteração do release. A reversão de imagem não desfaz
 migrações de dados; migrations serão definidas com os requisitos do produto.
 
-Os arquivos `ops/deploy.py`, `ops/dev-access.py` e `ops/compose.yml` são a base de
-operação confiável na VPS. Alterações neles devem passar por PR e ser aplicadas
+Os arquivos `ops/deploy.py`, `ops/dev-access.py`, `ops/compose.yml` e
+`ops/compose.production.yml` são a base de operação confiável na VPS. Alterações neles devem passar por PR e ser aplicadas
 pelo operador via SSH, antes de depender de novas opções em workflows. A aplicação
 é atualizada por imagem; seu código não é editado diretamente na VPS.
+
+### Domínio de produção e DNS
+
+O endereço de produção é **https://qatron.mhvps.site**. O override
+`deploy/compose.production.yml` conecta somente o container de produção à rede
+Docker externa `web`, já usada pelo Traefik. O provider Docker descobre o roteador
+`qatron`, restrito a esse hostname, no entrypoint `websecure`, com porta interna
+3000 e resolver `lets-encrypt`. A porta local `127.0.0.1:3102` continua disponível;
+desenvolvimento permanece sem rota pública. O redirecionamento HTTP → HTTPS já é
+feito pelo entrypoint `web` existente. Não reiniciar ou reconfigurar o Traefik nem
+os demais serviços para publicar essa rota.
+
+Antes da promoção, instale as versões revisadas de `deploy/deploy.py`,
+`deploy/compose.yml` e `deploy/compose.production.yml` em `ops/` e configure
+`APP_ORIGIN=https://qatron.mhvps.site` somente em `production/runtime.env`, mantendo
+as demais variáveis privadas. Desenvolvimento mantém
+`APP_ORIGIN=http://127.0.0.1:3111`; o túnel de produção em `127.0.0.1:3112` serve
+somente para diagnóstico, pois cadastro/login exigem a origem HTTPS pública.
+Instalar os arquivos não recria o container nem
+expõe a versão antiga: deixe a primeira criação da rota para o workflow de
+promoção, depois da transição das contas. O publicador usa os dois arquivos Compose
+em toda operação de produção, inclusive rollback, e somente a base em desenvolvimento.
+
+A sequência de publicação continua: PR para `develop`, testes e implantação em
+desenvolvimento concluídos, PR de `develop` para `main` preservando a mesma árvore,
+e execução de **Promover produção** pelo responsável. Não reconstruir a imagem
+em produção. Após a promoção, comparar `digest`, `source_commit` e `tree` dos dois
+`release.json`, verificar saúde e smoke, e conferir a rota com o hostname correto.
+
+No DNS da zona **mhvps.site** no Cloudflare, configurar somente:
+
+| Tipo | Nome | Conteúdo | Proxy | TTL |
+| --- | --- | --- | --- | --- |
+| A | qatron | 76.13.175.64 | Somente DNS (nuvem cinza) | Automático |
+
+Não adicionar AAAA sem uma origem IPv6 validada, nem modificar os registros dos
+outros serviços. A zona já está delegada ao Cloudflare com
+`anuj.ns.cloudflare.com` e `cora.ns.cloudflare.com`, confirmados em 07/10/2026.
+**Não é necessário alterar os nameservers no registrador**; adicionar somente o
+registro de `qatron` nessa zona existente.
+
+O resolver atual usa desafio ACME **TLS-ALPN-01**: o nome precisa resolver diretamente
+para a VPS na porta 443 para emitir/renovar o certificado. Manter o registro em
+**Somente DNS**; o proxy do Cloudflare termina TLS antes da origem. Não alterar o
+resolver compartilhado para contornar uma configuração de DNS. Referências:
+[ACME no Traefik](https://doc.traefik.io/traefik/reference/install-configuration/tls/certificate-resolvers/acme/#tlschallenge)
+e [status de proxy do Cloudflare](https://developers.cloudflare.com/dns/proxy-status/).
+
+Antes da propagação, `curl --resolve qatron.mhvps.site:443:76.13.175.64
+https://qatron.mhvps.site/healthz` verifica a rota preservando Host/SNI. Se ainda
+não houver certificado desse nome, usar `--insecure` apenas para esse diagnóstico
+de roteamento e registrar que isso não comprova TLS público válido. Após o DNS
+propagar e o certificado ser emitido, repetir sem `--insecure`, verificar o
+redirecionamento HTTP, a página `/acesso` e uma chamada autenticada com a origem
+HTTPS. As verificações de infraestrutura usam dados sintéticos e não chamam LLM.
+
+### Conclusão automática do TLS após configurar o DNS
+
+O Traefik existente não repete automaticamente a primeira emissão que falhou por
+nome inexistente. Depois de promover e confirmar a saúde de produção, instalar
+`deploy/tls_bootstrap.py` como `ops/tls_bootstrap.py`. O procedimento é exclusivo de
+`qatron.mhvps.site`/`76.13.175.64` e do container `akcit-qa-prod`, serviço `app`.
+Não altera nem reinicia o Traefik ou outros serviços.
+
+Adicionar uma única entrada identificada ao crontab do operador `matheus`,
+preservando as entradas existentes. O `PATH` explícito permite encontrar Docker;
+a linha roda a cada cinco minutos e fica silenciosa enquanto nada precisa mudar:
+
+```cron
+*/5 * * * * PATH=/usr/local/bin:/usr/bin:/bin /usr/bin/python3 /home/matheus/akcit-qa-agent/ops/tls_bootstrap.py # qatron-tls-bootstrap
+```
+
+O script exige concordância de Cloudflare (`1.1.1.1`) e Google (`8.8.8.8`), via
+DNS sobre HTTPS: somente o A esperado e nenhum AAAA. Confere projeto, serviço e
+saúde do container, e valida TLS com as CAs do sistema diretamente no IP da VPS,
+usando SNI `qatron.mhvps.site`. Se o certificado já for válido, registra conclusão.
+Se faltar certificado com o DNS pronto, mantém o lock `deployment.lock`, registra
+o horário **antes** da ação, para somente esse container, aguarda cinco segundos
+para o provider observar a remoção e inicia o mesmo container em `finally`.
+Isso dispara nova solicitação ACME; o limite persistido é uma tentativa a cada
+30 minutos. Há uma breve indisponibilidade do QAtron nessa tentativa.
+
+O estado privado `production/tls-bootstrap.json` usa `0600`. Um reinício pendente
+fica registrado antes da parada e é recuperado na próxima execução, mesmo se o DNS
+ficar indisponível; só é iniciado o mesmo container atual com projeto/serviço
+conferidos. Container substituído, outros projetos, serviço ausente ou produção
+não saudável não recebem novas tentativas. O lock não bloqueante evita disputar
+uma publicação. Após TLS válido, `done` torna as execuções futuras inativas.
+Não apagar o estado para forçar tentativas sucessivas. O teste sintético é
+`python3 -m unittest discover -s deploy -p 'test_tls_bootstrap.py'`.
 
 ## Backup
 
@@ -154,7 +250,10 @@ nem retenção automática: a política de dados e evidências será definida pe
 
 Esta versão prepara o procedimento; publicar o código não autoriza executá-lo
 sobre dados reais. O arquivamento deve acontecer na janela de manutenção da
-primeira publicação de cada ambiente, com todos os escritores parados. Instale
+primeira publicação de cada ambiente que contenha contas legadas, com todos os
+escritores parados. Se o ambiente estiver vazio, não execute o reset: preserve o
+backup completo verificado e deixe a aplicação criar o banco. Um banco SQLite já
+existente é preservado. Instale
 `deploy/reset_accounts.py` como `ops/reset_accounts.py` junto das ferramentas
 operacionais revisadas. Python 3.11 ou posterior e somente sua biblioteca padrão
 são necessários; nenhum serviço adicional é instalado.
@@ -416,7 +515,7 @@ ou hashes para investigar problemas de acesso.
 
 A jornada e os erros estão em
 [API autenticada de revisão do plano — T3.2](requisitos/CONTRATOS.md#api-autenticada-de-revisão-do-plano--t32).
-Com Node.js 24, execute `node --import tsx --test test/authenticated-api.test.ts`
+Com Node.js 24.21.0, execute `node --import tsx --test test/authenticated-api.test.ts`
 para reproduzir a jornada HTTP com duas contas, arquivos temporários reais e
 relógio controlado. A jornada de criação e histórico de T3.3 está em
 [CONTRATOS.md](requisitos/CONTRATOS.md#criação-e-histórico-de-execuções--t33) e é
@@ -427,7 +526,7 @@ são preparados exclusivamente nos testes; nenhuma fixture é carregada pela apl
 ## Jornada pelo navegador — T2.1
 
 Configure `APP_ORIGIN` conforme a seção anterior. Com
-Node.js 24 e dependências do `package-lock.json`, um ambiente local fictício pode
+Node.js 24.21.0, npm 12.2.0 e dependências do `package-lock.json`, um ambiente local fictício pode
 ser iniciado assim:
 
 ```sh
@@ -537,7 +636,7 @@ original da operação; não consultam a conta atual para substituí-lo silencio
 Consulte o resultado gerado pelo smoke para saber quais verificações passaram;
 o procedimento e os cenários descritos aqui não substituem essa evidência.
 
-Verificações locais, usando Node.js 24 e um Chromium instalado:
+Verificações locais, usando Node.js 24.21.0, npm 12.2.0 e um Chromium instalado:
 
 ```sh
 npm run check
@@ -577,7 +676,7 @@ produção continua usando a imagem já validada em desenvolvimento.
 
 ## Modelos e preparação do plano — T4.1
 
-Use Node.js 24, `package-lock.json` e Pi 0.87.0. Cada ambiente tem sua própria
+Use Node.js 24.21.0, npm 12.2.0, `package-lock.json` e Pi 0.87.0. Cada ambiente tem sua própria
 configuração privada; o padrão é o par `PI_PROVIDER` / `PI_MODEL`. Os três papéis
 podem usar esse mesmo modelo em sessões independentes. Substituições opcionais:
 
@@ -854,7 +953,7 @@ sem comprovar por si só a versão atual das skills.
 
 ## Gerar e consultar casos lógicos — T6.1
 
-Reutilize Node 24, pares `PI_PROVIDER`/`PI_MODEL` e substituições `PI_PLANNER_*` e
+Reutilize Node 24.21.0, npm 12.2.0, pares `PI_PROVIDER`/`PI_MODEL` e substituições `PI_PLANNER_*` e
 `PI_VALIDATOR_*` já configurados. Não há dependência, serviço, fila, credencial ou
 modelo adicional. `test-designer` usa `create-test-plan` para o plano e
 `create-test-cases` para os casos, escolhido internamente pelo backend. Cada tarefa
@@ -939,7 +1038,7 @@ ou `cancelled`). O regime de um escritor por ambiente continua aplicável.
 
 ### Verificação e demonstração controlada
 
-Execute na raiz, com Node 24 no `PATH`:
+Execute na raiz, com Node 24.21.0 e npm 12.2.0 no `PATH`:
 
 ```sh
 npm run check
@@ -1195,7 +1294,7 @@ compartilhada permanece. T6.3 não executa testes nem gera relatório.
 
 ### Verificação e ensaio real
 
-Com Node 24 e dependências do lockfile:
+Com Node 24.21.0, npm 12.2.0 e dependências do lockfile:
 
 ```sh
 npm run check

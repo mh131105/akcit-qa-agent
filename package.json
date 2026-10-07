@@ -5,8 +5,10 @@
   "type": "module",
   "description": "Base de desenvolvimento do sistema multiagentes de testes caixa preta.",
   "engines": {
-    "node": ">=24.7.0 <25"
+    "node": ">=24.7.0 <25",
+    "npm": "12.2.0"
   },
+  "packageManager": "npm@12.2.0",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "dev:remote": "node scripts/dev-access.mjs",
