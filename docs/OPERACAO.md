@@ -232,6 +232,8 @@ ficar indisponível; só é iniciado o mesmo container atual com projeto/serviç
 conferidos. Container substituído, outros projetos, serviço ausente ou produção
 não saudável não recebem novas tentativas. O lock não bloqueante evita disputar
 uma publicação. Após TLS válido, `done` torna as execuções futuras inativas.
+Esse bootstrap conclui apenas a emissão inicial; a renovação permanece a cargo
+do Traefik e exige manter o registro em Somente DNS enquanto usar TLS-ALPN-01.
 Não apagar o estado para forçar tentativas sucessivas. O teste sintético é
 `python3 -m unittest discover -s deploy -p 'test_tls_bootstrap.py'`.
 
