@@ -20,9 +20,12 @@ const contentSecurityPolicy = "default-src 'none'; script-src 'self'; style-src 
 
 export async function createApp(config: ReturnType<typeof readConfig>, options: Pick<PreparationOptions, 'modelCall' | 'modelPreflight' | 'visualCall' | 'visualPreflight'> & { now?: () => number } = {}) {
   const runs = new RunStore(config.dataDir);
-  await runs.initialize();
-  await runs.recoverInterrupted();
   const auth = new AuthService(config, options.now);
+  await auth.initialize();
+  try {
+    await runs.initialize();
+    await runs.recoverInterrupted();
+  } catch (error) { auth.close(); throw error; }
   const preparation = new PreparationCoordinator(runs, config, options);
   const server = createServer(async (request, response) => {
     try {
@@ -67,6 +70,7 @@ export async function createApp(config: ReturnType<typeof readConfig>, options: 
       response.end('{"error":{"code":"STORAGE_FAILURE","message":"Não foi possível concluir a operação."}}');
     }
   });
+  server.once('close', () => auth.close());
   // Encerramento controlado: espera o trabalho ativo terminar (sessão/navegador) antes de sair.
   return Object.assign(server, { shutdown: async () => { await preparation.settled(); } });
 }

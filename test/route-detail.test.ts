@@ -49,7 +49,7 @@ async function setup(t: TestContext, options: PreparationOptions = {}) {
   t.after(() => rm(dir, { force: true, recursive: true }));
   const config = readConfig({ DATA_DIR: dir, TARGET_ALLOWED_ORIGINS: targetOrigin,
     PI_PROVIDER: 'deepseek', PI_MODEL: 'deepseek-v4-pro', PI_THINKING_LEVEL: 'high',
-    APP_ORIGIN: 'http://localhost:3000', PILOT_ALLOWED_EMAILS: 'owner@example.test,other@example.test' });
+    APP_ORIGIN: 'http://localhost:3000' });
   const store = new RunStore(dir); await store.initialize();
   const calls: SpecialistTask[] = [];
   const coordinator = new PreparationCoordinator(store, config, { ...options, modelPreflight: async () => {},
@@ -271,7 +271,7 @@ test('T6.3: API autenticada inicia pelo mapa e isola resultado e decisões entre
     method: body === undefined ? 'GET' : 'POST', headers: { Cookie: cookie, 'X-Expected-User-Id': user,
       Origin: h.config.appOrigin, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const register = async (email: string) => {
-    const response = await request('/api/auth/register', '', '', { name: 'Teste', email, password: 'senha ficticia longa 1!' });
+    const response = await request('/api/auth/register', '', '', { name: 'Teste', email, password: 'Senha ficticia longa 1!' });
     assert.equal(response.status, 201); return { cookie: response.headers.get('set-cookie')!.split(';')[0]!, id: (await response.json()).user.id };
   };
   const owner = await register('owner@example.test'), other = await register('other@example.test');

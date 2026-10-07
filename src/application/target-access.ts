@@ -100,10 +100,10 @@ export async function configureTargetAccess(
     return { ok: false, error: { code: 'INVALID_URL', message: 'O endereço não deve conter credenciais embutidas.' } };
   }
   if (url.search || url.hash) {
-    return { ok: false, error: { code: 'INVALID_URL', message: 'A URL inicial não deve conter query string nem fragmento.' } };
+    return { ok: false, error: { code: 'INVALID_URL', message: 'Informe um endereço sem parâmetros após “?” ou “#”.' } };
   }
   if (!allowedOrigins.includes(url.origin)) {
-    return { ok: false, error: { code: 'TARGET_NOT_ALLOWED', message: 'O endereço informado não pertence às origens autorizadas pela equipe do piloto.' } };
+    return { ok: false, error: { code: 'TARGET_NOT_ALLOWED', message: 'Este endereço não está autorizado para testes.' } };
   }
 
   if (body.credential !== undefined) {

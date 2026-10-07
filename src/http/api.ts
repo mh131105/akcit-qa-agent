@@ -99,7 +99,8 @@ export async function handleApi(
     }
     if (account === 'register' || account === 'login') {
       fields(body, account === 'register' ? ['name', 'email', 'password', 'teamName'] : ['email', 'password']);
-      const credentials = { email: string(body, 'email', 3, 254), password: string(body, 'password', 15, 128, false) };
+      if (typeof body.password !== 'string') throw invalid();
+      const credentials = { email: string(body, 'email', 3, 254), password: body.password };
       const address = request.socket.remoteAddress ?? 'unknown';
       const result = account === 'register'
         ? await auth.register({ ...credentials, name: string(body, 'name', 1, 120),

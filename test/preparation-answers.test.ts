@@ -51,7 +51,7 @@ async function setup(t: TestContext, custom: PreparationOptions = {}) {
   t.after(() => rm(dir, { recursive: true, force: true }));
   const store = new RunStore(dir); await store.initialize();
   const config = readConfig({ DATA_DIR: dir, PI_PROVIDER: model.provider, PI_MODEL: model.model,
-    APP_ORIGIN: 'http://localhost:3000', PILOT_ALLOWED_EMAILS: 'one@example.test,two@example.test' });
+    APP_ORIGIN: 'http://localhost:3000' });
   const calls: SpecialistTask[] = [];
   const coordinator = new PreparationCoordinator(store, config, { modelPreflight: async () => {}, ...custom,
     modelCall: async task => { calls.push(task); return custom.modelCall ? custom.modelCall(task) : normal(task); } });
@@ -175,8 +175,9 @@ test('cancelamento e reinício durante retomada impedem avanço tardio e novo pr
 test('answer/resume HTTP exigem sessão, origem, identidade, propriedade e contrato estrito', async t => {
   const h = await setup(t); await h.start();
   const auth = new AuthService(h.config);
-  const owner = await auth.register({ name: 'Pessoa', email: 'one@example.test', password: 'senha fictícia comprida' }, 'owner');
-  const other = await auth.register({ name: 'Outra', email: 'two@example.test', password: 'senha fictícia comprida' }, 'other');
+  t.after(() => auth.close());
+  const owner = await auth.register({ name: 'Pessoa', email: 'one@example.test', password: 'Senha fictícia comprida 1!' }, 'owner');
+  const other = await auth.register({ name: 'Outra', email: 'two@example.test', password: 'Senha fictícia comprida 1!' }, 'other');
   await h.store.update(h.id, ({ run }) => { run.ownerId = owner.user.id; return { save: true, value: undefined }; });
   const app = createServer((request, response) => void handleApi(request, response, h.store, auth, h.config, h.coordinator));
   app.listen(0, '127.0.0.1'); await once(app, 'listening');

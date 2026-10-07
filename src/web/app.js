@@ -6,8 +6,10 @@ const storagePrefix = 'akcit.intake.v1:';
 const limit = 16 * 1024;
 const statuses = { draft: 'Rascunho', running: 'Em andamento', awaiting_approval: 'Aguardando aprovação', awaiting_input: 'Aguardando informações', ready: 'Etapa validada', completed: 'Concluída', interrupted: 'Interrompida', error: 'Erro', cancelled: 'Cancelada' };
 const phases = { intake: 'Recebimento do material', curation: 'Curadoria', planning: 'Planejamento', case_design: 'Criação dos casos', mapping: 'Mapeamento', route_detail: 'Detalhamento dos percursos', execution: 'Execução dos testes', report: 'Relatório', done: 'Processo concluído' };
-const validations = { approved: 'Aprovado pelo validador', changes_requested: 'Validador solicitou alterações', blocked: 'Validação bloqueada', error: 'Erro de validação' };
+const validations = { approved: 'Validação automática aprovada', changes_requested: 'Validação solicitou ajustes', blocked: 'Validação bloqueada', error: 'Erro de validação' };
 const roles = { 'artifact-curator': 'Curador', 'test-designer': 'Designer de testes', 'output-validator': 'Validador independente', 'test-executor': 'Executor de testes', 'report-writer': 'Redator' };
+const toolNames = { observe_screen: 'Captura de tela', pointer: 'Clique e movimento', keyboard_scroll: 'Teclado e rolagem', fill_credential: 'Preenchimento do acesso' };
+const actionOutcomes = { ok: 'Concluído', completed: 'Concluído', error: 'Falhou', cancelled: 'Cancelado', interrupted: 'Interrompido' };
 const activities = { curating: 'Organizando requisitos e fontes', planning: 'Elaborando o plano de testes', validating_curation: 'Revisando a curadoria', validating_planning: 'Revisando o plano de testes', case_design: 'Gerando casos de teste', validating_case_design: 'Validando os casos de teste', mapping: 'Mapeando a aplicação', validating_mapping: 'Validando o mapa de navegação', route_detail: 'Associando percursos aos casos aprovados', validating_route_detail: 'Validando as associações de percursos', execution: 'Executando os casos pela interface', validating_execution: 'Validando as evidências do caso', report: 'Redigindo o relatório', validating_report: 'Validando o relatório', analyzing_feedback: 'Analisando as alterações solicitadas' };
 let user = null;
 let rememberForm = null;
@@ -56,7 +58,7 @@ function tell(node, text, error = false) {
 function heading(title, subtitle, action) {
   document.title = `${title} · QAtron`;
   const header = el('div', null, 'page-heading'); const copy = el('div');
-  copy.append(el('p', 'Workspace / Qualidade de software', 'eyebrow'), el('h1', title));
+  copy.append(el('h1', title));
   if (subtitle) copy.append(el('p', subtitle, 'lead'));
   header.append(copy); if (action) header.append(action); main.append(header);
 }
@@ -97,6 +99,8 @@ function invalid(fieldRef, text) {
   return !!text;
 }
 const count = value => [...value].length;
+const passwordHint = 'De 8 a 128 caracteres, com pelo menos uma letra maiúscula, um número e um caractere especial.';
+const validNewPassword = value => count(value) >= 8 && count(value) <= 128 && /\p{Lu}/u.test(value) && /[0-9]/.test(value) && /[\p{P}\p{S}]/u.test(value);
 const bytes = value => new TextEncoder().encode(value).byteLength;
 const date = value => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 const internal = value => /^\/execucoes(?:\/(?:nova|[A-Za-z0-9][A-Za-z0-9_-]{0,127}))?(?:\?[^#]*)?(?:#(?:visao-geral|plano|casos|mapa|resultados))?$/.test(value || '') ? value : '/execucoes';
@@ -105,35 +109,40 @@ const target = () => internal(new URLSearchParams(location.search).get('next'));
 function errorText(error) {
   const texts = {
     INVALID_CREDENTIALS: 'E-mail ou senha incorretos. Confira os dados e tente novamente.',
-    REGISTRATION_NOT_ALLOWED: 'Este participante não está habilitado. Solicite a liberação à equipe do piloto.',
+    INVALID_PASSWORD: passwordHint,
     ACCOUNT_EXISTS: 'Este e-mail já tem uma conta. Use Entrar para continuar.',
     TOO_MANY_ATTEMPTS: 'Muitas tentativas. Aguarde 15 minutos e tente novamente.',
-    ORIGIN_REJECTED: 'Este endereço não está habilitado para envio. Peça à equipe para conferir a origem configurada.',
-    AUTH_NOT_CONFIGURED: 'O acesso ainda não foi configurado. Entre em contato com a equipe do piloto.',
+    ORIGIN_REJECTED: 'Não foi possível enviar esta solicitação. Atualize a página e tente novamente.',
+    AUTH_NOT_CONFIGURED: 'O acesso está temporariamente indisponível. Tente novamente mais tarde.',
     INVALID_INPUT: 'Confira os campos e seus limites antes de tentar novamente.',
-    BODY_TOO_LARGE: 'Os campos de texto ultrapassam 16 KiB. Reduza o texto ou os demais campos.',
+    BODY_TOO_LARGE: 'O conteúdo informado excede o limite. Reduza o texto e tente novamente.',
     INVALID_UPLOAD: 'Arquivo inválido. Envie .txt ou .md em UTF-8, ou PDF com texto selecionável.',
     FILE_TOO_LARGE: 'Cada arquivo deve ter até 10 MiB. Reduza o arquivo e tente novamente.',
     FILE_LIMIT: 'Selecione no máximo cinco arquivos.',
-    PDF_WITHOUT_TEXT: 'O PDF não contém texto selecionável. Envie texto ou um PDF com texto; OCR não está disponível.',
+    PDF_WITHOUT_TEXT: 'O PDF não contém texto selecionável. Envie um arquivo .txt, .md ou um PDF com texto.',
     PDF_EXTRACTION_FAILED: 'Não foi possível ler o PDF. Confira se o arquivo é válido e não tem senha.',
     EMPTY_FILE: 'O arquivo está vazio. Envie um arquivo com requisitos.',
     RUN_ACTIVE: 'Encerre a execução e aguarde o término do trabalho antes de excluir.',
     INPUT_LIMIT: 'Selecione até dez requisitos. Reduza explicitamente o material e crie uma nova execução.',
     CASE_LIMIT: 'O conjunto excede trinta casos. Reduza o escopo em um novo plano; nenhum caso foi cortado.',
-    CONTEXT_LIMIT: 'O material excede o contexto suportado pelos modelos. Reduza explicitamente as fontes ou o escopo; nenhum texto foi truncado.',
+    CONTEXT_LIMIT: 'O material é extenso demais para esta execução. Reduza o conteúdo ou divida-o em execuções.',
     COMMENT_REQUIRED: 'Informe um comentário para solicitar alterações.',
-    STALE_VERSION: 'A revisão ou suas dependências mudaram. Consulte o plano atualizado antes de decidir novamente.',
+    STALE_VERSION: 'Esta revisão mudou. Consulte a versão atual antes de decidir novamente.',
     DECISION_CONFLICT: 'Esta revisão já possui uma decisão diferente. Consulte a decisão salva.',
     DECISION_MISSING: 'Aprove a revisão vigente do plano antes de gerar os casos de teste.',
     INVALID_STATE: 'A execução não permite esta operação no estado atual. Consulte o estado atualizado.',
     INSUFFICIENT_VALIDATION: 'O plano e a curadoria precisam de validação aprovada. A decisão foi recusada.',
-    IDEMPOTENCY_CONFLICT: 'A chave já está associada a outro conteúdo. A tentativa foi preservada; consulte o histórico e solicite ajuda à equipe.',
+    IDEMPOTENCY_CONFLICT: 'Este salvamento não corresponde ao conteúdo atual. Consulte a execução salva antes de tentar novamente.',
     RUN_NOT_FOUND: 'Execução não encontrada ou indisponível para esta conta.',
     RESOURCE_UNAVAILABLE: 'O ambiente está ocupado com outra execução. O material e as decisões foram preservados; tente novamente após a conclusão.',
-    MODEL_NOT_CONFIGURED: 'A preparação exige a configuração do provedor e modelo para curador, planejador e validador. Solicite a configuração à equipe do piloto.',
-    MODEL_UNAVAILABLE: 'O modelo configurado não está disponível. Solicite à equipe a conferência da configuração.',
-    CREDENTIAL_UNAVAILABLE: 'A credencial do modelo não está disponível. Solicite a configuração à equipe do piloto.',
+    MODEL_NOT_CONFIGURED: 'Não foi possível iniciar o processamento. Tente novamente mais tarde.',
+    MODEL_UNAVAILABLE: 'O processamento está temporariamente indisponível. Tente novamente mais tarde.',
+    CREDENTIAL_UNAVAILABLE: 'Não foi possível iniciar o processamento. Tente novamente mais tarde.',
+    MODEL_ERROR: 'Não foi possível concluir o processamento. Os registros confirmados foram preservados.',
+    INVALID_OUTPUT: 'Não foi possível validar o resultado desta etapa. Os registros confirmados foram preservados.',
+    INVALID_MODEL_OUTPUT: 'Não foi possível validar o resultado desta etapa. Os registros confirmados foram preservados.',
+    STORAGE_FAILURE: 'Não foi possível acessar os dados da execução. Tente novamente mais tarde.',
+    TIMEOUT: 'O processamento excedeu o tempo disponível. Os registros confirmados foram preservados.',
     ANSWER_CONFLICT: 'Esta pergunta já possui outra resposta. Consulte a resposta registrada.',
     QUESTION_NOT_FOUND: 'A pergunta não está disponível nesta revisão. Consulte o material atualizado.',
     ACTIVE_LIMIT: 'Esta execução atingiu o limite de processamento ativo. As respostas e os resultados salvos estão preservados.',
@@ -141,14 +150,14 @@ function errorText(error) {
     DECISION_MISSING: 'Aprove a revisão vigente antes de continuar.',
     MAPPING_BLOCKED: 'O mapeamento foi interrompido por um impedimento. Consulte as pendências e limitações do mapa.',
     CREDENTIAL_REJECTED: 'O login da aplicação testada não foi confirmado. Corrija a credencial de teste e solicite uma nova tentativa.',
-    VALIDATOR_LIMIT: 'O limite de tentativas técnicas do validador foi esgotado sem parecer válido.',
+    VALIDATOR_LIMIT: 'Não foi possível concluir a revisão automática. Os registros salvos foram preservados.',
     REVISION_LIMIT: 'O limite de revisões desta etapa foi esgotado. Os registros salvos estão preservados.',
-    TARGET_NOT_ALLOWED: 'O endereço informado não pertence às origens autorizadas pela equipe do piloto.',
+    TARGET_NOT_ALLOWED: 'Este endereço não está autorizado para testes.',
     AUTHORIZED_TARGET_REQUIRED: 'Confirme a autorização para testar a aplicação.',
-    INVALID_URL: 'Endereço da aplicação inválido. Use HTTP ou HTTPS habilitado pela equipe, sem query string ou fragmento.',
+    INVALID_URL: 'Informe um endereço HTTP ou HTTPS autorizado, sem parâmetros após “?” ou “#”.',
     TARGET_IMMUTABLE: 'O endereço da aplicação não pode ser alterado após o início da preparação. Trocar o alvo exige outra execução.',
   };
-  return texts[error.code] || (error.status === 409 ? 'O registro não permite esta operação. Atualize a consulta e, se persistir, solicite ajuda à equipe.' : 'Não foi possível concluir a solicitação. Verifique a conexão e tente novamente.');
+  return texts[error.code] || (error.status === 409 ? 'O registro não permite esta operação. Atualize a página e consulte a situação da execução.' : 'Não foi possível concluir a solicitação. Verifique a conexão e tente novamente.');
 }
 async function api(path, { accountId, ...options } = {}) {
   const response = await fetch(`/api${path}`, { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(20000), ...options,
@@ -165,12 +174,13 @@ async function api(path, { accountId, ...options } = {}) {
 }
 function expire() {
   if (signedOut) return;
+  const hadSession = Boolean(user);
   if (rememberForm) rememberForm();
   revokeEvidence(); evidenceRunId = null;
   user = null; rememberForm = null; answerDrafts.clear(); clearInterval(sessionTimer); clearTimeout(detailTimer); detailSequence++;
   main.replaceChildren(); account.replaceChildren(); main.hidden = false;
   selectDetailTab = null;
-  location.replace(`/acesso?expired=1&next=${encodeURIComponent(internal(location.pathname + location.search + location.hash))}`);
+  location.replace(`/acesso?${hadSession ? 'expired=1&' : ''}next=${encodeURIComponent(internal(location.pathname + location.search + location.hash))}`);
 }
 async function sameAccount(accountId = user?.id) {
   const session = await api('/auth/me');
@@ -250,7 +260,7 @@ function access(serviceMessage = '') {
     const step = el('li'); const copy = el('div'); copy.append(el('strong', label), el('span', detail));
     step.append(el('span', number, 'auth-step-number'), copy); steps.append(step);
   }
-  visual.append(emblem, steps); story.append(visual, el('p', 'Seu critério. Agentes ao seu lado.', 'auth-signature'));
+  visual.append(emblem, steps); story.append(visual);
   const panel = el('section', null, 'panel auth-panel'); layout.append(story, panel); main.append(layout);
   let register = false; let email = '';
   const render = () => {
@@ -263,14 +273,14 @@ function access(serviceMessage = '') {
       }, 'secondary');
       tab.setAttribute('aria-pressed', String(register === value)); tabs.append(tab);
     }
-    panel.append(tabs, el('p', register ? 'Seu primeiro passo' : 'Vamos continuar?', 'eyebrow'), el('h2', register ? 'Participe do piloto' : 'Bem-vindo de volta'), el('p', register ? 'Crie sua conta para organizar testes e acompanhar decisões.' : 'Entre para retomar suas execuções e acompanhar os próximos passos.', 'auth-intro'));
+    panel.append(tabs, el('h2', register ? 'Crie sua conta' : 'Bem-vindo de volta'), el('p', register ? 'Crie sua conta para organizar testes e acompanhar decisões.' : 'Entre para retomar suas execuções e acompanhar os próximos passos.', 'auth-intro'));
     const cleanupMessage = new URLSearchParams(location.search).has('cleanup') ? 'Saída confirmada, mas não foi possível limpar a recuperação local desta aba. Feche a aba ou limpe o armazenamento do navegador.' : '';
     const notice = message(cleanupMessage || serviceMessage || (new URLSearchParams(location.search).has('expired') ? 'Sua sessão expirou ou mudou. Entre novamente. Conteúdo pendente só será recuperado para a mesma conta.' : ''), !!serviceMessage || !!cleanupMessage); panel.append(notice);
     const form = el('form'); form.noValidate = true; const fields = {};
     if (register) fields.name = field(form, 'name', 'Nome', { autocomplete: 'name', hint: 'Até 120 caracteres.' });
     fields.email = field(form, 'email', 'E-mail', { type: 'email', autocomplete: 'username' });
     fields.email.input.value = email; fields.email.input.placeholder = 'voce@equipe.com.br'; fields.email.input.spellcheck = false; fields.email.input.autocapitalize = 'none';
-    fields.password = field(form, 'password', 'Senha', { type: 'password', autocomplete: register ? 'new-password' : 'current-password', hint: 'De 15 a 128 caracteres. Espaços fazem parte da senha.' });
+    fields.password = field(form, 'password', 'Senha', { type: 'password', autocomplete: register ? 'new-password' : 'current-password', hint: register ? passwordHint : '' });
     const passwordControl = el('div', null, 'password-control'); fields.password.input.before(passwordControl); passwordControl.append(fields.password.input);
     const reveal = button('Mostrar', () => {
       const visible = fields.password.input.type === 'password'; fields.password.input.type = visible ? 'text' : 'password';
@@ -283,7 +293,8 @@ function access(serviceMessage = '') {
       event.preventDefault(); if (submit.disabled) return; let first;
       for (const [name, ref] of Object.entries(fields)) {
         const value = ref.input.value; let problem = '';
-        if (name === 'password' && (count(value) < 15 || count(value) > 128)) problem = 'Use de 15 a 128 caracteres.';
+        if (name === 'password') problem = register ? (validNewPassword(value) ? '' : passwordHint)
+          : !value ? 'Informe sua senha.' : count(value) > 128 ? 'Use até 128 caracteres.' : '';
         if (name === 'email' && (!ref.input.validity.valid || count(value.trim()) > 254)) problem = 'Informe um e-mail válido.';
         if (['name', 'teamName'].includes(name) && ((name === 'name' && !value.trim()) || count(value.trim()) > 120)) problem = 'Informe até 120 caracteres; nome é obrigatório.';
         if (invalid(ref, problem) && !first) first = ref.input;
@@ -295,17 +306,19 @@ function access(serviceMessage = '') {
       try {
         await api(`/auth/${register ? 'register' : 'login'}`, { method: 'POST', body: JSON.stringify(body) });
         fields.password.input.value = ''; await api('/auth/me'); location.replace(target());
-      } catch (error) { tell(notice, errorText(error), true); submit.disabled = false; submit.removeAttribute('aria-busy'); tabs.querySelectorAll('button').forEach(node => { node.disabled = false; }); }
+      } catch (error) {
+        if (register && error.code === 'INVALID_PASSWORD') { tell(notice, 'Confira a senha para criar sua conta.', true); invalid(fields.password, passwordHint); fields.password.input.focus(); }
+        else tell(notice, errorText(error), true);
+        submit.disabled = false; submit.removeAttribute('aria-busy'); tabs.querySelectorAll('button').forEach(node => { node.disabled = false; });
+      }
     });
-    const help = el('div', null, 'auth-support');
-    help.append(el('p', 'Precisa recuperar o acesso?', 'auth-support-title'), el('p', 'Procure a equipe responsável pelo piloto.', 'auth-help'));
-    panel.append(form, help, el('p', 'Esta é a conta do produto. O acesso usado pelo agente na aplicação testada será configurado separadamente.', 'auth-help auth-account-note'));
+    panel.append(form, el('p', 'O acesso à aplicação que você vai testar será configurado separadamente.', 'auth-help auth-account-note'));
   }; render();
 }
 
 function profilePage() {
   const accountId = user.id;
-  main.replaceChildren(); heading('Meu perfil', 'Nome e equipe usados para identificar suas decisões.');
+  main.replaceChildren(); heading('Meu perfil', 'Atualize suas informações.');
   const panel = el('section', null, 'panel'); const form = el('form'); form.noValidate = true;
   const name = field(form, 'profile-name', 'Nome', { autocomplete: 'name', hint: 'Até 120 caracteres.' });
   const team = field(form, 'profile-team', 'Equipe (opcional)', { optional: true, autocomplete: 'organization', hint: 'Até 120 caracteres.' });
@@ -463,7 +476,7 @@ function attemptPanel(run, attempt, accountId, observations = run.observations |
   if (attempt.current === false) detail.append(message('Tentativa histórica; não compõe a cobertura da revisão atual.'));
   if (attempt.reproducesAttemptId) detail.append(el('p', `Reprodução de ${referenceLabel(attempt.reproducesAttemptId, 'Tentativa')}`, 'hint'));
   if (attempt.setupObservation) detail.append(el('h4', 'Preparo observado'), el('p', attempt.setupObservation, 'text-content'));
-  if (attempt.events?.length) detail.append(planSection('Passos observados', attempt.events, event => `${event.at || ''} · ${event.note || event.action || event.tool || ''} · ${event.outcome || event.observation || ''}`));
+  if (attempt.events?.length) detail.append(planSection('Passos observados', attempt.events, event => `${event.at || ''} · ${event.note || event.action || toolNames[event.tool] || 'Ação de navegação'} · ${event.outcome ? actionOutcomes[event.outcome] || 'Registrado' : event.observation || ''}`));
   detail.append(el('h4', 'Resultado observado'), el('p', attempt.observed || 'Nenhuma observação registrada.', 'text-content'));
   if (attempt.reason) detail.append(el('p', attempt.reason, 'text-content'));
   if (attempt.evidenceGaps?.length) detail.append(planSection('Lacunas de evidência', attempt.evidenceGaps));
@@ -519,7 +532,7 @@ function publishedReportPanel(run, accountId) {
   return article;
 }
 async function printReport(run, accountId, article, notice, action) {
-  action.disabled = true; tell(notice, 'Conferindo a sessão e carregando as capturas da revisão publicada…');
+  action.disabled = true; tell(notice, 'Preparando o PDF e carregando as capturas…');
   const opened = [...article.querySelectorAll('details')].filter(node => !node.open);
   try {
     await sameAccount(accountId);
@@ -539,7 +552,6 @@ function resultsPanel(run, accountId) {
   if (run.report) {
     const notice = message(); const article = publishedReportPanel(run, accountId);
     const print = button('Salvar em PDF', () => printReport(run, accountId, article, notice, print));
-    panel.append(el('p', `Versão publicada: revisão ${run.report.revision}.`, 'hint'));
     if (run.report.underReview) panel.append(message('Há uma nova revisão em análise. A versão publicada abaixo permanece disponível.'));
     panel.append(print, notice, article);
   } else panel.append(message('Ainda não há relatório publicado. Os resultados validados e as tentativas salvas aparecem abaixo.'));
@@ -550,7 +562,7 @@ function resultsPanel(run, accountId) {
       const item = output.payload; const detail = el('details', null, 'plan-section');
       detail.append(el('summary', `${referenceLabel(item.caseId, 'Caso')} · ${resultNames[item.verdict] || item.verdict} · Revisão ${output.revision}`), el('p', item.observed, 'text-content'), el('p', item.reason, 'text-content'));
       const verdict = output.validations?.findLast(value => value.status !== 'error');
-      detail.append(message(verdict?.status === 'approved' ? 'Resultado validado.' : 'Resultado candidato, aguardando validação.'));
+      detail.append(message(verdict?.status === 'approved' ? 'Resultado validado.' : 'Resultado em revisão.'));
       for (const attempt of (run.attempts || []).filter(attempt => attempt.caseId === item.caseId)) detail.append(attemptPanel(run, attempt, accountId));
       interim.append(detail);
     }
@@ -563,8 +575,8 @@ function resultsPanel(run, accountId) {
 
 function historyPage() {
   const accountId = user.id;
-  main.replaceChildren(); heading('Minhas execuções', 'Seu material, seus planos e as decisões de cada revisão.', link('Nova execução', '/execucoes/nova', 'button'));
-  try { if (readAttempt()?.key) main.append(message('Há um salvamento sem confirmação nesta aba.'), link('Recuperar tentativa de salvamento', '/execucoes/nova', 'back-link')); }
+  main.replaceChildren(); heading('Minhas execuções', 'Acompanhe seus testes e consulte os resultados.', link('Nova execução', '/execucoes/nova', 'button'));
+  try { if (readAttempt()?.key) main.append(message('Há um salvamento sem confirmação nesta aba.'), link('Continuar salvamento', '/execucoes/nova', 'back-link')); }
   catch { main.append(message('Não foi possível ler a recuperação local. Verifique o armazenamento do navegador antes de iniciar uma execução.', true)); }
   const form = el('form', null, 'filters'); form.noValidate = true;
   const search = field(form, 'q', 'Buscar por nome ou aplicação', { optional: true });
@@ -583,7 +595,7 @@ function historyPage() {
       const data = await api(`/runs${query.size ? `?${query}` : ''}`, { accountId }); if (user?.id !== accountId || current !== sequence) return;
       results.replaceChildren();
       if (!data.items.length) {
-        const empty = el('div', null, 'empty'); empty.append(el('span', '+', 'empty-symbol'), el('h2', query.size ? 'Nenhum resultado para este filtro' : 'Sua primeira execução começa aqui'), el('p', query.size ? 'Experimente outro nome, aplicação ou situação.' : 'Você ainda não tem execuções. Reúna requisitos, histórias ou exemplos para salvar o primeiro rascunho.'));
+        const empty = el('div', null, 'empty'); empty.append(el('span', '+', 'empty-symbol'), el('h2', query.size ? 'Nenhum resultado para este filtro' : 'Sua primeira execução começa aqui'), el('p', query.size ? 'Experimente outro nome, aplicação ou situação.' : 'Crie uma execução para testar sua aplicação a partir dos requisitos.'));
         empty.append(query.size ? link('Limpar filtros', '/execucoes', 'button secondary') : link('Criar primeira execução', '/execucoes/nova', 'button')); results.append(empty);
       } else {
         results.append(el('p', `${data.items.length} ${data.items.length === 1 ? 'execução encontrada' : 'execuções encontradas'}`, 'list-caption'));
@@ -611,9 +623,9 @@ function historyPage() {
 
 function intakePage() {
   const accountId = user.id;
-  main.replaceChildren(); heading('Nova execução', 'Reúna o material que vai orientar a revisão do plano.');
+  main.replaceChildren(); heading('Nova execução', 'Informe a aplicação e os requisitos que serão testados.');
   const split = el('div', null, 'split'); const panel = el('section', null, 'panel');
-  const note = el('aside', null, 'side-note'); note.append(el('span', 'Antes de começar', 'step'), el('h2', 'Um rascunho é o primeiro passo.'), el('p', 'Salvar confirma o recebimento do material. A curadoria e a geração do plano ainda não são iniciadas.'), el('p', 'Cole o texto e/ou selecione até cinco arquivos .txt, .md ou PDF com texto, de até 10 MiB cada. As fontes serão preservadas separadamente.'));
+  const note = el('aside', null, 'side-note'); note.append(el('span', 'Antes de começar', 'step'), el('h2', 'Prepare seus requisitos'), el('p', 'Salve o rascunho e, em seguida, selecione “Preparar plano” para começar.'), el('p', 'Cole o texto e/ou selecione até cinco arquivos .txt, .md ou PDF com texto, de até 10 MiB cada. As fontes serão preservadas separadamente.'));
   split.append(panel, note); main.append(split);
   const notice = message(); panel.append(notice); const form = el('form'); form.noValidate = true;
   const identification = el('section', null, 'intake-section');
@@ -621,20 +633,20 @@ function intakePage() {
   const fields = { name: field(pair, 'name', 'Nome da execução', { hint: 'Até 120 caracteres.' }), applicationName: field(pair, 'applicationName', 'Aplicação', { hint: 'Até 120 caracteres.' }) };
   fields.objective = field(identification, 'objective', 'Objetivo (opcional)', { textarea: true, optional: true, hint: 'Até 2.000 caracteres.' });
   const material = el('section', null, 'intake-section'); material.append(el('span', '02 / Material de entrada', 'step')); form.append(material);
-  fields.text = field(material, 'text', 'Material de requisitos', { textarea: true, optional: true, className: 'material', hint: 'Cole histórias, requisitos, critérios ou cenários Gherkin. Gherkin é opcional. Preserve o texto original; dúvidas poderão ser esclarecidas depois.' });
-  const uploads = field(material, 'files', 'Arquivos de requisitos (opcional)', { optional: true, type: 'file', hint: 'Até cinco .txt, .md ou PDF com texto; até 10 MiB por arquivo. Arquivos ficam selecionados após um erro nesta página; ao recarregar, selecione-os novamente.' });
+  fields.text = field(material, 'text', 'Requisitos', { textarea: true, optional: true, className: 'material', hint: 'Cole requisitos, histórias, critérios de aceite ou cenários Gherkin.' });
+  const uploads = field(material, 'files', 'Arquivos de requisitos (opcional)', { optional: true, type: 'file', hint: 'Até cinco arquivos .txt, .md ou PDF com texto; até 10 MiB por arquivo.' });
   uploads.input.multiple = true; uploads.input.accept = '.txt,.md,.pdf';
   const received = el('ul', null, 'plain-list'); material.append(received);
   const meter = el('small'); const footer = el('div', null, 'form-footer'); const submit = button('Salvar rascunho'); submit.type = 'submit'; footer.append(meter, submit); form.append(footer); panel.append(form);
   let attempt = null; let sending = false; let blocked = false;
   const body = () => JSON.stringify(Object.fromEntries(Object.entries(fields).map(([name, ref]) => [name, ref.input.value])));
-  const update = () => { meter.textContent = `${bytes(body()).toLocaleString('pt-BR')} / 16.384 bytes dos campos de texto`; received.replaceChildren(...[...uploads.input.files].map(file => el('li', `${file.name} · ${(file.size / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} KiB`))); };
-  const lock = () => { Object.values(fields).forEach(ref => { ref.input.readOnly = !!attempt?.key; }); submit.textContent = attempt?.key ? 'Tentar confirmar salvamento' : 'Salvar rascunho'; };
+  const update = () => { meter.textContent = `Espaço de texto utilizado: ${Math.ceil(bytes(body()) / limit * 100)}%`; received.replaceChildren(...[...uploads.input.files].map(file => el('li', `${file.name} · ${(file.size / 1024).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} KiB`))); };
+  const lock = () => { Object.values(fields).forEach(ref => { ref.input.readOnly = !!attempt?.key; }); submit.textContent = attempt?.key ? 'Confirmar salvamento' : 'Salvar rascunho'; };
   try {
     attempt = readAttempt();
     if (attempt) { const values = JSON.parse(attempt.body); for (const [name, ref] of Object.entries(fields)) ref.input.value = values[name];
-      tell(notice, attempt.key ? 'O salvamento anterior ainda não foi confirmado. Tente confirmar usando o conteúdo original abaixo. Ele ficará bloqueado até a confirmação.' : 'Seu formulário pendente foi recuperado para esta conta.'); }
-  } catch { blocked = true; submit.disabled = true; tell(notice, 'Não foi possível ler a tentativa salva. O envio está bloqueado para evitar duplicação. Verifique o armazenamento da aba e solicite ajuda à equipe.', true); }
+      tell(notice, (attempt.key ? 'O salvamento anterior ainda não foi confirmado. Confirme usando o conteúdo original abaixo. Ele ficará bloqueado até a confirmação.' : 'Seu formulário pendente foi recuperado para esta conta.') + (attempt.files?.length ? ' Selecione novamente os arquivos da tentativa original.' : '')); }
+  } catch { blocked = true; submit.disabled = true; tell(notice, 'Não foi possível ler a tentativa salva. Consulte o histórico antes de iniciar outra execução, para evitar duplicação.', true); }
   lock(); update(); form.addEventListener('input', update);
   rememberForm = () => {
     if (attempt?.key || blocked || user?.id !== accountId) return;
@@ -649,7 +661,7 @@ function intakePage() {
         if (name !== 'objective' && !value && (name !== 'text' || !uploads.input.files.length)) problem = 'Preencha este campo ou selecione arquivos de requisitos.';
         const max = name === 'objective' ? 2000 : name === 'text' ? Infinity : 120;
         if (count(value) > max) problem = `Use até ${max.toLocaleString('pt-BR')} caracteres.`;
-        if (name === 'text' && bytes(body()) > limit) problem = 'O JSON completo excede 16 KiB. Reduza o material ou os demais campos.';
+        if (name === 'text' && bytes(body()) > limit) problem = 'O conteúdo informado excede o limite. Reduza o texto ou envie os requisitos em arquivo.';
         if (invalid(ref, problem) && !first) first = ref.input;
       }
       if (first) { first.focus(); return; }
@@ -660,7 +672,7 @@ function intakePage() {
     sending = true; submit.disabled = true; uploads.input.disabled = true; tell(notice, 'Conferindo sessão e salvando o rascunho…');
     try {
       const files = await Promise.all(selectedFiles.map(async file => ({ name: file.name, size: file.size, sha256: [...new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()))].map(value => value.toString(16).padStart(2, '0')).join('') })));
-      if (attempt?.key && JSON.stringify(attempt.files || []) !== JSON.stringify(files)) { tell(notice, 'Selecione novamente os mesmos arquivos da tentativa original para confirmar o salvamento. O conteúdo e a chave foram preservados.', true); return; }
+      if (attempt?.key && JSON.stringify(attempt.files || []) !== JSON.stringify(files)) { tell(notice, 'Selecione novamente os mesmos arquivos da tentativa original para confirmar o salvamento. O conteúdo original foi preservado.', true); return; }
       const candidate = attempt?.key ? attempt : { accountId, key: crypto.randomUUID(), body: body(), ...(files.length ? { files } : {}) };
       // Guardar e reler antes de qualquer POST. Falha local nunca dispara um envio.
       try { saveAttempt(candidate); } catch { tell(notice, 'Não foi possível guardar a tentativa nesta aba. Nenhuma solicitação de salvamento foi enviada. Habilite o armazenamento do navegador e tente novamente.', true); return; }
@@ -680,7 +692,7 @@ function intakePage() {
           try { sessionStorage.removeItem(storagePrefix + accountId); attempt = null; lock(); }
           catch { blocked = true; }
           tell(notice, errorText(error), true);
-        } else { tell(notice, `${errorText(error)} O salvamento ainda não foi confirmado. Use “Tentar confirmar salvamento” para repetir a tentativa original.`, true); }
+        } else { tell(notice, `${errorText(error)} O salvamento ainda não foi confirmado. Use “Confirmar salvamento” para repetir a tentativa original.`, true); }
         return;
       }
       if (user?.id !== accountId) return;
@@ -732,12 +744,16 @@ function targetAccessPanel(run, accountId) {
   panel.id = 'target-access-panel';
 
   const isConfigured = Boolean(access.hasCredential && access.startUrl);
+  const mapping = run.mapping;
+  const verdicts = mapping?.validations.filter(value => value.status !== 'error') || [];
+  const authenticated = isConfigured && mapping?.current && mapping.payload.accessRevision === access.revision &&
+    mapping.payload.authentication.status === 'authenticated' && verdicts.length === 1 && verdicts[0].status === 'approved';
   panel.append(
     el('p', access.revision > 0 ? `Acesso à aplicação testada · Revisão ${access.revision}` : 'Acesso à aplicação testada', 'eyebrow'),
     el('h2', 'Acesso à aplicação testada'),
     message(
-      isConfigured
-        ? 'Acesso configurado. O login ainda não foi verificado pelo navegador.'
+      authenticated ? 'Acesso à aplicação confirmado.' : isConfigured
+        ? 'Acesso salvo. A conexão será verificada no mapeamento.'
         : 'Acesso pendente. Configure o endereço e a conta de teste antes do mapeamento.'
     )
   );
@@ -745,7 +761,7 @@ function targetAccessPanel(run, accountId) {
   if (isConfigured) {
     const dl = el('dl', null, 'metadata');
     for (const [title, value] of [
-      ['URL inicial', access.startUrl],
+      ['Endereço da aplicação', access.startUrl],
       ['Perfil de acesso', access.accessProfile || 'Não informado'],
       ['Preparação necessária', access.dataPreparation || 'Nenhuma'],
       ['Credencial de teste', 'Credencial cadastrada'],
@@ -767,14 +783,14 @@ function targetAccessPanel(run, accountId) {
   if (!isConfigured) editContainer.open = true;
   editContainer.append(el('summary', isConfigured ? 'Alterar configuração de acesso' : 'Configurar acesso'));
 
-  const lead = el('p', 'Informe a conta de teste e o endereço da aplicação que será testada. Esta conta é diferente da conta usada para entrar no nosso produto.', 'hint');
+  const lead = el('p', 'Informe o endereço e a conta da aplicação que será testada. Essa conta é diferente da sua conta QAtron.', 'hint');
   const form = el('form');
   form.noValidate = true;
 
-  const urlField = field(form, 'target-start-url', 'URL inicial', {
+  const urlField = field(form, 'target-start-url', 'Endereço da aplicação', {
     hint: run.status !== 'draft' && access.startUrl
-      ? 'Endereço fixado após o início da preparação (imutável nesta execução).'
-      : 'Protocolo HTTP ou HTTPS habilitado pela equipe, sem query string ou fragmento. Ex.: http://127.0.0.1:4000',
+      ? 'Para testar outro endereço, crie uma nova execução.'
+      : 'Informe um endereço autorizado, sem parâmetros após “?” ou “#”. Ex.: https://sua-aplicacao.com',
   });
   urlField.input.value = access.startUrl || '';
   if (run.status !== 'draft' && access.startUrl) {
@@ -798,7 +814,7 @@ function targetAccessPanel(run, accountId) {
 
   if (isConfigured) {
     const credSection = el('div', null, 'plan-section');
-    credSection.append(el('p', 'Credencial cadastrada no registro seguro.', 'hint'));
+    credSection.append(el('p', 'Dados de acesso salvos.', 'hint'));
     replaceCredBox = checkboxField(credSection, 'target-replace-credential', 'Substituir usuário e senha da conta de teste', { optional: true });
 
     const credInputs = el('div');
@@ -806,13 +822,11 @@ function targetAccessPanel(run, accountId) {
     usernameField = field(credInputs, 'target-username', 'Usuário da conta de teste', {
       optional: true,
       autocomplete: 'off',
-      hint: 'Conta na aplicação testada (diferente da conta do nosso produto).',
     });
     passwordField = field(credInputs, 'target-password', 'Senha da conta de teste', {
       optional: true,
       type: 'password',
       autocomplete: 'off',
-      hint: 'Senha da conta de teste. Preservada literalmente.',
     });
     credSection.append(credInputs);
     form.append(credSection);
@@ -827,12 +841,10 @@ function targetAccessPanel(run, accountId) {
   } else {
     usernameField = field(form, 'target-username', 'Usuário da conta de teste', {
       autocomplete: 'off',
-      hint: 'Conta na aplicação testada (diferente da conta do nosso produto).',
     });
     passwordField = field(form, 'target-password', 'Senha da conta de teste', {
       type: 'password',
       autocomplete: 'off',
-      hint: 'Senha da conta de teste. Preservada literalmente.',
     });
   }
 
@@ -877,7 +889,7 @@ function targetAccessPanel(run, accountId) {
     };
 
     if (bytes(JSON.stringify(payload)) > limit) {
-      tell(notice, 'O envio excede o limite de 16 KiB. Reduza os dados informados.', true);
+      tell(notice, 'O conteúdo informado excede o limite. Reduza os dados e tente novamente.', true);
       return;
     }
 
@@ -899,7 +911,7 @@ function targetAccessPanel(run, accountId) {
       if (passwordField) passwordField.input.value = '';
       if (usernameField && shouldSendCred) usernameField.input.value = '';
 
-      await detailPage('Acesso salvo com sucesso. Acesso configurado. O login ainda não foi verificado pelo navegador.');
+      await detailPage('Acesso salvo.');
       main.focus();
     } catch (error) {
       if (user?.id !== accountId) return;
@@ -926,23 +938,23 @@ function casesPanel(run, accountId, pending) {
   const currentDecision = caseDecisions.find(d => d.outputRevision === cases.revision);
 
   const statusText = !cases.current
-    ? 'Casos desatualizados — as dependências desta revisão foram alteradas.'
+    ? 'Estes casos precisam ser atualizados após as alterações anteriores.'
     : currentDecision
     ? (currentDecision.decision === 'approved'
       ? (run.routeDetail ? 'Casos aprovados. Consulte o detalhamento e suas pendências abaixo.'
-        : run.mapping ? 'Casos aprovados. O mapa está disponível; a associação de percursos é uma etapa separada.'
+        : run.mapping ? 'Casos aprovados. O mapa está disponível para definir os percursos.'
         : run.canMap ? 'Casos aprovados. Pronto para mapear a aplicação.'
         : run.targetAccess?.revision > 0 ? 'Casos aprovados. O mapeamento ainda não foi iniciado.'
         : 'Casos aprovados. Configure o acesso à aplicação antes do mapeamento.')
       : 'Alterações solicitadas. Os casos aguardam revisão.')
     : (verdicts.length === 1 && verdicts[0].status === 'approved'
-      ? 'Conjunto validado. Disponível para revisão humana.'
-      : 'Conteúdo provisório — a validação desta revisão ainda não foi aprovada.');
+      ? 'Casos validados. Prontos para sua revisão.'
+      : 'Casos em revisão. Aguarde a validação para aprová-los.');
 
   panel.append(el('p', `Casos de teste / Revisão ${cases.revision}`, 'eyebrow'), el('h2', 'Casos de teste'),
-    el('p', run.routeDetail ? 'Casos lógicos aprovados — consulte a associação de percursos de cada caso abaixo.'
-      : run.mapping ? 'Casos lógicos — mapa disponível, aguardando associação dos percursos.'
-      : 'Casos lógicos — percurso ainda não mapeado.', 'lead'),
+    el('p', run.routeDetail ? 'Consulte os percursos dos casos aprovados abaixo.'
+      : run.mapping ? 'O mapa está disponível. Defina os percursos dos casos para continuar.'
+      : 'O percurso será definido após o mapeamento.', 'lead'),
     message(statusText));
   for (const item of cases.payload.testCases) {
     const detail = el('details', null, 'plan-section'); detail.append(el('summary', `${referenceLabel(item.id, 'Caso')} · ${referenceList(item.ruleIds, 'Critério')}`));
@@ -975,7 +987,7 @@ function casesPanel(run, accountId, pending) {
   if (currentDecision?.decision === 'approved' && run.canMap) {
     const map = el('section', null, 'next-action mapping-start');
     map.append(el('h3', 'Mapear aplicação'),
-      el('p', 'O agente entrará na aplicação, autenticará pela interface e percorrerá as telas relevantes. O mapa observado será examinado pelo validador visual em sessão independente.'));
+      el('p', 'Vamos acessar a aplicação e identificar os caminhos necessários para os testes.'));
     const notice = message(); map.append(notice);
     const start = button('Mapear aplicação', async () => {
       start.disabled = true; tell(notice, 'Solicitando o mapeamento da aplicação…');
@@ -994,7 +1006,7 @@ function casesPanel(run, accountId, pending) {
 
   if (run.canDecideCases && !currentDecision) {
     const review = el('section', null, 'plan-section');
-    review.append(el('h3', 'Decidir sobre os casos de teste'), el('p', 'Aprovar registra sua decisão e mantém a execução em espera. O servidor confere a revisão e suas dependências antes de aceitar.'));
+    review.append(el('h3', 'Decidir sobre os casos de teste'), el('p', 'Revise os casos antes de aprová-los. Depois, inicie o mapeamento da aplicação.'));
     const notice = message(); review.append(notice);
     const form = el('form'); form.noValidate = true;
     const comment = field(form, 'case-comment', 'Comentário sobre os casos', { optional: true, textarea: true, hint: 'Obrigatório ao solicitar alterações. Até 4.000 caracteres.' });
@@ -1012,7 +1024,7 @@ function casesPanel(run, accountId, pending) {
       }
       const payload = { outputId: cases.id, outputRevision: cases.revision, ...(changes ? { comment: comment.input.value } : {}) };
       if (bytes(JSON.stringify(payload)) > limit) {
-        invalid(comment, 'O comentário torna o envio maior que 16 KiB. Reduza seu tamanho.'); comment.input.focus(); return;
+        invalid(comment, 'O comentário excede o limite. Reduza-o e tente novamente.'); comment.input.focus(); return;
       }
       pending = { accountId, runId: run.id, outputId: cases.id, outputRevision: cases.revision, comment: comment.input.value,
         decision: changes ? 'changes_requested' : 'approved' };
@@ -1023,7 +1035,7 @@ function casesPanel(run, accountId, pending) {
         await api(`/runs/${encodeURIComponent(run.id)}/${changes ? 'request-changes' : 'approve'}`, {
           accountId, method: 'POST', body: JSON.stringify(payload),
         });
-        await detailPage('A solicitação foi aceita. Confira abaixo a decisão consultada no registro salvo.', false, pending);
+        await detailPage('Decisão registrada.', false, pending);
         main.focus();
       } catch (error) {
         if (!user) return;
@@ -1052,7 +1064,7 @@ function captureFigure(run, observation, accountId) {
   const img = el('img');
   img.alt = 'Captura da tela observada'; img.loading = 'lazy';
   if (observation.width && observation.height) { img.width = observation.width; img.height = observation.height; }
-  const caption = el('figcaption', [referenceLabel(observation.id || observation.assetId, 'Captura'), observation.at ? date(observation.at) : '', observation.width && observation.height ? `${observation.width}×${observation.height}` : '', observation.caseId ? `${referenceLabel(observation.caseId, 'Caso')} · ${referenceLabel(observation.attemptId, 'Tentativa')}` : ''].filter(Boolean).join(' · '));
+  const caption = el('figcaption', [referenceLabel(observation.id || observation.assetId, 'Captura'), observation.at ? date(observation.at) : '', observation.caseId ? `${referenceLabel(observation.caseId, 'Caso')} · ${referenceLabel(observation.attemptId, 'Tentativa')}` : ''].filter(Boolean).join(' · '));
   figure.append(img, caption);
   img._evidenceReady = evidenceUrl(run.id, observation.assetId, accountId).then(url => {
     if (user?.id !== accountId || evidenceRunId !== run.id || !img.isConnected) { URL.revokeObjectURL(url); evidenceUrls.delete(url); throw new Error('Conta alterada.'); }
@@ -1096,7 +1108,7 @@ function routeDetailPanel(run, accountId) {
   const panel = el('section', null, 'panel');
   panel.append(el('h2', 'Detalhamento dos percursos'));
   if (run.canDetailRoutes && run.mapping) {
-    panel.append(el('p', 'O projetista associará os casos aprovados aos caminhos do mapa. O validador revisará as associações em sessão independente.'));
+    panel.append(el('p', 'Defina os percursos dos casos a partir do mapa da aplicação.'));
     const notice = message();
     const start = button('Detalhar percursos', async () => {
       start.disabled = true; tell(notice, 'Solicitando o detalhamento dos percursos…');
@@ -1117,7 +1129,7 @@ function routeDetailPanel(run, accountId) {
     else if (!routes.current) panel.append(message('Detalhamento desatualizado — as dependências foram alteradas.'));
     else if (routes.validations.some(value => value.status === 'approved')) panel.append(message('Detalhamento validado. Consulte os percursos e as pendências de cada caso.'));
     else if (run.status === 'awaiting_input') panel.append(message('Detalhamento com impedimentos. Responda às perguntas e consulte as opções de retomada.'));
-    else panel.append(message('Detalhamento provisório — nenhuma prontidão para execução foi publicada.'));
+    else panel.append(message('Percursos em revisão. Aguarde a validação para executar os testes.'));
     panel.append(planSection('Pareceres sobre o detalhamento', routes.validations,
       value => `${validations[value.status] || value.status} · Revisão ${value.outputRevision} · ${value.reason}`));
     for (const verdict of routes.validations) if (verdict.findings.length) panel.append(planSection('Achados do detalhamento', verdict.findings,
@@ -1199,7 +1211,7 @@ function mappingPanel(run, accountId) {
     const actions = el('details', null, 'plan-section');
     actions.append(el('summary', `Ações registradas (${run.mappingActions.length})`));
     for (const action of run.mappingActions) {
-      actions.append(el('p', `${action.tool} · ${date(action.at)}${action.observationId ? ' · ' + referenceLabel(action.observationId, 'Captura') : ''}${action.note ? ' — ' + action.note : ''}`, 'hint'));
+      actions.append(el('p', `${toolNames[action.tool] || 'Ação de navegação'} · ${date(action.at)}${action.observationId ? ' · ' + referenceLabel(action.observationId, 'Captura') : ''}${action.note ? ' — ' + action.note : ''}`, 'hint'));
     }
     panel.append(actions);
   }
@@ -1236,19 +1248,19 @@ function pendingComment(run, accountId, pending) {
 const canAnswer = run => run.canAnswer ?? (['curation', 'planning', 'mapping', 'route_detail', 'execution'].includes(run.phase) && ['awaiting_input', 'awaiting_approval', 'ready'].includes(run.status));
 function questionPanel(run, accountId, pending) {
   const panel = el('section', null, 'panel'); panel.append(el('h2', 'Perguntas e esclarecimentos'),
-    el('p', 'Responda às dúvidas localizadas e retome o trabalho. Mudanças de regra ou escopo exigem nova revisão e as aprovações correspondentes.'));
+    el('p', 'Responda às perguntas para continuar. Mudanças de regra ou escopo precisarão de nova revisão e aprovação.'));
   const editable = canAnswer(run);
   for (const [index, question] of run.questions.entries()) {
     const item = el('section', null, 'plan-section');
     const scope = question.caseIds?.length ? `Casos afetados: ${referenceList(question.caseIds, 'Caso')}` : question.ruleIds?.length ? `Critérios afetados: ${referenceList(question.ruleIds, 'Critério')}` : question.requirementIds.length ? `Requisitos afetados: ${referenceList(question.requirementIds, 'Requisito')}` : 'Afeta todo o material';
     item.append(el('h3', referenceLabel(question.id, 'Pergunta')), el('p', question.description, 'text-content'),
-      el('p', `${scope}. ${question.blocking ? 'Bloqueia apenas esse escopo.' : 'Não bloqueia o planejamento.'}`, 'hint'));
+      el('p', `${scope}. ${question.blocking ? 'Os itens indicados aguardam esta resposta.' : 'Não bloqueia o planejamento.'}`, 'hint'));
     for (const source of question.sources) item.append(el('p', sourceLabel(source), 'hint'), el('blockquote', source.quote, 'text-content'));
     const key = `${accountId}:${run.id}:${question.outputId}:${question.outputRevision}:${question.id}`;
     const answer = run.answers?.find(value => value.id === question.answerId);
     if (answer) {
       if (answerDrafts.get(key)?.text === answer.text) answerDrafts.delete(key);
-      item.append(el('p', `Resposta r${answer.revision || 1} registrada em ${date(answer.at)}`, 'hint'), el('p', answer.text, 'text-content'));
+      item.append(el('p', `Resposta · Versão ${answer.revision || 1} registrada em ${date(answer.at)}`, 'hint'), el('p', answer.text, 'text-content'));
     }
     if (editable && question.outputId) {
       const correction = answer ? el('details', null, 'plan-section') : null;
@@ -1263,7 +1275,7 @@ function questionPanel(run, accountId, pending) {
       form.addEventListener('submit', async event => {
         event.preventDefault(); if (sending) return;
         const payload = { outputId: question.outputId, outputRevision: question.outputRevision, questionId: question.id, text: response.input.value, expectedAnswerRevision: answer?.revision ?? 0 };
-        const problem = !payload.text.trim() ? 'Informe a resposta.' : count(payload.text) > 4000 ? 'Use até 4.000 caracteres.' : bytes(JSON.stringify(payload)) > limit ? 'O envio excede 16 KiB. Reduza a resposta.' : '';
+        const problem = !payload.text.trim() ? 'Informe a resposta.' : count(payload.text) > 4000 ? 'Use até 4.000 caracteres.' : bytes(JSON.stringify(payload)) > limit ? 'A resposta excede o limite. Reduza-a e tente novamente.' : '';
         if (invalid(response, problem)) { response.input.focus(); return; }
         remember(); const activeComment = pendingComment(run, accountId, pending);
         sending = true; save.disabled = response.input.readOnly = true; tell(notice, 'Registrando resposta…');
@@ -1313,19 +1325,36 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   const views = detailTabs();
   if (focusedTab) document.getElementById(focusedTab)?.focus({ preventScroll: true });
   views.results.append(resultsPanel(run, accountId));
-  if (run.versions?.length) views.overview.append(planSection('Revisões preservadas', run.versions, item => `${referenceLabel(item.id, 'Saída')} · Revisão ${item.revision}`));
-  if (run.invalidations?.length) views.overview.append(planSection('Revisões invalidadas', run.invalidations, item => `${referenceLabel(item.outputId, 'Saída')} · Revisão ${item.outputRevision} — ${item.reason}`));
+  if (run.versions?.length) views.overview.append(planSection('Histórico de versões', run.versions, item => `${referenceLabel(item.id, 'Saída')} · Revisão ${item.revision}`));
+  if (run.invalidations?.length) views.overview.append(planSection('Versões invalidadas', run.invalidations, item => `${referenceLabel(item.outputId, 'Saída')} · Revisão ${item.outputRevision} — ${item.reason}`));
   if (currentArtifacts.length) views.overview.append(planSection('Fontes recebidas', currentArtifacts, item => `${item.name} · ${item.pages?.length ? `${item.pages.length} páginas · ` : ''}Revisão ${item.version}`));
   if (run.progress?.activeRole || run.progress?.activity) {
-    summary.append(message([roles[run.progress.activeRole] || run.progress.activeRole, activities[run.progress.activity] || run.progress.activity].filter(Boolean).join(' · ')));
+    summary.append(message(activities[run.progress.activity] || 'Processando a execução…'));
   }
-  if (run.stopReason) summary.append(message(run.stopReason.message, ['error', 'interrupted'].includes(run.status)));
+  if (run.stopReason) {
+    const technical = ['AUTH_NOT_CONFIGURED', 'MODEL_NOT_CONFIGURED', 'MODEL_UNAVAILABLE', 'CREDENTIAL_UNAVAILABLE', 'MODEL_ERROR', 'INVALID_OUTPUT', 'INVALID_MODEL_OUTPUT', 'STORAGE_FAILURE', 'TIMEOUT', 'VALIDATOR_LIMIT', 'REVISION_LIMIT', 'CONTEXT_LIMIT', 'TARGET_NOT_ALLOWED'].includes(run.stopReason.code);
+    summary.append(message(technical ? errorText(run.stopReason) : run.stopReason.message, ['error', 'interrupted'].includes(run.status)));
+  }
   const summaryActions = el('div', null, 'actions summary-actions'); summary.append(summaryActions);
   if (run.targetAccess) views.overview.append(targetAccessPanel(run, accountId));
   if (run.cases) views.cases.append(casesPanel(run, accountId, pending));
-  else { const empty = el('section', null, 'panel empty'); empty.append(el('h2', 'Casos de teste'), el('p', 'Os casos estarão disponíveis após a aprovação do plano e a geração do conjunto.')); views.cases.append(empty); }
+  else {
+    const empty = el('section', null, 'panel empty');
+    const text = run.canCreateCases ? 'Selecione “Gerar casos de teste” para continuar.'
+      : run.status === 'running' && run.phase === 'case_design' ? 'Criando os casos de teste. Acompanhe o progresso da execução.'
+      : ['completed', 'cancelled', 'interrupted', 'error'].includes(run.status) ? 'Nenhum caso está disponível nesta execução.'
+      : 'Os casos ficarão disponíveis após a aprovação do plano e sua geração.';
+    empty.append(el('h2', 'Casos de teste'), el('p', text)); views.cases.append(empty);
+  }
   if (run.mapping) views.map.append(mappingPanel(run, accountId));
-  else { const empty = el('section', null, 'panel empty'); empty.append(el('h2', 'Mapa de navegação'), el('p', 'O mapa estará disponível após a aprovação dos casos e a exploração da aplicação.')); views.map.append(empty); }
+  else {
+    const empty = el('section', null, 'panel empty');
+    const text = run.canMap ? 'Selecione “Mapear aplicação” para continuar.'
+      : run.status === 'running' && run.phase === 'mapping' ? 'Mapeando a aplicação. Acompanhe o progresso da execução.'
+      : ['completed', 'cancelled', 'interrupted', 'error'].includes(run.status) ? 'Nenhum mapa está disponível nesta execução.'
+      : 'O mapa ficará disponível após a aprovação dos casos, a configuração do acesso e o mapeamento da aplicação.';
+    empty.append(el('h2', 'Mapa de navegação'), el('p', text)); views.map.append(empty);
+  }
   const mappingStart = views.cases.querySelector('.mapping-start');
   if (mappingStart) summary.append(mappingStart);
   if (run.canDetailRoutes || run.routeDetail || run.phase === 'route_detail') views.cases.append(routeDetailPanel(run, accountId));
@@ -1340,7 +1369,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
     views.overview.append(copy);
   }
   if (run.answers?.length) views.overview.append(planSection('Histórico de esclarecimentos', run.answers,
-    value => `${referenceLabel(value.questionId, 'Pergunta')} · Resposta r${value.revision || 1} · Revisão da saída ${value.outputRevision} · ${date(value.at)} — ${value.text}`));
+    value => `${referenceLabel(value.questionId, 'Pergunta')} · Resposta · Versão ${value.revision || 1} · Versão relacionada ${value.outputRevision} · ${date(value.at)} — ${value.text}`));
   if (run.canResume) {
     const notice = message(); const resume = button(['curation', 'planning'].includes(run.phase) ? 'Retomar preparação com as respostas' : 'Retomar com as respostas', async () => {
       if ([...answerDrafts].some(([key, draft]) => key.startsWith(`${accountId}:${id}:`) && draft.text.trim())) {
@@ -1389,7 +1418,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   if (run.questions?.length) summaryActions.append(button('Ver perguntas e respostas', () => views.choose('overview', true), 'secondary'));
   if (run.status === 'awaiting_approval' && run.phase === 'planning') summaryActions.append(button('Revisar plano', () => views.choose('plan', true), 'secondary'));
   if (run.canDecideCases) summaryActions.append(button('Revisar casos', () => views.choose('cases', true), 'secondary'));
-  if (run.canDetailRoutes) summaryActions.append(button('Revisar percursos', () => views.choose('cases', true), 'secondary'));
+  if (run.canDetailRoutes) summaryActions.append(button('Ver etapa de percursos', () => views.choose('cases', true), 'secondary'));
   if (run.canCreateCases && run.plan) {
     const notice = message(); const generate = button('Gerar casos de teste', async () => {
       generate.disabled = true; tell(notice, 'Solicitando a geração dos casos de teste…');
@@ -1420,7 +1449,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
     !run.approvals.some(decision => decision.outputId === pending.outputId && decision.outputRevision === pending.outputRevision);
   if (pending && !restorePlanComment && !restoreCaseComment) main.append(preservedComment(pending));
   if (!run.plan) {
-    const empty = el('section', null, 'panel empty'); empty.append(el('h2', 'Plano de testes'), el('p', 'Ainda não há plano disponível para consulta.')); views.plan.append(empty);
+    const empty = el('section', null, 'panel empty'); empty.append(el('h2', 'Plano de testes'), el('p', run.status === 'draft' ? 'Selecione “Preparar plano” para começar.' : run.status === 'running' ? 'Preparando o plano. Acompanhe o progresso da execução.' : 'Ainda não há plano disponível para consulta.')); views.plan.append(empty);
     if (run.status === 'draft') summary.append(message('Material recebido. O processamento ainda não foi iniciado.'));
     return;
   }
@@ -1448,7 +1477,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
     if (restorePlanComment) views.plan.append(preservedComment(pending));
     summaryActions.append(button('Atualizar consulta', () => detailPage('', false, pendingComment(run, accountId, pending)), 'secondary')); return;
   }
-  const review = el('section', null, 'panel'); review.append(el('h2', `Decidir sobre a revisão ${plan.revision}`), el('p', 'Aprovar registra sua decisão e mantém a execução em espera. O servidor confere a revisão e suas dependências antes de aceitar.'));
+  const review = el('section', null, 'panel'); review.append(el('h2', `Decidir sobre a revisão ${plan.revision}`), el('p', 'Revise o plano antes de aprová-lo. Depois, gere os casos de teste.'));
   const notice = message(); review.append(notice); const form = el('form'); form.noValidate = true;
   const comment = field(form, 'comment', 'Comentário', { optional: true, textarea: true, hint: 'Obrigatório ao solicitar alterações. Até 4.000 caracteres.' });
   if (restorePlanComment) comment.input.value = pending.comment;
@@ -1458,7 +1487,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
     if (submitting) return;
     if (changes && invalid(comment, !comment.input.value.trim() ? 'Informe um comentário para solicitar alterações.' : count(comment.input.value) > 4000 ? 'Use até 4.000 caracteres.' : '')) { comment.input.focus(); return; }
     const payload = { outputId: plan.id, outputRevision: plan.revision, ...(changes ? { comment: comment.input.value } : {}) };
-    if (bytes(JSON.stringify(payload)) > limit) { invalid(comment, 'O comentário torna o envio maior que 16 KiB. Reduza seu tamanho.'); comment.input.focus(); return; }
+    if (bytes(JSON.stringify(payload)) > limit) { invalid(comment, 'O comentário excede o limite. Reduza-o e tente novamente.'); comment.input.focus(); return; }
     pending = { accountId, runId: id, outputId: plan.id, outputRevision: plan.revision, comment: comment.input.value,
       decision: changes ? 'changes_requested' : 'approved' };
     submitting = true; approve.disabled = change.disabled = comment.input.readOnly = true; tell(notice, 'Registrando decisão…');
@@ -1466,7 +1495,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
       await sameAccount(accountId);
       if (user?.id !== accountId) return;
       await api(`/runs/${encodeURIComponent(id)}/${changes ? 'request-changes' : 'approve'}`, { accountId, method: 'POST', body: JSON.stringify(payload) });
-      await detailPage('A solicitação foi aceita. Confira abaixo a decisão consultada no registro salvo.', false, pending); main.focus();
+      await detailPage('Decisão registrada.', false, pending); main.focus();
     } catch (error) {
       if (!user) return;
       if (error.status === 409) { await detailPage(`Decisão recusada. ${errorText(error)} Nenhuma decisão foi reaplicada.`, true, pending); main.focus(); }

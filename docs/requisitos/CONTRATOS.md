@@ -617,10 +617,14 @@ com agentes; T6.1 acrescenta `/continue` exclusivamente para casos do plano apro
 | `POST /api/runs/:id/request-changes` | `{outputId, outputRevision, comment}` | `200`, `{status, phase, approvals}` |
 
 `user` contém somente `id`, `name`, `email` e `teamName`. O ID interno é gerado pelo
-backend. Nome e equipe têm de 1 a 120 caracteres após remoção de espaços externos;
+backend com UUID v4 aleatório, não sequencial. Nome e equipe têm de 1 a 120 caracteres após remoção de espaços externos;
 equipe é opcional. E-mail tem no máximo 254 caracteres e é normalizado com remoção
-de espaços externos e conversão para minúsculas, inclusive na configuração.
-Senha tem de 15 a 128 caracteres Unicode, sem remoção de espaços ou truncamento.
+de espaços externos e conversão para minúsculas.
+No cadastro, a senha tem de 8 a 128 caracteres Unicode, com pelo menos uma
+maiúscula (`\p{Lu}`), um dígito de `0` a `9` e uma pontuação ou símbolo
+(`\p{P}`/`\p{S}`). Espaço não conta como especial; minúscula não é obrigatória.
+A senha é preservada literalmente, sem normalização, remoção de espaços ou
+truncamento. O login verifica a senha informada sem reaplicar a política de criação.
 `outputId` tem de 1 a 128 caracteres e não pode conter apenas espaços;
 `outputRevision` é inteiro positivo seguro. `comment` tem de 1 a 4.000 caracteres,
 não pode conter apenas espaços e é preservado literalmente.
@@ -668,24 +672,29 @@ necessária, sem caminho, credenciais, consulta ou fragmento. HTTPS é aceito; H
 é restrito a loopback para uso local ou túnel. Origem inválida impede carregar a
 configuração. Origem ausente mantém o healthcheck disponível, mas autenticação
 responde `503`, informando a configuração pendente.
-`PILOT_ALLOWED_EMAILS` é a lista separada por vírgulas de e-mails habilitados.
-Cadastro e login exigem participação na lista; removê-la revoga o acesso da conta.
-Lista vazia desabilita acesso por contas; a lista não verifica titularidade de e-mail.
+O cadastro é aberto a qualquer e-mail válido e inicia a sessão imediatamente,
+sem convite, lista de e-mails autorizados ou confirmação de titularidade por e-mail.
+Isso não amplia as origens permitidas para a aplicação testada.
 
-As contas são persistidas em `DATA_DIR/auth/users.json`, envelope
-`{schemaVersion: 1, users: [...]}`, com
-ID interno, nome, e-mail normalizado, equipe opcional, criação UTC e dados do hash.
-Cadastro serializa **ler → verificar unicidade → gravar**, com arquivo temporário,
-sincronização e renomeação atômica, diretório `0700` e arquivo `0600`. Cadastros
-concorrentes não duplicam e-mail nem removem contas. O armazenamento exige um único
-processo escritor por ambiente, como o de execuções.
+As contas são persistidas em `DATA_DIR/auth/users.sqlite`, usando SQLite nativo do
+Node.js, com ID UUID v4, nome, e-mail normalizado único, equipe opcional, criação UTC
+e dados do hash. As restrições do banco impedem IDs/e-mails duplicados, inclusive em
+cadastros concorrentes. O diretório usa `0700` e o banco `0600`; a aplicação conserva
+um único processo escritor por ambiente e não altera o armazenamento das execuções.
 
-Senha usa `crypto.scrypt` assíncrono com salt aleatório de 16 bytes, chave de
-64 bytes, `N=32768`, `r=8`, `p=3` e `maxmem=64 MiB`. Algoritmo, parâmetros, salt e
-hash são salvos; a verificação usa `timingSafeEqual`. Os parâmetros seguem as
-[configurações scrypt da OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt)
-e a [API assíncrona do Node.js 24](https://nodejs.org/docs/latest-v24.x/api/crypto.html#cryptoscryptpassword-salt-keylen-options-callback).
+Senha usa `crypto.argon2` assíncrono, variante **Argon2id**, versão 19, salt aleatório
+de 16 bytes, saída de 32 bytes, memória de 19.456 KiB, duas passagens e paralelismo 1.
+Algoritmo, versão, parâmetros, salt e hash são persistidos; a comparação usa
+`timingSafeEqual`. A implementação usa a
+[API nativa do Node.js 24](https://nodejs.org/docs/latest-v24.x/api/crypto.html#cryptoargon2algorithm-parameters-callback).
 Senha, hash e cookie não são registrados em logs nem devolvidos em JSON.
+
+A transição das contas anteriores é operacional e explícita: arquivar e verificar
+contas, execuções, originais, credenciais dos alvos e mídias, com o serviço parado,
+antes de começar com banco vazio. Não há conversão automática de hashes nem herança
+de histórico pelo mesmo e-mail. A presença de `auth/users.json` impede iniciar a
+nova aplicação; falha/corrupção do banco preserva os dados e impede a inicialização.
+Consultar [o procedimento de transição e restauração](../OPERACAO.md#transição-única-para-cadastro-aberto).
 
 Cada cadastro ou login bem-sucedido gera token aleatório novo de 32 bytes;
 identificadores de sessão fornecidos pelo cliente não são adotados. A sessão fica
@@ -699,7 +708,8 @@ e [origem em APIs](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Req
 
 Cadastro e login compartilham limite de **dez tentativas por e-mail** e **trinta
 por endereço de conexão em quinze minutos**, com `429` no excesso. O endereço vem
-da conexão; `X-Forwarded-For` não é confiável neste recorte. Contadores vencidos
+da conexão; `X-Forwarded-For` não é confiável. Pessoas que chegam pelo mesmo
+relay ou proxy compartilham o limite por endereço. Contadores vencidos
 são removidos; o teto é de 10.000 chaves combinando e-mails e endereços. Saturação
 recusa novas chaves com `429` até a expiração de contadores. Login incorreto usa mensagem
 genérica, sem distinguir e-mail inexistente de senha incorreta.
@@ -751,9 +761,9 @@ Não são expostos stack traces, caminhos, segredos ou dados de outra conta.
 
 | HTTP | Situação e códigos |
 | --- | --- |
-| `400` | Entrada/JSON inválidos (`INVALID_INPUT`, `INVALID_JSON`), comentário obrigatório (`COMMENT_REQUIRED`), ID de execução inválido (`INVALID_RUN_ID`) ou conta esperada ausente, repetida ou inválida (`INVALID_EXPECTED_USER_ID`) |
+| `400` | Entrada/JSON inválidos (`INVALID_INPUT`, `INVALID_JSON`), senha fora da política (`INVALID_PASSWORD`), comentário obrigatório (`COMMENT_REQUIRED`), ID de execução inválido (`INVALID_RUN_ID`) ou conta esperada ausente, repetida ou inválida (`INVALID_EXPECTED_USER_ID`) |
 | `401` | Sessão ausente, inválida ou expirada (`INVALID_SESSION`); login inválido com mensagem genérica (`INVALID_CREDENTIALS`) |
-| `403` | Origem recusada (`ORIGIN_REJECTED`) ou cadastro não habilitado (`REGISTRATION_NOT_ALLOWED`) |
+| `403` | Origem recusada (`ORIGIN_REJECTED`) |
 | `404` | Execução inexistente ou de outro proprietário (`RUN_NOT_FOUND`); rota não oferecida (`NOT_FOUND`) |
 | `405` | Método não oferecido para a rota (`METHOD_NOT_ALLOWED`) |
 | `409` | Conta esperada diferente da sessão (`ACCOUNT_CHANGED`); cadastro duplicado (`ACCOUNT_EXISTS`); revisão, estado, parecer ou decisão incompatíveis (`STALE_VERSION`, `INVALID_STATE`, `INSUFFICIENT_VALIDATION`, `DECISION_CONFLICT`, `INVALID_DECISION`); registro inválido/ambíguo (`INVALID_RECORD`, `AMBIGUOUS_RECORD`) |
@@ -764,7 +774,7 @@ Não são expostos stack traces, caminhos, segredos ou dados de outra conta.
 
 ### Exemplos fictícios e teste HTTP
 
-Configure `APP_ORIGIN=http://127.0.0.1:3000` e habilite `ana@example.invalid`.
+Configure `APP_ORIGIN=http://127.0.0.1:3000`; qualquer e-mail válido pode cadastrar-se.
 Os comandos usam somente dados fictícios. A execução `run-demo-001` representa
 um registro previamente criado pelo backend para o ID interno retornado no
 cadastro; não há endpoint de preparação ou fixture carregada pela aplicação.
@@ -775,13 +785,13 @@ qa_demo_dir=$(mktemp -d)
 curl -sS -c "$qa_demo_dir/cookies" -o "$qa_demo_dir/account.json" \
   http://127.0.0.1:3000/api/auth/register \
   -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
-  --data '{"name":"Ana Exemplo","email":"ana@example.invalid","password":"Senha ficticia de exemplo 123","teamName":"Equipe Demo"}'
+  --data '{"name":"Ana Exemplo","email":"ana@example.invalid","password":"Senha ficticia de exemplo 123!","teamName":"Equipe Demo"}'
 
 # Em acessos posteriores, o login também emite uma sessão nova.
 curl -sS -c "$qa_demo_dir/cookies" -o "$qa_demo_dir/account.json" \
   http://127.0.0.1:3000/api/auth/login \
   -H 'Origin: http://127.0.0.1:3000' -H 'Content-Type: application/json' \
-  --data '{"email":"ana@example.invalid","password":"Senha ficticia de exemplo 123"}'
+  --data '{"email":"ana@example.invalid","password":"Senha ficticia de exemplo 123!"}'
 
 # Capture a conta ao preparar a operação; uma consulta posterior não a substitui.
 qa_demo_expected=$(node --input-type=module -e 'import fs from "node:fs"; console.log(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).user.id)' "$qa_demo_dir/account.json")

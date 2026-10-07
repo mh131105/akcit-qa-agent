@@ -1,10 +1,12 @@
-# Especificação do protótipo
+# Especificação do produto
 
-Versão 1.3 · 26/09/2026 · Entrega: 26/09 às 17h, horário de Manaus.
+Versão 1.4 · 07/10/2026 · Cadastro aberto e acabamento do MVP.
+O nome do arquivo foi preservado para manter os links existentes.
 
 Este documento define o que implementar e como aceitar a entrega. O fluxo e os seis
 agentes refletem as decisões da equipe. As telas, os limites operacionais e os critérios
-abaixo formam a base técnica proposta pelo CTO. Ainda não são funcionalidades entregues.
+abaixo definem os requisitos; evidências históricas de implementação e aceite
+permanecem nos registros de cada entrega.
 
 ## 1. Produto e limite da entrega
 
@@ -25,8 +27,9 @@ capturas de tela, relatório web e PDF, cancelamento e recuperação do material
 **Fora desta sprint:** organizações com membros e permissões, convites, SSO, cobrança,
 vídeos curtos por tentativa (evolução futura), integração com Jira/GitHub, OCR, planilhas, aplicativo móvel, editor de fluxogramas,
 chat geral, testes de carga, de segurança e de usabilidade, concorrência de navegadores e memória
-entre sprints. Recuperação de conta será assistida pelo operador no piloto. O cadastro
-será restrito aos participantes habilitados pela equipe; a liberação pública fica fora.
+entre sprints. Recuperação de senha por e-mail e confirmação de e-mail não fazem
+parte desta entrega. O cadastro é livre e inicia a sessão imediatamente; a publicação
+do domínio/HTTPS permanece uma etapa operacional separada.
 
 <!-- ponytail: um piloto com um proprietário por execução e um trabalho de agente por vez; colaboração e filas distribuídas só quando houver uso que justifique. -->
 
@@ -181,7 +184,7 @@ fazem parte da entrega; os critérios são verificações a realizar na implemen
 | RF-07 | Apresentar relatório padronizado com esperado, observado, veredito, US/CA, fontes, evidências, cobertura e limitações. | Incluir aprovados, reprovados, bloqueados, inconclusivos e não executados. Conclusões publicadas vêm de saídas validadas; relatório parcial mantém a indicação de interrupção. |
 | RF-08 | Salvar entradas, versões, decisões, perguntas, tentativas e mídias ao longo da execução. | Atualizar a página mantém o estado. Reiniciar o serviço preserva registros confirmados e marca trabalho ativo como interrompido; não retoma uma ação de navegador automaticamente. |
 | RF-09 | Submeter curadoria, plano, casos, mapa, detalhamento, resultados e relatório ao validador independente. | Parecer identifica versão e motivo. Aprovação libera dependentes; correção volta ao autor; bloqueio/erro não liberam avanço. Orquestrador não sobrepõe o parecer. |
-| RF-10 | Oferecer cadastro básico, entrada, saída e edição de nome e nome opcional da equipe no primeiro acesso. | Conta do produto usa nome, e-mail e senha. Sessão protege execuções e mídias. Mostrar que a conta usada pelo agente no aplicativo é um acesso distinto. |
+| RF-10 | Oferecer cadastro básico, entrada, saída e edição de nome e nome opcional da equipe no primeiro acesso. | Conta do produto usa nome, e-mail e senha; cadastro livre com acesso imediato, UUID v4 e e-mail único. Senha de 8 a 128 caracteres com maiúscula, número e pontuação/símbolo; hash Argon2id em SQLite. Sessão protege execuções e mídias. Mostrar que a conta usada pelo agente no aplicativo é um acesso distinto. |
 | RF-11 | Listar execuções da conta, com nome, aplicação, data, etapa e situação; permitir reabrir e excluir uma execução encerrada. | Lista vazia orienta a criar a primeira execução; busca e filtro funcionam. Exclusão pede confirmação e remove seus dados conforme RNF-12. Uma conta não consulta execuções de outra. |
 | RF-12 | Exibir um board simples com histórias, critérios e cobertura. | Expandir uma US mostra seus CA, fontes, casos associados e pendências. Exibir critérios sem caso e sua justificativa. Não exigir arrastar cartões ou configurar colunas. |
 | RF-13 | Gerar um plano distinto dos casos: objetivo, cobertura por CA, prioridades, exclusões justificadas, abordagem e pré-condições conhecidas. | Mostrar plano validado para revisão humana. Artefatos necessários mas ausentes ficam identificados; o plano não depende de conhecer os cliques da interface. |
@@ -220,7 +223,7 @@ nem promessas de capacidade comprovada. São conferidos no ambiente de demonstra
 | RNF-01 | **Uso claro.** Cada etapa mostra situação e uma ação principal. Campos têm rótulo, obrigatoriedade e erro junto ao campo; mensagens indicam como resolver. Ações indisponíveis explicam o motivo. Sem percentual de progresso estimado pelo modelo. |
 | RNF-02 | **Acessibilidade e apresentação.** Fluxo principal utilizável por teclado, com foco visível, rótulos e estados compreensíveis sem depender só de cor. Conferir em desktop de 1366 px e leitura em 390 px; tabelas podem rolar horizontalmente em áreas delimitadas. |
 | RNF-03 | **Resposta da interface.** Mostrar retorno visual ao envio em até 1 s e progresso persistido em até 5 s durante conexão normal. Consultas de histórico/metadados respondem em até 2 s em 20 consultas no ambiente de demonstração. Tempo de modelo, upload e captura é indicado separadamente. |
-| RNF-04 | **Acesso e segredos.** Conferir autorização no servidor para cada execução, arquivo e mídia; senha protegida por hash próprio para senhas, sessão protegida e invalidada no logout. Credencial do alvo fica em armazenamento privado, fora de logs, respostas, fontes e prompts gerais; capturas dos casos começam após autenticação e excluem credenciais e informações sensíveis. Testar com duas contas e um segredo fictício identificável. |
+| RNF-04 | **Acesso e segredos.** Conferir autorização no servidor para cada execução, arquivo e mídia; senha protegida por Argon2id em SQLite, IDs de contas UUID v4 não sequenciais, sessão protegida e invalidada no logout. Credencial do alvo fica em armazenamento privado, fora de logs, respostas, fontes e prompts gerais; capturas dos casos começam após autenticação e excluem credenciais e informações sensíveis. Testar com duas contas e um segredo fictício identificável. |
 | RNF-05 | **Isolamento do piloto.** Navegar somente em destinos habilitados pela equipe, incluindo redirecionamentos e destinos privados autorizados para desenvolvimento. Bloquear acesso a serviços internos não autorizados. Conteúdo de páginas/arquivos não amplia tools ou permissões. Exposição pública exige HTTPS; acesso local pode usar o túnel existente. |
 | RNF-06 | **Integridade e recuperação.** Validar contratos e referências no servidor e salvar decisões/resultados antes de avançar. Envios repetidos não duplicam execuções, decisões ou tentativas. Queda mantém os registros confirmados; trabalho incompleto aparece como interrompido, nunca concluído. |
 | RNF-07 | **Limites de entrada e execução.** Até 5 arquivos de 10 MiB cada, 10 histórias/requisitos selecionados e 30 casos por execução. Excesso pede redução de escopo, sem truncar conteúdo silenciosamente. Uma tarefa ativa por ambiente; segunda solicitação recebe “ambiente ocupado” e pode tentar depois. |
@@ -237,7 +240,7 @@ compartilham uma página de execução com abas, sem quatro aplicações ou flux
 
 | Tela | Conteúdo e ação principal | Estados indispensáveis |
 | --- | --- | --- |
-| TELA-01 · Acesso | Alternar cadastro/entrada; nome, e-mail e senha, nome de equipe opcional no primeiro acesso. Entrar leva ao histórico. | Conta não habilitada, credencial inválida, envio em andamento e sessão expirada. Link de ajuda para recuperação assistida. |
+| TELA-01 · Acesso | Alternar cadastro/entrada; nome, e-mail e senha, nome de equipe opcional no primeiro acesso. Entrar leva ao histórico. | E-mail já cadastrado, regra de senha não atendida, credencial inválida, envio em andamento e sessão expirada. Não oferecer recuperação de senha sem um fluxo implementado. |
 | TELA-02 · Minhas execuções | Lista com busca e filtro; nome, aplicação, data e situação. “Nova execução”; menu para duplicar ou excluir uma encerrada. | Lista vazia com orientação; carregando; erro recuperável; exclusão com nome da execução e confirmação. |
 | TELA-03 · Nova execução | Formulário em duas partes na mesma página: requisitos e identificação; depois ambiente/acesso/preparo. “Preparar plano”. URL e acesso podem ser completados antes da exploração. | Arquivo inválido, extração sem texto, campo obrigatório, limite excedido e salvamento. Preservar o que foi preenchido. |
 | TELA-04 · Execução / Visão geral | Cabeçalho com etapa, situação e próxima ação. Board de US/CA; perguntas e respostas; resumo do acesso; cancelar. Sem trabalho independente elegível, oferecer “Encerrar com pendências”. | Curando, revisando, aguardando usuário, acesso bloqueado, ambiente ocupado e execução interrompida. Mostrar próxima ação útil. |

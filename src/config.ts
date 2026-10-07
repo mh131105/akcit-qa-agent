@@ -46,8 +46,6 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   }
   const port = Number(env.PORT ?? 3000);
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('PORT inválida.');
-  const pilotAllowedEmails = [...new Set((env.PILOT_ALLOWED_EMAILS ?? '').split(',').map(normalizeEmail).filter(Boolean))];
-  if (!pilotAllowedEmails.every(isValidEmail)) throw new Error('PILOT_ALLOWED_EMAILS contém e-mail inválido.');
   const targetAllowedOrigins = parseTargetAllowedOrigins(env.TARGET_ALLOWED_ORIGINS);
   const preparationModels = {} as Record<PreparationRole, SpecialistModel>;
   let preparationConfigError: string | undefined;
@@ -112,7 +110,6 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     dataDir: resolve(env.DATA_DIR ?? '.data'),
     revision: env.APP_REVISION ?? 'local',
     appOrigin: applicationOrigin(env.APP_ORIGIN),
-    pilotAllowedEmails,
     targetAllowedOrigins,
     maxConcurrentBrowserSessions: 1,
     preparationModels,

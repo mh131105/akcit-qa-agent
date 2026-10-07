@@ -31,7 +31,7 @@ function validAccess(record: StoredRun, config: Pick<ReturnType<typeof readConfi
   try { url = new URL(input.startUrl); }
   catch { return { error: { code: 'ACCESS_NOT_CONFIGURED', message: 'O endereço configurado para o alvo é inválido.', status: 409 } }; }
   if (!config.targetAllowedOrigins.includes(url.origin)) {
-    return { error: { code: 'TARGET_NOT_ALLOWED', message: 'O endereço configurado não pertence mais às origens autorizadas pela equipe do piloto.', status: 403 } };
+    return { error: { code: 'TARGET_NOT_ALLOWED', message: 'O endereço configurado não está mais autorizado para testes.', status: 403 } };
   }
   return { url };
 }

@@ -36,7 +36,7 @@ test('páginas e arquivos locais usam lista explícita, cabeçalhos seguros e ca
   const data = await mkdtemp(join(tmpdir(), 'akcit-web-test-'));
   const app = await createApp(readConfig({
     APP_ENV: 'development', PORT: '0', DATA_DIR: data,
-    APP_ORIGIN: 'http://127.0.0.1', PILOT_ALLOWED_EMAILS: 'pilot@example.test',
+    APP_ORIGIN: 'http://127.0.0.1',
   }));
   app.listen(0, '127.0.0.1');
   await once(app, 'listening');

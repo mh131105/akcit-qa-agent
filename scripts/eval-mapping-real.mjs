@@ -63,7 +63,7 @@ const MATERIAL = withExecutionReport
   ? await readFile(new URL('../docs/requisitos/exemplos/artefato-demo.md', import.meta.url), 'utf8') +
     (targetMode === 'blocked-reservations' ? '\n\n## US-02\nComo usuário autenticado, quero registrar notas independentes das reservas.\n## CA-03\nAo salvar uma nota não vazia de até 200 caracteres, seu texto deve aparecer na lista de notas.\n' : '')
   : 'US-01: Criar reservas.\nCA-01: A quantidade de reserva aceita está entre 1 e 10.';
-const ACCOUNT = { name: 'Avaliador Real', email: 'eval-mapping@example.test', password: 'senha ficticia longa 1!' };
+const ACCOUNT = { name: 'Avaliador Real', email: 'eval-mapping@example.test', password: 'Senha ficticia longa 1!' };
 
 const report = {
   startedAt: new Date().toISOString(), sha: process.env.APP_REVISION ?? null,
@@ -88,7 +88,7 @@ const appPort = probe.address().port;
 await new Promise(resolve => probe.close(resolve));
 const origin = `http://127.0.0.1:${appPort}`;
 const config = readConfig({ ...env, DATA_DIR: dataDir, APP_ORIGIN: origin,
-  TARGET_ALLOWED_ORIGINS: targetOrigin, PILOT_ALLOWED_EMAILS: ACCOUNT.email });
+  TARGET_ALLOWED_ORIGINS: targetOrigin });
 const resolvedText = resolvePreparationModels(config);
 const resolvedVisual = resolveVisualModels(config);
 report.appliedModels = { textual: resolvedText, visual: resolvedVisual };

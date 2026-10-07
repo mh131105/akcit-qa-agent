@@ -11,7 +11,7 @@ import { readConfig } from '../src/config.js';
 import { RunStore } from '../src/storage/runs.js';
 
 const origin = 'http://localhost:3000';
-const password = 'senha fictícia de testes';
+const password = 'Senha fictícia de testes 1!';
 const accounts = [
   { name: 'Pessoa Um', email: 'one@example.test', password },
   { name: 'Pessoa Dois', email: 'two@example.test', password },
@@ -26,8 +26,7 @@ const idFor = (userId: string, key: string) => `run-${hash([userId, key.toLowerC
 
 async function harness(t: TestContext) {
   const dataDir = await fs.mkdtemp(join(tmpdir(), 'akcit-intake-'));
-  const config = readConfig({ DATA_DIR: dataDir, APP_ORIGIN: origin,
-    PILOT_ALLOWED_EMAILS: accounts.map(account => account.email).join(',') });
+  const config = readConfig({ DATA_DIR: dataDir, APP_ORIGIN: origin });
   let app = await createApp(config);
   let base = '';
   async function listen() {

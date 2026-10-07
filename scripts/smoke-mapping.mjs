@@ -86,7 +86,7 @@ try {
 
   const config = readConfig({
     DATA_DIR: root, APP_ORIGIN: 'http://localhost:3000',
-    TARGET_ALLOWED_ORIGINS: [targetOrigin, fixtureOrigin].join(','), PILOT_ALLOWED_EMAILS: 'smoke@example.test',
+    TARGET_ALLOWED_ORIGINS: [targetOrigin, fixtureOrigin].join(','),
   });
   let executorCalls = 0;
   let validatorCalls = 0;
@@ -219,7 +219,7 @@ try {
   // Conta real registrada pela API: o cookie e o ID retornados conduzem a jornada.
   const registered = await fetch(base + '/api/auth/register', {
     method: 'POST', headers: { Origin: config.appOrigin, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name: 'Smoke Mapping', email: 'smoke@example.test', password: 'senha ficticia longa 1!' }),
+    body: JSON.stringify({ name: 'Smoke Mapping', email: 'smoke@example.test', password: 'Senha ficticia longa 1!' }),
   });
   const registeredText = await registered.text();
   assert.equal(registered.status, 201, registeredText);

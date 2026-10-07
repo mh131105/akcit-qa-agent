@@ -4,19 +4,20 @@ LINK DEMONSTRAÇÃO: https://drive.google.com/file/d/1njZJOCjh0ErBU8ssKVqBqWXJu2
 
 QAtron é o nome do produto. O repositório e os identificadores de infraestrutura
 continuam como `akcit-qa-agent`. A [identidade visual](docs/brand/README.md) inclui
-a logo e o símbolo em SVG.
+a marca utilizada na interface.
 
 Base de desenvolvimento para um sistema de testes caixa preta com Pi, um
 orquestrador e cinco especialistas: curadoria, planejamento, execução, relatório e
 validação das saídas. O validador avalia o trabalho dos outros especialistas; o
 orquestrador encaminha as tarefas e aplica os pareceres, sem julgar a qualidade.
-Esta branch implementa acesso ao piloto, entrada textual, curadoria, plano com
-validação independente e revisão humana. Perguntas podem ser respondidas pelo site;
-a retomada explícita incorpora os esclarecimentos sem alterar os originais.
-US/CA, requisitos em prosa e Gherkin textual são aceitos sem formato obrigatório.
-Casos, navegação, execução e relatório ainda seguem como próximas entregas em
-[PROTOTIPO.md](docs/requisitos/PROTOTIPO.md). O estado da revisão e da integração
-está em [SPRINT.md](docs/SPRINT.md).
+O produto oferece cadastro livre, entrada de requisitos, curadoria, plano e casos
+com validação independente e aprovação humana, navegação visual, execução e relatório.
+Perguntas podem ser respondidas pelo site; a retomada explícita incorpora os
+esclarecimentos sem alterar os originais. US/CA, requisitos em prosa e Gherkin textual
+são aceitos sem formato obrigatório. Contas usam SQLite, senhas Argon2id e UUID v4.
+Os requisitos e limites estão em [PROTOTIPO.md](docs/requisitos/PROTOTIPO.md); antes
+da primeira atualização de um ambiente com contas antigas, siga a
+[transição operacional](docs/OPERACAO.md#transição-única-para-cadastro-aberto).
 
 **Equipe: comecem pelo [guia de desenvolvimento da sprint](docs/requisitos/README.md).**
 Ele reúne o escopo proposto para 26/09, os contratos, a divisão de trabalho e os

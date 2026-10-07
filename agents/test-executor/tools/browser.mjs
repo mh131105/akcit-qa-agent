@@ -30,7 +30,7 @@ export async function openBrowserSession(options) {
 
   const start = new URL(options.startUrl);
   if (!allowed.has(start.origin)) {
-    throw new Error(`ORIGIN_NOT_ALLOWED: a origem ${start.origin} não está habilitada pela equipe do piloto.`);
+    throw new Error(`ORIGIN_NOT_ALLOWED: a origem ${start.origin} não está autorizada para testes.`);
   }
   await mkdir(options.mediaDir, { recursive: true, mode: 0o700 });
 
