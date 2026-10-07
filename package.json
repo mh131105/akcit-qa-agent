@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "description": "Base de desenvolvimento do sistema multiagentes de testes caixa preta.",
-  "engines": { "node": ">=24 <25" },
+  "engines": {
+    "node": ">=24.7.0 <25",
+    "npm": "12.2.0"
+  },
+  "packageManager": "npm@12.2.0",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "dev:remote": "node scripts/dev-access.mjs",
@@ -13,7 +17,15 @@
     "check": "tsc --noEmit",
     "test": "node --import tsx --test test/*.test.ts",
     "smoke:runtime": "node scripts/smoke-runtime.mjs",
-    "pi": "pi"
+    "smoke:web": "node scripts/smoke-web.mjs",
+    "demo:target": "node scripts/demo-target.mjs",
+    "smoke:target": "node scripts/smoke-target.mjs",
+    "smoke:mapping": "node scripts/smoke-mapping.mjs",
+    "eval:mapping:real": "node scripts/eval-mapping-real.mjs",
+    "eval:routes:real": "node scripts/eval-mapping-real.mjs --with-route-detail",
+    "pi": "pi",
+    "smoke:execution": "node scripts/smoke-execution.mjs",
+    "eval:flow:real": "node scripts/eval-mapping-real.mjs --with-execution-report"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.87.0",

@@ -1,13 +1,32 @@
-# AKCIT QA Agent
+# QAtron
+
+LINK DEMONSTRAÇÃO: https://drive.google.com/file/d/1njZJOCjh0ErBU8ssKVqBqWXJu2xxs-7K/view?usp=sharing
+
+QAtron é o nome do produto. O repositório e os identificadores de infraestrutura
+continuam como `akcit-qa-agent`. A [identidade visual](docs/brand/README.md) inclui
+a marca utilizada na interface.
 
 Base de desenvolvimento para um sistema de testes caixa preta com Pi, um
-orquestrador e quatro especialistas: curadoria, planejamento, execução e relatório.
-O produto e sua metodologia ainda serão implementados a partir dos RF, RN, RG e US.
+orquestrador e cinco especialistas: curadoria, planejamento, execução, relatório e
+validação das saídas. O validador avalia o trabalho dos outros especialistas; o
+orquestrador encaminha as tarefas e aplica os pareceres, sem julgar a qualidade.
+O produto oferece cadastro livre, entrada de requisitos, curadoria, plano e casos
+com validação independente e aprovação humana, navegação visual, execução e relatório.
+Perguntas podem ser respondidas pelo site; a retomada explícita incorpora os
+esclarecimentos sem alterar os originais. US/CA, requisitos em prosa e Gherkin textual
+são aceitos sem formato obrigatório. Contas usam SQLite, senhas Argon2id e UUID v4.
+Os requisitos e limites estão em [PROTOTIPO.md](docs/requisitos/PROTOTIPO.md); antes
+da primeira atualização de um ambiente com contas antigas, siga a
+[transição operacional](docs/OPERACAO.md#transição-única-para-cadastro-aberto).
+
+**Equipe: comecem pelo [guia de desenvolvimento da sprint](docs/requisitos/README.md).**
+Ele reúne o escopo proposto para 26/09, os contratos, a divisão de trabalho e os
+critérios para considerar o protótipo pronto.
 
 ## Começar na própria máquina
 
 Requisitos: Git e Docker Desktop/Engine com Compose 2.24 ou posterior. O container
-instala Node.js 24, Pi 0.87.0 e as dependências; não é preciso instalá-los no host.
+instala Node.js 24.21.0, npm 12.2.0, Pi 0.87.0 e as dependências; não é preciso instalá-los no host.
 Há suporte às arquiteturas ARM64 (Mac Apple Silicon) e AMD64 (Linux/Windows).
 
 ```sh
@@ -32,8 +51,11 @@ docker compose down
 ```
 
 O último comando preserva o volume. `docker compose down -v` **apaga os dados locais**.
-Para trabalhar fora do container: Node.js 24, `npm ci`, `npm run dev`. As ferramentas
-de tela e vídeo devem ser executadas no container Linux.
+Para trabalhar fora do container, use Node.js **24.21.0** (fixado em `.nvmrc`) e
+npm **12.2.0**: `nvm install && nvm use`, `npm install --global npm@12.2.0`,
+`npm ci` e `npm run dev`. O npm fixado preserva as versões do lockfile também
+nas dependências empacotadas pelo Pi. As ferramentas de tela e vídeo devem ser
+executadas no container Linux.
 
 ## Fluxo da equipe
 
@@ -57,7 +79,7 @@ operadores de confiança. Nunca use a chave pessoal da VPS como secret do GitHub
 
 ## Acessar desenvolvimento remoto sem domínio
 
-Para integrantes com chave pública autorizada, use Node.js 24 na máquina local:
+Para integrantes com chave pública autorizada, use Node.js 24.21.0 e npm 12.2.0 na máquina local:
 
 ```sh
 npm run dev:remote
@@ -75,20 +97,26 @@ O responsável já tem acesso administrativo e pode usar o túnel convencional:
 ssh -N -L 3111:127.0.0.1:3101 -L 3112:127.0.0.1:3102 matheus@76.13.175.64
 ```
 
-Desenvolvimento: http://127.0.0.1:3111. Produção: http://127.0.0.1:3112.
-O domínio e HTTPS público serão conectados ao Traefik quando a equipe os fornecer.
+Desenvolvimento: http://127.0.0.1:3111, a origem configurada para esse ambiente.
+A porta http://127.0.0.1:3112 de produção serve somente para diagnóstico: a origem
+de autenticação é https://qatron.mhvps.site, portanto cadastro/login pelo endereço
+local são recusados. A rota pelo Traefik e o registro DNS estão descritos em
+[Operação](docs/OPERACAO.md#domínio-de-produção-e-dns).
 
 ## Estrutura
 
-- `src/`: servidor inicial, configuração e fábrica de sessões do Pi.
+- `src/`: site, API, autenticação, persistência, contratos e coordenação do Pi.
 - `agents/`: diretórios de tools e skills de cada especialista.
 - `scripts/`: inicialização, verificação de runtime e integração com publicação.
 - `deploy/`: Compose da VPS e publicador com comandos restritos.
 - `.github/workflows/`: CI, desenvolvimento e promoção de produção.
-- `docs/requisitos/`: espaço para os RF, RN, RG e US.
+- `docs/requisitos/`: requisitos, regras de negócio, telas, contratos e exemplos sintéticos.
 - `docs/OPERACAO.md`: limites, dados, segredos, backup e recuperação.
 - `docs/EQUIPE.md`: convites e acesso temporário da equipe ao desenvolvimento.
 
-O runtime não inicia chamadas de LLM. A equipe definirá o provedor e o modelo e
-configurará credenciais no ambiente correspondente ao implementar os agentes.
-Os testes de infraestrutura não consomem tokens de provedores.
+Salvar um rascunho não chama modelos. **Preparar plano** e **Retomar preparação**
+fazem inferências reais com os modelos e credenciais configurados privadamente por
+ambiente; siga [OPERACAO.md](docs/OPERACAO.md#modelos-e-preparação-do-plano--t41).
+Testes automatizados substituem os modelos e os smokes de infraestrutura não
+consomem tokens de provedores. A avaliação real das skills é um comando separado,
+com resultados e limitações em [ajuste de entradas](docs/evidencias/ajuste-entradas/README.md).
