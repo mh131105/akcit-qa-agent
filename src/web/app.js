@@ -99,7 +99,7 @@ function invalid(fieldRef, text) {
 const count = value => [...value].length;
 const bytes = value => new TextEncoder().encode(value).byteLength;
 const date = value => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
-const internal = value => /^\/execucoes(?:\/(?:nova|[A-Za-z0-9][A-Za-z0-9_-]{0,127}))?(?:\?[^#]*)?$/.test(value || '') ? value : '/execucoes';
+const internal = value => /^\/execucoes(?:\/(?:nova|[A-Za-z0-9][A-Za-z0-9_-]{0,127}))?(?:\?[^#]*)?(?:#(?:visao-geral|plano|casos|mapa|resultados))?$/.test(value || '') ? value : '/execucoes';
 const target = () => internal(new URLSearchParams(location.search).get('next'));
 
 function errorText(error) {
@@ -169,7 +169,8 @@ function expire() {
   revokeEvidence(); evidenceRunId = null;
   user = null; rememberForm = null; answerDrafts.clear(); clearInterval(sessionTimer); clearTimeout(detailTimer); detailSequence++;
   main.replaceChildren(); account.replaceChildren(); main.hidden = false;
-  location.replace(`/acesso?expired=1&next=${encodeURIComponent(internal(location.pathname + location.search))}`);
+  selectDetailTab = null;
+  location.replace(`/acesso?expired=1&next=${encodeURIComponent(internal(location.pathname + location.search + location.hash))}`);
 }
 async function sameAccount(accountId = user?.id) {
   const session = await api('/auth/me');
@@ -207,7 +208,18 @@ function clearAttempts() {
 }
 function navigation() {
   const accountId = user.id;
-  account.replaceChildren(link('Minhas execuções', '/execucoes'), link('Meu perfil', '/perfil'), el('span', user.name, 'account-name'));
+  document.body.classList.add('authenticated');
+  const workspace = el('div', null, 'workspace-links');
+  for (const [label, path] of [['Minhas execuções', '/execucoes'], ['Nova execução', '/execucoes/nova']]) {
+    const item = link(label, path);
+    if (location.pathname === path || (path === '/execucoes' && /^\/execucoes\/(?!nova$)/.test(location.pathname))) item.setAttribute('aria-current', 'page');
+    workspace.append(item);
+  }
+  const profile = el('div', null, 'account-profile');
+  const profileLink = link('Meu perfil', '/perfil');
+  if (location.pathname === '/perfil') profileLink.setAttribute('aria-current', 'page');
+  profile.append(el('span', user.name, 'account-name'), profileLink);
+  account.replaceChildren(workspace, profile);
   const exit = button('Sair', async () => {
     exit.disabled = true;
     try {
@@ -222,30 +234,49 @@ function navigation() {
     let cleanupFailed = false;
     try { clearAttempts(); } catch { cleanupFailed = true; }
     location.replace(cleanupFailed ? '/acesso?cleanup=1' : '/acesso');
-  }, 'secondary'); account.append(exit);
+  }, 'secondary'); profile.append(exit);
 }
 
 function access(serviceMessage = '') {
   main.replaceChildren(); document.title = 'Acesso · QAtron';
   const layout = el('div', null, 'auth-layout'); const story = el('section', null, 'auth-story');
-  story.append(el('p', 'QAtron / Qualidade de software', 'eyebrow'), el('h1', 'Seu próximo teste começa com o comportamento esperado.'), el('p', 'Reúna histórias, requisitos ou exemplos do comportamento esperado. Salve o material e revise o plano quando estiver disponível.', 'lead'));
-  const steps = el('div', null, 'auth-steps');
-  for (const [number, title] of [['01', 'Reúna o material'], ['02', 'Salve a execução'], ['03', 'Revise o plano']]) { const step = el('div'); step.append(el('strong', number), el('span', title)); steps.append(step); }
-  story.append(steps); const panel = el('section', null, 'panel'); layout.append(story, panel); main.append(layout);
-  let register = false;
+  const title = el('h1', 'Bons testes começam '); title.append(el('span', 'com clareza.'));
+  story.append(el('p', 'Qualidade, com contexto', 'eyebrow'), title, el('p', 'Do primeiro requisito à evidência final, acompanhe cada etapa e decida quando avançar.', 'lead'));
+  const visual = el('div', null, 'auth-visual'); const emblem = el('div', null, 'auth-emblem');
+  const mark = el('img', null, 'auth-monogram'); mark.src = '/web/qatron-mark.png'; mark.alt = ''; mark.width = 112; mark.height = 112;
+  emblem.append(mark);
+  const steps = el('ol', null, 'auth-steps');
+  for (const [number, label, detail] of [['01', 'Requisitos', 'O contexto vem primeiro'], ['02', 'Plano de teste', 'Sua revisão orienta o caminho'], ['03', 'Evidências', 'Cada decisão tem uma base']]) {
+    const step = el('li'); const copy = el('div'); copy.append(el('strong', label), el('span', detail));
+    step.append(el('span', number, 'auth-step-number'), copy); steps.append(step);
+  }
+  visual.append(emblem, steps); story.append(visual, el('p', 'Seu critério. Agentes ao seu lado.', 'auth-signature'));
+  const panel = el('section', null, 'panel auth-panel'); layout.append(story, panel); main.append(layout);
+  let register = false; let email = '';
   const render = () => {
     panel.replaceChildren(); const tabs = el('div', null, 'auth-switch');
     for (const [label, value] of [['Entrar', false], ['Criar conta', true]]) {
-      const tab = button(label, () => { register = value; render(); panel.querySelector('input').focus(); }, 'secondary');
+      const tab = button(label, () => {
+        if (register === value) return;
+        email = panel.querySelector('#email').value;
+        register = value; render(); panel.querySelector('input').focus();
+      }, 'secondary');
       tab.setAttribute('aria-pressed', String(register === value)); tabs.append(tab);
     }
-    panel.append(tabs, el('h2', register ? 'Participe do piloto' : 'Bem-vindo de volta'));
+    panel.append(tabs, el('p', register ? 'Seu primeiro passo' : 'Vamos continuar?', 'eyebrow'), el('h2', register ? 'Participe do piloto' : 'Bem-vindo de volta'), el('p', register ? 'Crie sua conta para organizar testes e acompanhar decisões.' : 'Entre para retomar suas execuções e acompanhar os próximos passos.', 'auth-intro'));
     const cleanupMessage = new URLSearchParams(location.search).has('cleanup') ? 'Saída confirmada, mas não foi possível limpar a recuperação local desta aba. Feche a aba ou limpe o armazenamento do navegador.' : '';
     const notice = message(cleanupMessage || serviceMessage || (new URLSearchParams(location.search).has('expired') ? 'Sua sessão expirou ou mudou. Entre novamente. Conteúdo pendente só será recuperado para a mesma conta.' : ''), !!serviceMessage || !!cleanupMessage); panel.append(notice);
     const form = el('form'); form.noValidate = true; const fields = {};
     if (register) fields.name = field(form, 'name', 'Nome', { autocomplete: 'name', hint: 'Até 120 caracteres.' });
     fields.email = field(form, 'email', 'E-mail', { type: 'email', autocomplete: 'username' });
+    fields.email.input.value = email; fields.email.input.placeholder = 'voce@equipe.com.br'; fields.email.input.spellcheck = false; fields.email.input.autocapitalize = 'none';
     fields.password = field(form, 'password', 'Senha', { type: 'password', autocomplete: register ? 'new-password' : 'current-password', hint: 'De 15 a 128 caracteres. Espaços fazem parte da senha.' });
+    const passwordControl = el('div', null, 'password-control'); fields.password.input.before(passwordControl); passwordControl.append(fields.password.input);
+    const reveal = button('Mostrar', () => {
+      const visible = fields.password.input.type === 'password'; fields.password.input.type = visible ? 'text' : 'password';
+      reveal.textContent = visible ? 'Ocultar' : 'Mostrar'; reveal.setAttribute('aria-label', visible ? 'Ocultar senha' : 'Mostrar senha'); reveal.setAttribute('aria-pressed', String(visible));
+    }, 'password-reveal secondary');
+    reveal.setAttribute('aria-label', 'Mostrar senha'); reveal.setAttribute('aria-pressed', 'false'); reveal.setAttribute('aria-controls', 'password'); passwordControl.append(reveal);
     if (register) fields.teamName = field(form, 'teamName', 'Nome da equipe (opcional)', { optional: true, autocomplete: 'organization', hint: 'Até 120 caracteres.' });
     const submit = button(register ? 'Cadastrar e entrar' : 'Entrar na conta', null, 'auth-submit'); submit.type = 'submit'; form.append(submit);
     form.addEventListener('submit', async event => {
@@ -260,13 +291,15 @@ function access(serviceMessage = '') {
       if (first) { first.focus(); return; }
       const body = { email: fields.email.input.value.trim(), password: fields.password.input.value };
       if (register) { body.name = fields.name.input.value.trim(); if (fields.teamName.input.value.trim()) body.teamName = fields.teamName.input.value.trim(); }
-      submit.disabled = true; tabs.querySelectorAll('button').forEach(node => { node.disabled = true; }); tell(notice, 'Conferindo seu acesso…');
+      submit.disabled = true; submit.setAttribute('aria-busy', 'true'); tabs.querySelectorAll('button').forEach(node => { node.disabled = true; }); tell(notice, 'Conferindo seu acesso…');
       try {
         await api(`/auth/${register ? 'register' : 'login'}`, { method: 'POST', body: JSON.stringify(body) });
         fields.password.input.value = ''; await api('/auth/me'); location.replace(target());
-      } catch (error) { tell(notice, errorText(error), true); submit.disabled = false; tabs.querySelectorAll('button').forEach(node => { node.disabled = false; }); }
+      } catch (error) { tell(notice, errorText(error), true); submit.disabled = false; submit.removeAttribute('aria-busy'); tabs.querySelectorAll('button').forEach(node => { node.disabled = false; }); }
     });
-    panel.append(form, el('p', 'Esta é a conta do produto. O acesso usado pelo agente na aplicação testada será configurado separadamente.', 'auth-help'), el('p', 'Precisa recuperar o acesso? Procure a equipe responsável pelo piloto.', 'auth-help'));
+    const help = el('div', null, 'auth-support');
+    help.append(el('p', 'Precisa recuperar o acesso?', 'auth-support-title'), el('p', 'Procure a equipe responsável pelo piloto.', 'auth-help'));
+    panel.append(form, help, el('p', 'Esta é a conta do produto. O acesso usado pelo agente na aplicação testada será configurado separadamente.', 'auth-help auth-account-note'));
   }; render();
 }
 
@@ -295,8 +328,7 @@ function profilePage() {
   });
 }
 
-let currentTab = null;
-let tabPhase = null;
+let selectDetailTab = null;
 let currentArtifacts = [];
 let currentAnswerSources = [];
 // Rótulos de apresentação: os identificadores originais continuam nas operações e referências.
@@ -355,26 +387,33 @@ function sourceLabel(source) {
   const answer = currentAnswerSources.find(item => item.artifactId === source.artifactId);
   return `${artifact?.name || (answer ? `Resposta à ${referenceLabel(answer.questionId, 'Pergunta')} · Revisão ${answer.revision || 1}` : referenceLabel(source.artifactId, 'Fonte'))} · ${source.locator}${pages?.length ? ` · PDF página${pages.length > 1 ? 's' : ''} ${pages.map(page => page.page).join(', ')}` : ''}`;
 }
-function detailTabs(run) {
-  const defaults = { planning: 'plan', case_design: 'cases', mapping: 'cases', route_detail: 'cases', execution: 'results', report: 'results', done: 'results' };
-  if (tabPhase !== `${run.id}:${run.phase}`) { currentTab = defaults[run.phase] || 'overview'; tabPhase = `${run.id}:${run.phase}`; }
+function detailTabs() {
+  const sections = [['overview', 'Visão geral', 'visao-geral'], ['plan', 'Plano', 'plano'], ['cases', 'Casos', 'casos'], ['map', 'Mapa', 'mapa'], ['results', 'Resultados', 'resultados']];
   const nav = el('div', null, 'run-tabs'); nav.setAttribute('role', 'tablist'); nav.setAttribute('aria-label', 'Seções da execução');
   const panes = {}; const buttons = [];
-  const choose = (id, focus = false) => {
-    currentTab = id;
+  const choose = (id, focus = false, updateUrl = true) => {
+    const section = sections.find(item => item[0] === id) || sections[0];
+    id = section[0];
+    const focusHidden = Object.entries(panes).some(([key, pane]) => key !== id && pane.contains(document.activeElement));
     buttons.forEach(node => { const selected = node.dataset.target === id; node.setAttribute('aria-selected', String(selected)); node.tabIndex = selected ? 0 : -1; if (selected && focus) node.focus(); });
     for (const [key, pane] of Object.entries(panes)) pane.hidden = key !== id;
+    if (focusHidden && !focus) buttons.find(node => node.dataset.target === id).focus();
+    if (updateUrl && location.hash !== `#${section[2]}`) history.pushState(null, '', `#${section[2]}`);
   };
-  for (const [id, label] of [['overview', 'Visão geral'], ['plan', 'Plano'], ['cases', 'Casos'], ['results', 'Resultados']]) {
+  for (const [id, label] of sections) {
     const tab = button(label, () => choose(id), 'secondary'); tab.id = `tab-${id}`; tab.dataset.target = id; tab.setAttribute('role', 'tab'); tab.setAttribute('aria-controls', `pane-${id}`);
     const pane = el('div', null, 'tab-pane'); pane.id = `pane-${id}`; pane.setAttribute('role', 'tabpanel'); pane.setAttribute('aria-labelledby', tab.id); pane.tabIndex = 0;
     buttons.push(tab); panes[id] = pane; nav.append(tab);
     tab.addEventListener('keydown', event => {
-      const index = buttons.indexOf(tab); const next = event.key === 'ArrowRight' ? (index + 1) % 4 : event.key === 'ArrowLeft' ? (index + 3) % 4 : event.key === 'Home' ? 0 : event.key === 'End' ? 3 : null;
-      if (next !== null) { event.preventDefault(); choose(buttons[next].dataset.target, true); }
+      const index = buttons.indexOf(tab); const next = event.key === 'ArrowRight' ? (index + 1) % buttons.length : event.key === 'ArrowLeft' ? (index + buttons.length - 1) % buttons.length : event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : null;
+      if (next !== null) {
+        event.preventDefault(); buttons.forEach((node, position) => { node.tabIndex = position === next ? 0 : -1; }); buttons[next].focus();
+      }
     });
   }
-  main.append(nav, ...Object.values(panes)); choose(currentTab);
+  main.append(nav, ...Object.values(panes));
+  selectDetailTab = () => choose(sections.find(item => `#${item[2]}` === location.hash)?.[0] || 'overview', false, false);
+  selectDetailTab();
   return { ...panes, choose };
 }
 
@@ -551,7 +590,7 @@ function historyPage() {
         const list = el('ul', null, 'run-list');
         for (const run of data.items) {
           const row = el('li', null, 'run-row'); const identification = el('div'); const name = el('h2'); name.append(link(run.name, `/execucoes/${encodeURIComponent(run.id)}`));
-          identification.append(name, el('p', run.applicationName)); const state = el('div'); state.append(el('span', statuses[run.status] || run.status, 'badge'), el('p', phases[run.phase] || run.phase));
+          identification.append(name, el('p', run.applicationName)); const state = el('div'); state.append(el('span', statuses[run.status] || run.status, `badge status-${run.status}`), el('p', phases[run.phase] || run.phase));
           const actions = el('div', null, 'actions');
           for (const [label, operation] of [['Duplicar', 'duplicate'], ...(['completed', 'cancelled', 'interrupted', 'error'].includes(run.status) ? [['Excluir', 'delete']] : [])]) actions.append(button(label, async () => {
             try { const detail = await api(`/runs/${encodeURIComponent(run.id)}`, { accountId }); if (user?.id === accountId) await manageRun(detail, accountId, operation); }
@@ -577,14 +616,15 @@ function intakePage() {
   const note = el('aside', null, 'side-note'); note.append(el('span', 'Antes de começar', 'step'), el('h2', 'Um rascunho é o primeiro passo.'), el('p', 'Salvar confirma o recebimento do material. A curadoria e a geração do plano ainda não são iniciadas.'), el('p', 'Cole o texto e/ou selecione até cinco arquivos .txt, .md ou PDF com texto, de até 10 MiB cada. As fontes serão preservadas separadamente.'));
   split.append(panel, note); main.append(split);
   const notice = message(); panel.append(notice); const form = el('form'); form.noValidate = true;
-  form.append(el('span', '01 / Identificação', 'step')); const pair = el('div', null, 'two-fields'); form.append(pair);
+  const identification = el('section', null, 'intake-section');
+  identification.append(el('span', '01 / Identificação', 'step')); const pair = el('div', null, 'two-fields'); identification.append(pair); form.append(identification);
   const fields = { name: field(pair, 'name', 'Nome da execução', { hint: 'Até 120 caracteres.' }), applicationName: field(pair, 'applicationName', 'Aplicação', { hint: 'Até 120 caracteres.' }) };
-  fields.objective = field(form, 'objective', 'Objetivo (opcional)', { textarea: true, optional: true, hint: 'Até 2.000 caracteres.' });
-  form.append(el('span', '02 / Material de entrada', 'step'));
-  fields.text = field(form, 'text', 'Material de requisitos', { textarea: true, optional: true, className: 'material', hint: 'Cole histórias, requisitos, critérios ou cenários Gherkin. Gherkin é opcional. Preserve o texto original; dúvidas poderão ser esclarecidas depois.' });
-  const uploads = field(form, 'files', 'Arquivos de requisitos (opcional)', { optional: true, type: 'file', hint: 'Até cinco .txt, .md ou PDF com texto; até 10 MiB por arquivo. Arquivos ficam selecionados após um erro nesta página; ao recarregar, selecione-os novamente.' });
+  fields.objective = field(identification, 'objective', 'Objetivo (opcional)', { textarea: true, optional: true, hint: 'Até 2.000 caracteres.' });
+  const material = el('section', null, 'intake-section'); material.append(el('span', '02 / Material de entrada', 'step')); form.append(material);
+  fields.text = field(material, 'text', 'Material de requisitos', { textarea: true, optional: true, className: 'material', hint: 'Cole histórias, requisitos, critérios ou cenários Gherkin. Gherkin é opcional. Preserve o texto original; dúvidas poderão ser esclarecidas depois.' });
+  const uploads = field(material, 'files', 'Arquivos de requisitos (opcional)', { optional: true, type: 'file', hint: 'Até cinco .txt, .md ou PDF com texto; até 10 MiB por arquivo. Arquivos ficam selecionados após um erro nesta página; ao recarregar, selecione-os novamente.' });
   uploads.input.multiple = true; uploads.input.accept = '.txt,.md,.pdf';
-  const received = el('ul', null, 'plain-list'); form.append(received);
+  const received = el('ul', null, 'plain-list'); material.append(received);
   const meter = el('small'); const footer = el('div', null, 'form-footer'); const submit = button('Salvar rascunho'); submit.type = 'submit'; footer.append(meter, submit); form.append(footer); panel.append(form);
   let attempt = null; let sending = false; let blocked = false;
   const body = () => JSON.stringify(Object.fromEntries(Object.entries(fields).map(([name, ref]) => [name, ref.input.value])));
@@ -933,7 +973,7 @@ function casesPanel(run, accountId, pending) {
   panel.append(decisions);
 
   if (currentDecision?.decision === 'approved' && run.canMap) {
-    const map = el('section', null, 'plan-section');
+    const map = el('section', null, 'next-action mapping-start');
     map.append(el('h3', 'Mapear aplicação'),
       el('p', 'O agente entrará na aplicação, autenticará pela interface e percorrerá as telas relevantes. O mapa observado será examinado pelo validador visual em sessão independente.'));
     const notice = message(); map.append(notice);
@@ -943,7 +983,7 @@ function casesPanel(run, accountId, pending) {
         await sameAccount(accountId); if (user?.id !== accountId) return;
         await api(`/runs/${encodeURIComponent(run.id)}/continue`, { accountId, method: 'POST',
           body: JSON.stringify({ outputId: cases.id, outputRevision: cases.revision, expectedAccessRevision: run.targetAccess.revision }) });
-        await detailPage('Mapeamento aceito. Acompanhe a exploração e a validação visual abaixo.');
+        await detailPage('Mapeamento aceito. Acompanhe a exploração e a validação visual na aba Mapa.');
       } catch (error) { if (user?.id === accountId) await detailPage(errorText(error), true); }
     });
     map.append(start); panel.append(map);
@@ -1083,7 +1123,7 @@ function routeDetailPanel(run, accountId) {
     for (const verdict of routes.validations) if (verdict.findings.length) panel.append(planSection('Achados do detalhamento', verdict.findings,
       value => `${value.location || 'Geral'} — ${value.message}`));
     if (routes.payload.pending.length) panel.append(planSection('Casos com percurso pendente', routes.payload.pending, value => `${referenceLabel(value.caseId, 'Caso')} — ${value.reason}`));
-    panel.append(el('p', 'Os percursos de cada caso estão no painel Casos de teste. Nenhum teste foi executado nesta etapa.', 'hint'));
+    panel.append(el('p', 'Os percursos de cada caso estão na aba Casos. Nenhum teste foi executado nesta etapa.', 'hint'));
   }
   return panel;
 }
@@ -1167,7 +1207,7 @@ function mappingPanel(run, accountId) {
   if (run.canMap && run.status === 'awaiting_input' && run.cases) {
     const retrySection = el('section', null, 'plan-section');
     retrySection.append(el('h3', 'Nova tentativa de mapeamento'),
-      el('p', 'Corrija a credencial de teste acima e solicite explicitamente uma nova tentativa. O histórico e o tempo consumido são preservados.'));
+      el('p', 'Corrija a credencial de teste na aba Visão geral e solicite explicitamente uma nova tentativa. O histórico e o tempo consumido são preservados.'));
     const notice = message(); retrySection.append(notice);
     const retry = button('Mapear aplicação (nova tentativa)', async () => {
       retry.disabled = true; tell(notice, 'Solicitando nova tentativa de mapeamento…');
@@ -1175,7 +1215,7 @@ function mappingPanel(run, accountId) {
         await sameAccount(accountId); if (user?.id !== accountId) return;
         await api(`/runs/${encodeURIComponent(run.id)}/continue`, { accountId, method: 'POST',
           body: JSON.stringify({ outputId: run.cases.id, outputRevision: run.cases.revision, expectedAccessRevision: run.targetAccess.revision }) });
-        await detailPage('Nova tentativa aceita. Acompanhe o mapeamento abaixo.');
+        await detailPage('Nova tentativa aceita. Acompanhe o mapeamento na aba Mapa.');
       } catch (error) { if (user?.id === accountId) await detailPage(errorText(error), true); }
     });
     retrySection.append(retry); panel.append(retrySection);
@@ -1248,6 +1288,8 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   if (!user) return;
   clearTimeout(detailTimer); const sequence = ++detailSequence;
   const accountId = user.id;
+  const focusedTab = document.activeElement?.getAttribute('role') === 'tab' ? document.activeElement.id : null;
+  selectDetailTab = null;
   main.replaceChildren(); main.append(message('Carregando execução…')); main.setAttribute('aria-busy', 'true');
   const id = location.pathname.split('/')[2]; let run;
   if (pending && (pending.accountId !== accountId || pending.runId !== id)) pending = null;
@@ -1265,10 +1307,11 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   currentArtifacts = run.artifacts || []; currentAnswerSources = run.answers || []; prepareReferenceNames(run);
   heading(run.name, run.applicationName); if (noticeText) main.append(message(noticeText, isError));
   const metadata = el('dl', null, 'metadata');
-  for (const [title, value] of [['Criada em', date(run.createdAt)], ['Etapa', phases[run.phase] || run.phase], ['Situação', statuses[run.status] || run.status]]) { const item = el('div'); item.append(el('dt', title), el('dd', value)); metadata.append(item); }
-  const summary = el('section', null, 'panel'); summary.append(metadata); main.append(summary);
-  summary.append(runManagement(run, accountId));
-  const views = detailTabs(run);
+  for (const [title, value] of [['Criada em', date(run.createdAt)], ['Etapa', phases[run.phase] || run.phase], ['Situação', statuses[run.status] || run.status]]) { const item = el('div'); item.append(el('dt', title), el('dd', value, title === 'Situação' ? `status-badge status-${run.status}` : '')); metadata.append(item); }
+  const summary = el('section', null, 'panel run-summary'); summary.setAttribute('aria-label', 'Resumo da execução');
+  const summaryHeading = el('div', null, 'summary-heading'); summaryHeading.append(metadata, runManagement(run, accountId)); summary.append(summaryHeading); main.append(summary);
+  const views = detailTabs();
+  if (focusedTab) document.getElementById(focusedTab)?.focus({ preventScroll: true });
   views.results.append(resultsPanel(run, accountId));
   if (run.versions?.length) views.overview.append(planSection('Revisões preservadas', run.versions, item => `${referenceLabel(item.id, 'Saída')} · Revisão ${item.revision}`));
   if (run.invalidations?.length) views.overview.append(planSection('Revisões invalidadas', run.invalidations, item => `${referenceLabel(item.outputId, 'Saída')} · Revisão ${item.outputRevision} — ${item.reason}`));
@@ -1276,20 +1319,25 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   if (run.progress?.activeRole || run.progress?.activity) {
     summary.append(message([roles[run.progress.activeRole] || run.progress.activeRole, activities[run.progress.activity] || run.progress.activity].filter(Boolean).join(' · ')));
   }
-  if (run.stopReason) main.append(message(run.stopReason.message, ['error', 'interrupted'].includes(run.status)));
+  if (run.stopReason) summary.append(message(run.stopReason.message, ['error', 'interrupted'].includes(run.status)));
+  const summaryActions = el('div', null, 'actions summary-actions'); summary.append(summaryActions);
   if (run.targetAccess) views.overview.append(targetAccessPanel(run, accountId));
   if (run.cases) views.cases.append(casesPanel(run, accountId, pending));
-  if (run.mapping) views.cases.append(mappingPanel(run, accountId));
+  else { const empty = el('section', null, 'panel empty'); empty.append(el('h2', 'Casos de teste'), el('p', 'Os casos estarão disponíveis após a aprovação do plano e a geração do conjunto.')); views.cases.append(empty); }
+  if (run.mapping) views.map.append(mappingPanel(run, accountId));
+  else { const empty = el('section', null, 'panel empty'); empty.append(el('h2', 'Mapa de navegação'), el('p', 'O mapa estará disponível após a aprovação dos casos e a exploração da aplicação.')); views.map.append(empty); }
+  const mappingStart = views.cases.querySelector('.mapping-start');
+  if (mappingStart) summary.append(mappingStart);
   if (run.canDetailRoutes || run.routeDetail || run.phase === 'route_detail') views.cases.append(routeDetailPanel(run, accountId));
   if (run.curation) views.overview.append(curationPanel(run.curation, run));
-  if (run.questions?.length) main.append(questionPanel(run, accountId, pending));
+  if (run.questions?.length) views.overview.append(questionPanel(run, accountId, pending));
   for (const [key, draft] of answerDrafts) {
     if (!key.startsWith(`${accountId}:${id}:`) || !draft.text.trim()) continue;
     if (canAnswer(run) && run.questions.some(question => question.outputId && !question.answerId && key === `${accountId}:${id}:${question.outputId}:${question.outputRevision}:${question.id}`)) continue;
     const copy = el('section', null, 'panel'); copy.append(el('h3', `Texto não enviado · ${referenceLabel(draft.questionId, 'Pergunta')} · Revisão ${draft.outputRevision}`),
       el('p', 'A pergunta ou sua resposta mudou. Este texto foi preservado para consulta e cópia; não será reaplicado.'), el('blockquote', draft.text, 'text-content'),
       button('Descartar este texto não enviado', () => { answerDrafts.delete(key); copy.remove(); }, 'secondary'));
-    main.append(copy);
+    views.overview.append(copy);
   }
   if (run.answers?.length) views.overview.append(planSection('Histórico de esclarecimentos', run.answers,
     value => `${referenceLabel(value.questionId, 'Pergunta')} · Resposta r${value.revision || 1} · Revisão da saída ${value.outputRevision} · ${date(value.at)} — ${value.text}`));
@@ -1306,7 +1354,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
         await detailPage('Retomada aceita. As novas revisões aparecerão abaixo.', false, activeComment);
       } catch (error) { if (user?.id === accountId) await detailPage(errorText(error), true, activeComment); }
     });
-    summary.append(resume, notice);
+    summaryActions.append(resume, notice);
   }
   if ((run.status === 'draft' && run.phase === 'intake') || (run.canCancel ?? ['running', 'ready', 'awaiting_input', 'awaiting_approval'].includes(run.status))) {
     const operation = run.status === 'draft' ? 'start' : 'cancel';
@@ -1321,7 +1369,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
         if (user?.id === accountId) await detailPage(errorText(error), true);
       }
     }, operation === 'cancel' ? 'secondary' : '');
-    summary.append(action, notice);
+    summaryActions.append(action, notice);
   }
   const nextActions = [
     [run.canExecute, 'Executar testes', 'continue', run.routeDetail ? { outputId: run.routeDetail.id, outputRevision: run.routeDetail.revision, expectedAccessRevision: run.targetAccess.revision } : {}],
@@ -1336,9 +1384,12 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
       action.disabled = true; tell(notice, 'Solicitando continuidade…');
       try { await sameAccount(accountId); await api(`/runs/${encodeURIComponent(id)}/${operation}`, { accountId, method: 'POST', body: JSON.stringify(body) }); await detailPage('Solicitação aceita. Acompanhe o progresso.'); }
       catch (error) { if (user?.id === accountId) await detailPage(errorText(error), true); }
-    }); summary.append(action, notice);
+    }); summaryActions.append(action, notice);
   }
-  if (run.questions?.length) summary.append(button('Ver perguntas e respostas', () => views.choose('overview'), 'secondary'));
+  if (run.questions?.length) summaryActions.append(button('Ver perguntas e respostas', () => views.choose('overview', true), 'secondary'));
+  if (run.status === 'awaiting_approval' && run.phase === 'planning') summaryActions.append(button('Revisar plano', () => views.choose('plan', true), 'secondary'));
+  if (run.canDecideCases) summaryActions.append(button('Revisar casos', () => views.choose('cases', true), 'secondary'));
+  if (run.canDetailRoutes) summaryActions.append(button('Revisar percursos', () => views.choose('cases', true), 'secondary'));
   if (run.canCreateCases && run.plan) {
     const notice = message(); const generate = button('Gerar casos de teste', async () => {
       generate.disabled = true; tell(notice, 'Solicitando a geração dos casos de teste…');
@@ -1349,7 +1400,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
         await detailPage('Geração aceita. Acompanhe a produção e a validação independente dos casos.');
       } catch (error) { if (user?.id === accountId) await detailPage(errorText(error), true); }
     });
-    summary.append(generate, notice);
+    summaryActions.append(generate, notice);
   }
   if (run.status === 'running') {
     // ponytail: consulta simples durante o trabalho; a revisão humana não reconstrói formulários.
@@ -1368,7 +1419,11 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
   const restoreCaseComment = pending && run.cases?.id === pending.outputId && run.cases.revision === pending.outputRevision &&
     !run.approvals.some(decision => decision.outputId === pending.outputId && decision.outputRevision === pending.outputRevision);
   if (pending && !restorePlanComment && !restoreCaseComment) main.append(preservedComment(pending));
-  if (!run.plan) { main.append(message(run.status === 'draft' ? 'Material recebido. O processamento ainda não foi iniciado.' : 'Ainda não há plano disponível para consulta.')); return; }
+  if (!run.plan) {
+    const empty = el('section', null, 'panel empty'); empty.append(el('h2', 'Plano de testes'), el('p', 'Ainda não há plano disponível para consulta.')); views.plan.append(empty);
+    if (run.status === 'draft') summary.append(message('Material recebido. O processamento ainda não foi iniciado.'));
+    return;
+  }
   const plan = run.plan; const content = plan.payload.testPlan; const panel = el('section', null, 'panel');
   panel.append(el('p', `Plano de testes / Revisão ${plan.revision}`, 'eyebrow'), el('h2', 'Revisão do plano'), el('h3', 'Objetivo'), el('p', content.objective, 'text-content'));
   panel.append(planSection('Requisitos referenciados', content.requirementIds, id => referenceLabel(id, 'Requisito')), planSection('Critérios referenciados', content.ruleIds, id => referenceLabel(id, 'Critério')), planSection('Prioridades', content.priorities, item => `${referenceLabel(item.ruleId, 'Critério')} — ${item.reason}`), planSection('Exclusões', content.exclusions, item => `${item.description} — ${item.reason}`), planSection('Abordagem', content.approach), planSection('Pré-condições', content.preconditions));
@@ -1391,7 +1446,7 @@ async function detailPage(noticeText = '', isError = false, pending = null) {
     const waiting = run.status === 'awaiting_approval' && run.phase === 'planning';
     views.plan.append(message(currentDecisions.length ? `A decisão desta revisão está registrada.${waiting ? ' A execução permanece em espera; a continuidade ainda não foi iniciada.' : ''}` : 'A revisão está disponível para consulta. Uma decisão exige a etapa de aprovação e um parecer aprovado do validador.'));
     if (restorePlanComment) views.plan.append(preservedComment(pending));
-    summary.append(button('Atualizar consulta', () => detailPage('', false, pendingComment(run, accountId, pending)), 'secondary')); return;
+    summaryActions.append(button('Atualizar consulta', () => detailPage('', false, pendingComment(run, accountId, pending)), 'secondary')); return;
   }
   const review = el('section', null, 'panel'); review.append(el('h2', `Decidir sobre a revisão ${plan.revision}`), el('p', 'Aprovar registra sua decisão e mantém a execução em espera. O servidor confere a revisão e suas dependências antes de aceitar.'));
   const notice = message(); review.append(notice); const form = el('form'); form.noValidate = true;
@@ -1439,8 +1494,10 @@ async function boot() {
   }
 }
 // Limpa o snapshot privado antes de entrar no cache de navegação do navegador.
-addEventListener('pagehide', () => { if (rememberForm) rememberForm(); revokeEvidence(); clearTimeout(detailTimer); detailSequence++; main.replaceChildren(); account.replaceChildren(); });
+addEventListener('pagehide', () => { if (rememberForm) rememberForm(); revokeEvidence(); clearTimeout(detailTimer); detailSequence++; selectDetailTab = null; main.replaceChildren(); account.replaceChildren(); });
 addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
+addEventListener('hashchange', () => selectDetailTab?.());
+addEventListener('popstate', () => selectDetailTab?.());
 document.addEventListener('visibilitychange', () => {
   if (!user) return;
   if (document.hidden) { main.hidden = true; account.hidden = true; }

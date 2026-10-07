@@ -12,6 +12,7 @@ const pages = new Set(['/perfil', '/acesso', '/execucoes', '/execucoes/nova']);
 const webFiles = new Map([
   ['/web/styles.css', { url: new URL('../src/web/styles.css', import.meta.url), type: 'text/css; charset=utf-8' }],
   ['/web/app.js', { url: new URL('../src/web/app.js', import.meta.url), type: 'text/javascript; charset=utf-8' }],
+  ['/web/qatron-mark.png', { url: new URL('../src/web/qatron-mark.png', import.meta.url), type: 'image/png' }],
 ]);
 const indexFile = new URL('../src/web/index.html', import.meta.url);
 // blob: apenas para exibir capturas buscadas com a autenticação existente; URLs revogadas ao sair.
