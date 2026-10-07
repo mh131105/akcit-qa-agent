@@ -213,6 +213,39 @@ async function openTab(id, targetPage = page) {
   if (await tab.getAttribute('aria-selected') !== 'true') await tab.click();
   await selectedTab(id, targetPage);
 }
+// Atualização periódica com a execução em andamento: sem tela de carregamento,
+// sem voltar ao topo e sem fechar seções abertas.
+async function stableRefresh(targetPage = page) {
+  const viewport = targetPage.viewportSize();
+  await targetPage.setViewportSize({ width: viewport.width, height: 360 });
+  const before = await targetPage.evaluate(() => {
+    globalThis.smokeLoadingShown = false;
+    globalThis.smokeRefreshObserver = new MutationObserver(() => {
+      if (document.querySelector('main')?.textContent.includes('Carregando execução')) globalThis.smokeLoadingShown = true;
+    });
+    globalThis.smokeRefreshObserver.observe(document.querySelector('main'), { childList: true, subtree: true });
+    const details = [...document.querySelectorAll('main details:not([hidden] *)')].find(node => !node.open && node.checkVisibility());
+    if (details) details.open = true;
+    scrollTo(0, document.documentElement.scrollHeight);
+    return { scroll: scrollY, maxScroll: document.documentElement.scrollHeight - innerHeight, details: details?.querySelector('summary').textContent ?? null };
+  });
+  assert.ok(before.maxScroll > 100, 'A página da execução precisa ter rolagem para conferir a atualização.');
+  const refreshes = [];
+  const counter = response => { if (/\/api\/runs\/[^/]+$/.test(new URL(response.url()).pathname)) refreshes.push(response.status()); };
+  targetPage.on('response', counter);
+  await targetPage.waitForTimeout(5000);
+  targetPage.off('response', counter);
+  const after = await targetPage.evaluate(details => {
+    globalThis.smokeRefreshObserver.disconnect();
+    const node = details && [...document.querySelectorAll('main details > summary')].find(item => item.textContent === details);
+    return { scroll: scrollY, loading: globalThis.smokeLoadingShown, open: node ? node.parentElement.open : null };
+  }, before.details);
+  await targetPage.setViewportSize(viewport);
+  assert.ok(refreshes.length >= 2, 'A execução em andamento é consultada periodicamente.');
+  assert.equal(after.loading, false, 'A atualização periódica não exibe a tela de carregamento.');
+  assert.ok(Math.abs(after.scroll - before.scroll) <= 2, `A atualização preserva a rolagem (${before.scroll} → ${after.scroll}).`);
+  if (before.details) assert.equal(after.open, true, 'A atualização preserva seções abertas.');
+}
 async function tabNavigationJourney(id) {
   await page.goto(`/execucoes/${id}?smoke=abas`);
   await selectedTab('overview');
@@ -997,6 +1030,7 @@ async function preparationJourney(context, store, owner) {
   await bodyIncludes('Validando os casos de teste');
   await waitForPreparationHeld();
   await selectedTab('plan');
+  await stableRefresh();
   await openTab('cases');
   await bodyIncludes('Casos em revisão. Aguarde a validação para aprová-los.');
   holdCaseValidation = false; releasePreparation();
