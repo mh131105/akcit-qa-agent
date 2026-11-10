@@ -157,7 +157,7 @@ function errorText(error) {
     CREDENTIAL_REJECTED: 'O login da aplicação testada não foi confirmado. Corrija a credencial de teste e solicite uma nova tentativa.',
     VALIDATOR_LIMIT: 'Não foi possível concluir a revisão automática. Os registros salvos foram preservados.',
     REVISION_LIMIT: 'O limite de revisões desta etapa foi esgotado. Os registros salvos estão preservados.',
-    TARGET_NOT_ALLOWED: 'Este endereço não está autorizado para testes.',
+    TARGET_NOT_ALLOWED: 'Use o endereço público HTTP ou HTTPS da aplicação. Endereços internos não estão disponíveis para testes.',
     AUTHORIZED_TARGET_REQUIRED: 'Confirme a autorização para testar a aplicação.',
     INVALID_URL: 'Informe um endereço HTTP ou HTTPS autorizado, sem parâmetros após “?” ou “#”.',
     TARGET_IMMUTABLE: 'O endereço da aplicação não pode ser alterado após o início da preparação. Trocar o alvo exige outra execução.',
@@ -795,7 +795,7 @@ function targetAccessPanel(run, accountId) {
   const urlField = field(form, 'target-start-url', 'Endereço da aplicação', {
     hint: run.status !== 'draft' && access.startUrl
       ? 'Para testar outro endereço, crie uma nova execução.'
-      : 'Informe um endereço autorizado, sem parâmetros após “?” ou “#”. Ex.: https://sua-aplicacao.com',
+      : 'Informe o endereço público HTTP ou HTTPS da aplicação. Ex.: https://sua-aplicacao.com/login',
   });
   urlField.input.value = access.startUrl || '';
   if (run.status !== 'draft' && access.startUrl) {

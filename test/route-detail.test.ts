@@ -126,6 +126,23 @@ test('T6.3: detalha com Pro/high, contexto completo, snapshot preservado e saíd
   assert.ok((await h.review()).routeDetail?.ready);
 });
 
+test('alvo público não listado permanece válido no detalhamento e na elegibilidade de execução', async t => {
+  const h = await setup(t);
+  h.config.targetAllowedOrigins = [];
+  await h.store.update(h.id, record => {
+    record.run.input.startUrl = 'https://8.8.8.8/app?workspace=demo#/login';
+    return { save: true, value: undefined };
+  });
+  assert.equal((await h.review()).canDetailRoutes, true);
+  assert.deepEqual(await h.start(), { accepted: true });
+  await h.coordinator.settled();
+  const view = await h.review();
+  assert.equal(view.phase, 'route_detail');
+  assert.equal(view.status, 'ready');
+  assert.equal(view.routeDetail?.current, true);
+  assert.equal(view.canExecute, true);
+});
+
 test('T6.3: domínio recusa omissões, duplicatas, IDs inventados, razões vazias e alteração lógica', async t => {
   const h = await setup(t), run = await h.read();
   const cases = run.outputs.find(item => item.phase === 'case_design')!;

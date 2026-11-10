@@ -23,6 +23,21 @@ da primeira atualização de um ambiente com contas antigas, siga a
 Ele reúne o escopo proposto para 26/09, os contratos, a divisão de trabalho e os
 critérios para considerar o protótipo pronto.
 
+## Aplicações que podem ser testadas
+
+Uma conta pode configurar a URL pública HTTP ou HTTPS da aplicação que tem
+autorização para testar, sem solicitar liberação de domínio ao operador. Caminho,
+parâmetros e fragmento da URL são preservados. A conta de teste do alvo continua
+privada e seu preenchimento é restrito à origem inicial informada.
+
+Endereços internos, localhost, redes privadas e serviços de metadados não são
+destinos de produção. O navegador usa um proxy por sessão que verifica o DNS e
+conecta ao IP aprovado; redirecionamentos e recursos passam pelo mesmo controle.
+As exceções em `TARGET_ALLOWED_ORIGINS` servem somente a alvos controlados nos
+ambientes local/development e são ignoradas em production.
+
+Esta política também é aplicada no mapeamento e na execução dos casos.
+
 ## Começar na própria máquina
 
 Requisitos: Git e Docker Desktop/Engine com Compose 2.24 ou posterior. O container
