@@ -85,7 +85,25 @@ export async function createTargetProxy({ trustedOrigins = [], lookup, onBlocked
   server.on('connect', (request, client, head) => {
     void (async () => {
       if (!request.url || /[/?#]/.test(request.url)) throw new TargetPolicyError('INVALID_URL', 'CONNECT inválido.');
-      const target = await destination('https://' + request.url);
+      let connectUrl = new URL('https://' + request.url);
+      if (connectUrl.username || connectUrl.password || connectUrl.pathname !== '/') {
+        throw new TargetPolicyError('INVALID_URL', 'CONNECT inválido.');
+      }
+      // Chromium also tunnels ws:// through CONNECT. CONNECT carries only
+      // host:port, so preserve an exact, explicitly trusted HTTP fixture when no
+      // HTTPS exception matches. Production has no trusted private origins.
+      const connectPort = Number(connectUrl.port || 443);
+      if (!trustedOrigins.includes(connectUrl.origin)) {
+        for (const origin of trustedOrigins) {
+          const fixture = new URL(origin);
+          if (fixture.protocol === 'http:' && fixture.hostname === connectUrl.hostname &&
+              Number(fixture.port || 80) === connectPort) {
+            connectUrl = fixture;
+            break;
+          }
+        }
+      }
+      const target = await destination(connectUrl.href);
       if (client.destroyed) return;
       const outgoing = track(createConnection({ host: target.address, family: target.family, port: target.port }));
       let connected = false;

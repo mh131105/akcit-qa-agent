@@ -246,3 +246,39 @@ test('target proxy: WebSocket upgrade conserva caminho, Host e dados sem liberar
   assert.match(bytes.toString(), /^HTTP\/1.1 101 Switching Protocols/);
   assert.ok(bytes.subarray(bytes.indexOf('\r\n\r\n') + 4).equals(marker));
 });
+
+test('target proxy: CONNECT de WebSocket aceita somente host/porta da fixture HTTP explícita', async t => {
+  let otherHits = 0;
+  const other = await fixture(t, (_request, response) => { otherHits++; response.end('private'); });
+  const target = await fixture(t, (_request, response) => response.end());
+  target.server.on('upgrade', (_request, socket, head) => {
+    socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n');
+    if (head.length) socket.write(head);
+    socket.on('data', bytes => socket.write(bytes));
+  });
+  const proxy = await createTargetProxy({ trustedOrigins: [target.origin] });
+  t.after(() => proxy.close());
+  const authority = new URL(target.origin).host;
+  const socket = proxySocket(proxy.url);
+  const marker = Buffer.from('plain-websocket-through-connect');
+  socket.write(`CONNECT ${authority} HTTP/1.1\r\nHost: ${authority}\r\n\r\n`);
+  // Chromium sends the plain WebSocket handshake after CONNECT. Sending it
+  // eagerly also verifies that already-buffered CONNECT bytes are preserved.
+  socket.write(`GET /live HTTP/1.1\r\nHost: ${authority}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n`);
+  socket.write(marker);
+  const bytes = await readUntil(socket, marker);
+  assert.match(bytes.toString(), /^HTTP\/1.1 200 Connection Established/);
+  assert.ok(bytes.includes(Buffer.from('HTTP/1.1 101 Switching Protocols')));
+  assert.ok(bytes.includes(marker));
+  const blocked = proxySocket(proxy.url);
+  const otherAuthority = new URL(other.origin).host;
+  blocked.write(`CONNECT ${otherAuthority} HTTP/1.1\r\nHost: ${otherAuthority}\r\n\r\n`);
+  assert.match((await readUntil(blocked, Buffer.from('\r\n\r\n'))).toString(), /^HTTP\/1.1 403 Forbidden/);
+  assert.equal(otherHits, 0);
+  // With no explicit fixture exception, the same CONNECT remains forbidden.
+  const publicProxy = await createTargetProxy();
+  t.after(() => publicProxy.close());
+  const denied = proxySocket(publicProxy.url);
+  denied.write(`CONNECT ${authority} HTTP/1.1\r\nHost: ${authority}\r\n\r\n`);
+  assert.match((await readUntil(denied, Buffer.from('\r\n\r\n'))).toString(), /^HTTP\/1.1 403 Forbidden/);
+});

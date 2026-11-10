@@ -63,13 +63,14 @@ export async function openBrowserSession(options) {
   let page;
   let proxy;
   let navigationRevision = 0;
+  let blockedNavigation = false;
   const abort = () => {
     processes.abort();
     void browser?.close().catch(() => {});
     void proxy?.close().catch(() => {});
   };
   function currentDestinationAllowed() {
-    if (!page || page.isClosed()) return false;
+    if (!page || page.isClosed() || blockedNavigation) return false;
     try { validateTargetUrl(page.url(), trustedOrigins); return true; }
     catch { return false; }
   }
@@ -84,7 +85,7 @@ export async function openBrowserSession(options) {
       proxy: { server: proxy.url, bypass: '<-loopback>' },
       args: ['--no-sandbox', '--window-position=0,0', `--window-size=${width},${height}`, '--force-device-scale-factor=1',
         '--proxy-bypass-list=<-loopback>', '--disable-quic',
-        '--force-webrtc-ip-handling-policy=disable_non_proxied_udp'],
+        '--webrtc-ip-handling-policy=disable_non_proxied_udp'],
     });
     try {
       const context = await browser.newContext({
@@ -95,6 +96,7 @@ export async function openBrowserSession(options) {
       page.on('framenavigated', frame => {
         if (frame !== page.mainFrame()) return;
         navigationRevision += 1;
+        blockedNavigation = false;
         // Bloqueio adicional para navegações locais/data que não passam pelo HTTP.
         // A revisão impede persistir uma captura feita durante troca de documento.
         if (!currentDestinationAllowed()) void page.close().catch(() => {});
@@ -106,15 +108,25 @@ export async function openBrowserSession(options) {
         let url;
         try { url = new URL(request.url()); }
         catch { return route.abort('blockedbyclient'); }
-        const mainNavigation = request.isNavigationRequest() && request.frame() === page.mainFrame();
-        if (!mainNavigation && ['data:', 'blob:'].includes(url.protocol)) return route.continue();
+        const navigation = request.isNavigationRequest();
+        let mainNavigation = navigation;
+        if (navigation) {
+          // A primeira requisição de um popup pode chegar antes da criação do
+          // frame. Nesse intervalo, trate a navegação conservadoramente.
+          try { mainNavigation = request.frame() === page.mainFrame(); } catch { /* frame ainda indisponível */ }
+        }
+        const subresource = !navigation;
+        if (subresource && ['data:', 'blob:'].includes(url.protocol)) return route.continue();
         // Quando o Chromium expõe o handshake WebSocket ao roteador, sua política
         // de rede é a mesma de HTTP/S; ele continua passando pelo proxy pinado.
-        if (!mainNavigation && url.protocol === 'ws:') url.protocol = 'http:';
-        if (!mainNavigation && url.protocol === 'wss:') url.protocol = 'https:';
+        if (subresource && url.protocol === 'ws:') url.protocol = 'http:';
+        if (subresource && url.protocol === 'wss:') url.protocol = 'https:';
         try { validateTargetUrl(url.href, trustedOrigins); }
         catch {
           recordBlocked(url.href);
+          // Um goto abortado pode conservar o documento anterior; não o capturar
+          // como se fosse uma observação do destino cuja navegação foi recusada.
+          if (mainNavigation) blockedNavigation = true;
           return route.abort('blockedbyclient');
         }
         // A validação/pinagem DNS de cada conexão ocorre no proxy, inclusive em
