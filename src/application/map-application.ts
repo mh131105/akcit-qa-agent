@@ -11,6 +11,7 @@ import { preflightVisualModels, type VisualResult, type VisualTask } from '../ru
 import { runVisual } from './visual-call.js';
 import { SpecialistError } from '../runtime/pi.js';
 import { resolveVisualModels, type readConfig, type ResolvedVisualModels } from '../config.js';
+import { validateTargetUrl, TargetPolicyError } from '../../agents/test-executor/tools/target-policy.mjs';
 
 export class MappingError extends Error {
   constructor(readonly code: string, message: string, readonly status = 409) { super(message); this.name = 'MappingError'; }
@@ -28,10 +29,12 @@ function validAccess(record: StoredRun, config: Pick<ReturnType<typeof readConfi
     return { error: { code: 'ACCESS_NOT_CONFIGURED', message: 'Configure o endereço, a autorização e a credencial de teste antes do mapeamento.', status: 409 } };
   }
   let url: URL;
-  try { url = new URL(input.startUrl); }
-  catch { return { error: { code: 'ACCESS_NOT_CONFIGURED', message: 'O endereço configurado para o alvo é inválido.', status: 409 } }; }
-  if (!config.targetAllowedOrigins.includes(url.origin)) {
-    return { error: { code: 'TARGET_NOT_ALLOWED', message: 'O endereço configurado não está mais autorizado para testes.', status: 403 } };
+  try { url = validateTargetUrl(input.startUrl, config.targetAllowedOrigins); }
+  catch (error) {
+    if (error instanceof TargetPolicyError && error.code === 'TARGET_NOT_ALLOWED') {
+      return { error: { code: error.code, message: error.message, status: 403 } };
+    }
+    return { error: { code: 'ACCESS_NOT_CONFIGURED', message: 'O endereço configurado para o alvo é inválido.', status: 409 } };
   }
   return { url };
 }

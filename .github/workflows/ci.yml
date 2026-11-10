@@ -66,6 +66,7 @@ jobs:
             --tmpfs /tmp:rw,size=512m,mode=1777 \
             --tmpfs /home/node:rw,size=128m,uid=1000,gid=1000,mode=0700 \
             --tmpfs /data:rw,size=128m,uid=1000,gid=1000,mode=0700 \
+            -e SMOKE_PUBLIC_TARGET_URL=https://example.com \
             -e SMOKE_ARTIFACT_DIR=/evidence -v "$PWD/artifacts/mapping:/evidence" \
             akcit-qa:ci node scripts/smoke-mapping.mjs
       - name: Execução visual por caso com navegador/tools reais e modelos substituídos

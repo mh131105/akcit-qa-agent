@@ -46,7 +46,10 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   }
   const port = Number(env.PORT ?? 3000);
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('PORT inválida.');
-  const targetAllowedOrigins = parseTargetAllowedOrigins(env.TARGET_ALLOWED_ORIGINS);
+  // Exceções explícitas para alvos controlados de desenvolvimento/testes. Em
+  // produção, uma configuração antiga nunca libera acesso à rede interna.
+  const configuredTargetOrigins = parseTargetAllowedOrigins(env.TARGET_ALLOWED_ORIGINS);
+  const targetAllowedOrigins = environment === 'production' ? [] : configuredTargetOrigins;
   const preparationModels = {} as Record<PreparationRole, SpecialistModel>;
   let preparationConfigError: string | undefined;
   const visualModels = { executor: {} as SpecialistModel, 'validator-visual': {} as SpecialistModel };

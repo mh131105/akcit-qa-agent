@@ -1,5 +1,28 @@
 # Operação dos ambientes
 
+## Destinos públicos · 10/11/2026
+
+Aplicações públicas HTTP/HTTPS podem ser configuradas pela própria conta, sem
+liberação manual de domínio. O cadastro valida formato e resolução DNS; não
+verifica login nem inicia modelos. URLs com caminho, parâmetros e fragmento são
+aceitas, enquanto credenciais embutidas continuam recusadas.
+
+Cada sessão do Chromium utiliza um proxy HTTP/CONNECT em loopback. O proxy
+resolve o destino de cada nova conexão, recusa respostas DNS com endereços não
+públicos e conecta diretamente ao IP validado, conservando Host e TLS do destino.
+Isso também vale para redirecionamentos, recursos e conexões WebSocket. A sessão
+encerra o proxy e as conexões ao concluir, falhar ou ser cancelada.
+
+Em production, localhost, redes privadas, endereços reservados e serviços de
+metadados são recusados inclusive quando constam na configuração antiga.
+`TARGET_ALLOWED_ORIGINS` serve apenas a fixtures controladas em local/development;
+um alvo público não recebe acesso às exceções internas desses ambientes.
+A credencial privada só pode ser preenchida na origem inicial do alvo.
+
+Para publicar esta alteração, seguir o fluxo existente: PR para develop, CI e
+smokes da imagem, validação em desenvolvimento e promoção da mesma imagem.
+Não é necessário manter uma lista dos domínios públicos de usuários.
+
 ## Candidato T9.1 — execução e relatório
 
 O estado efetivo das verificações está no [fechamento da sprint](evidencias/fechamento-sprint/README.md).
@@ -96,9 +119,10 @@ Os serviços Perio, Traefik, PostgreSQL, Redis, Portainer e Gotenberg não são 
 - Container como usuário `node`, sem privilégios, sem socket do Docker, com
   capabilities removidas e root filesystem somente leitura.
 - `/data` persistente e exclusivo por ambiente. `/tmp` e home transitórios.
-- Navegador com tela virtual Xvfb. O Chromium deste protótipo usa o isolamento do
-  container; não contamos com o sandbox interno do Chromium. Antes de permitir
-  navegação aberta a URLs arbitrárias, revisar isolamento por execução e rede.
+- Navegador com tela virtual Xvfb. O Chromium usa o isolamento do container;
+  não contamos com seu sandbox interno. A saída HTTP/HTTPS passa pelo proxy por
+  sessão descrito em [Destinos públicos](#destinos-públicos--10112026), com IP
+  validado por conexão e bloqueio de destinos não públicos em produção.
 - Logs limitados a 3 arquivos de 10 MiB por container.
 - Nenhuma porta da aplicação publicada na Internet antes do domínio/HTTPS.
 - Chaves de publicação distintas com comandos forçados; sem terminal nem túneis.
@@ -456,13 +480,15 @@ cliente para definir a origem confiável. Origem informada e inválida é recusa
 na configuração; sem origem, a autenticação responde `503 / AUTH_NOT_CONFIGURED`
 e o healthcheck permanece disponível.
 
-`TARGET_ALLOWED_ORIGINS` recebe uma lista de origens autorizadas separadas por vírgula
-para alvos de teste (ex.: `http://127.0.0.1:4000,https://alvo.exemplo.test`).
+`TARGET_ALLOWED_ORIGINS` recebe exceções de origens controladas separadas por vírgula
+somente para testes em local/development (ex.: `http://127.0.0.1:4000`).
 Cada entrada deve ser uma origem exata (protocolo + hostname + porta opcional),
 sem caminho, barra final, query string ou fragmento. Apenas protocolos `http:` e `https:`
-são aceitos. Uma lista vazia ou não configurada não impede a preparação textual ou rascunhos,
-mas recusa a configuração de qualquer alvo na rota `PATCH /api/runs/:id` (`403 / TARGET_NOT_ALLOWED`).
-Alvos locais (como o alvo de demonstração T7) precisam estar explicitamente listados.
+são aceitos. Uma lista vazia permite os destinos públicos HTTP/HTTPS, sem
+liberação por domínio. Em production, a lista é ignorada: destinos não públicos
+continuam recusados. Fixtures locais (como o alvo de demonstração T7) precisam
+estar explicitamente listadas em um ambiente local/development. Essas exceções
+só ficam disponíveis ao navegador quando a origem inicial é uma delas.
 
 Qualquer e-mail válido pode criar uma conta, sem convite ou autorização prévia.
 Cadastro bem-sucedido inicia a sessão imediatamente. Não há confirmação de e-mail
@@ -1267,8 +1293,8 @@ não entra no contexto dos agentes; ele serve apenas à avaliação externa.
   início e término — erro, timeout, cancelamento e saída inválida preservam o
   histórico. Falhas técnicas e de navegador conservam a causa identificável; o
   esgotamento de revisões é reservado a saídas de modelo fora do contrato.
-- Piloto simples: uma única aba; novas abas e destinos fora de
-  `TARGET_ALLOWED_ORIGINS` são bloqueados com motivo legível.
+- Uma única aba; novas abas e destinos não públicos são bloqueados com motivo
+  legível. Recursos de domínios públicos passam pelo mesmo proxy do alvo.
 - Erro de credencial antes da autenticação: corrija a credencial no painel (nova
   revisão de acesso) e use **Mapear aplicação (nova tentativa)**; histórico e tempo
   consumido são preservados.

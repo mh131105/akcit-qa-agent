@@ -6,6 +6,7 @@ import { validateRouteDetail } from '../domain/route-detail.js';
 import type { RunOutput, RunRecord } from '../storage/runs.js';
 import type { readConfig } from '../config.js';
 import { caseDependencies, answersCurrent, latestOutput, PreparationError } from './prepare-plan.js';
+import { validateTargetUrl } from '../../agents/test-executor/tools/target-policy.mjs';
 
 type Config = Pick<ReturnType<typeof readConfig>, 'targetAllowedOrigins'>;
 export type RouteDetailRequest = { outputId: string; outputRevision: number };
@@ -39,7 +40,7 @@ export function routeDependencies(run: RunRecord, request: RouteDetailRequest, c
   if (!Number.isSafeInteger(accessRevision) || (accessRevision as number) < 1 || mapping.payload.accessRevision !== accessRevision ||
     run.input.authorizedTarget !== true || typeof run.input.credentialRef !== 'string') return stale('O acesso mudou desde o mapa validado.');
   try {
-    if (!config.targetAllowedOrigins.includes(new URL(run.input.startUrl as string).origin)) return stale('O destino do mapa não está autorizado.');
+    validateTargetUrl(run.input.startUrl as string, config.targetAllowedOrigins);
     const artifacts = [...run.artifacts, ...(run.answerArtifacts ?? [])] as import('../domain/preparation.js').Artifact[];
     const logicalCases = parseTestCases(cases.payload, artifacts, dependencies.curation.payload as CurationPayload, plan.payload as PlanPayload);
     const navigation = parseNavigation({ authentication: mapping.payload.authentication, map: mapping.payload.map,

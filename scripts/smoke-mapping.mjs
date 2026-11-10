@@ -3,6 +3,7 @@
 // explicitamente (SIMULAÇÃO identificada). Sem chamada paga de LLM.
 // Executa na imagem final (Xvfb + Chromium + xdotool + ffmpeg), como o CI.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
@@ -25,13 +26,16 @@ const visualModels = {
   executor: { provider: 'deepseek', model: 'deepseek-flash', thinkingLevel: 'high' },
   'validator-visual': { provider: 'deepseek', model: 'deepseek-flash', thinkingLevel: 'high' },
 };
-const BLOCKED_ORIGIN = 'https://example.com';
+const BLOCKED_ORIGIN = 'http://169.254.169.254';
 const displayGeometry = execFileSync('xdotool', ['getdisplaygeometry'], { encoding: 'utf8' }).trim();
 let browserSession;
 let server;
 let target;
 let app;
 let fixtureServer;
+let websocketUpgrades = 0;
+let blockedWebsocketUpgrades = 0;
+const websocketSockets = new Set();
 
 // DOM pronto não implica que o compositor já pintou no display do Xvfb.
 // O roteiro aguarda a página controlada; a evidência continua vindo da tool
@@ -67,18 +71,56 @@ const headers = (cookie, userId, origin = undefined) => ({
 try {
   // Alvo T7 controlado em modo de referência.
   target = createDemoTarget({ port: 0, user: 'demo', password: 'demo1234', mode: 'reference' });
+  target.server.on('upgrade', (_request, socket) => {
+    blockedWebsocketUpgrades += 1;
+    socket.destroy();
+  });
   target.server.listen(0, '127.0.0.1');
   await once(target.server, 'listening');
   const targetOrigin = 'http://127.0.0.1:' + target.server.address().port;
 
   // Página controlada para os testes de cursor/aba extra das ferramentas reais.
   fixtureServer = createServer((_request, response) => {
+    if (_request.url === '/redirect-private') {
+      response.writeHead(302, { Location: BLOCKED_ORIGIN + '/latest/meta-data/' });
+      response.end();
+      return;
+    }
     response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     response.end(`<!doctype html><html><title>alvos</title><body style="margin:0">
 <button id="popup" style="position:absolute;left:60px;top:60px;width:140px;height:40px" onclick="window.open('/popup-extra')">Abrir popup</button>
 <button id="alvo-a" style="position:absolute;left:30px;top:200px;width:14px;height:14px" onclick="document.title='alvo-a-clicado'"></button>
 <button id="alvo-b" style="position:absolute;left:420px;top:420px;width:14px;height:14px" onclick="document.title='alvo-b-clicado'"></button>
 </body></html>`);
+  });
+  // Fixture WebSocket RFC6455 mínima: o smoke só envia uma mensagem curta de texto.
+  // O handshake e o frame são reais, sem biblioteca ou chamada de modelo.
+  fixtureServer.on('upgrade', (request, socket, head) => {
+    websocketUpgrades += 1;
+    if (request.url !== '/ws' || typeof request.headers['sec-websocket-key'] !== 'string') {
+      socket.destroy();
+      return;
+    }
+    websocketSockets.add(socket);
+    socket.on('close', () => websocketSockets.delete(socket));
+    socket.on('error', () => {});
+    const accept = createHash('sha1').update(request.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+    socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n');
+    let buffered = Buffer.alloc(0);
+    const receive = chunk => {
+      buffered = Buffer.concat([buffered, chunk]);
+      if (buffered.length < 2) return;
+      if ((buffered[0] & 0x0f) === 8) { socket.end(Buffer.from([0x88, 0])); return; }
+      const length = buffered[1] & 0x7f;
+      if (buffered[0] !== 0x81 || !(buffered[1] & 0x80) || length >= 126) { socket.destroy(); return; }
+      if (buffered.length < 6 + length) return;
+      const payload = Buffer.from(buffered.subarray(6, 6 + length));
+      for (let index = 0; index < length; index++) payload[index] ^= buffered[2 + index % 4];
+      socket.write(Buffer.concat([Buffer.from([0x81, length]), payload]));
+      buffered = buffered.subarray(6 + length);
+    };
+    socket.on('data', receive);
+    if (head.length) receive(head);
   });
   fixtureServer.listen(0, '127.0.0.1');
   await once(fixtureServer, 'listening');
@@ -154,7 +196,7 @@ try {
       const novaShot = await runTool('observe_screen', {});
       assert.equal(target.reservations.length, 0, 'nenhuma reserva criada durante o mapeamento');
       checked.push('percurso-reservas-nova-reserva-sem-confirmar');
-      // 8. Destino não habilitado é bloqueado antes do acesso, com motivo legível.
+      // 8. Rede privada/metadata é bloqueada antes do acesso, com motivo legível.
       //    A página após a navegação recusada não sustenta a verificação de
       //    privacidade: a captura fica bloqueada, sem imagem, por segurança.
       await browserSession.page.goto(BLOCKED_ORIGIN).catch(() => {});
@@ -164,7 +206,7 @@ try {
       const blockedText = blockedShot.content.find(item => item.type === 'text').text;
       const blockedInfo = JSON.parse(blockedText);
       assert.ok(blockedInfo.blockedDestinations.includes(BLOCKED_ORIGIN), 'destino bloqueado com motivo legível');
-      assert.ok(['CREDENTIAL_VISIBLE', 'PRIVACY_CHECK_FAILED'].includes(blockedInfo.blocked));
+      assert.ok(['TARGET_NOT_ALLOWED', 'PAGE_CHANGED', 'CREDENTIAL_VISIBLE', 'PRIVACY_CHECK_FAILED'].includes(blockedInfo.blocked));
       assert.ok(!browserSession.page.url().startsWith(BLOCKED_ORIGIN), 'navegação bloqueada não vence');
       checked.push('destino-bloqueado');
       // 9. Mapa construído somente com identificadores devolvidos pelas tools.
@@ -365,7 +407,113 @@ try {
     await fixtureSession.page.waitForFunction(expected => document.title === expected, title, { timeout: 10000 });
   }
   checked.push('cliques-alvos-pequenos-coordenadas-da-captura');
+  const websocketEcho = await fixtureSession.page.evaluate(address => new Promise((resolve, reject) => {
+    const socket = new WebSocket(address);
+    const timeout = setTimeout(() => { socket.close(); reject(new Error('WebSocket timeout')); }, 5000);
+    socket.onopen = () => socket.send('qatron-proxy');
+    socket.onmessage = event => { clearTimeout(timeout); socket.close(); resolve(event.data); };
+    socket.onerror = () => { clearTimeout(timeout); reject(new Error('WebSocket handshake failed')); };
+  }), fixtureOrigin.replace('http:', 'ws:') + '/ws');
+  assert.equal(websocketEcho, 'qatron-proxy');
+  assert.equal(websocketUpgrades, 1, 'handshake e eco atravessam o proxy do Chromium');
+  checked.push('websocket-real-atravessa-proxy');
+
+  const blockedWebsocket = await fixtureSession.page.evaluate(address => new Promise((resolve, reject) => {
+    const socket = new WebSocket(address);
+    const timeout = setTimeout(() => { socket.close(); reject(new Error('Blocked WebSocket timeout')); }, 5000);
+    socket.onopen = () => { clearTimeout(timeout); socket.close(); resolve('opened'); };
+    socket.onerror = () => { clearTimeout(timeout); resolve('blocked'); };
+  }), targetOrigin.replace('http:', 'ws:') + '/ws');
+  assert.equal(blockedWebsocket, 'blocked');
+  assert.equal(blockedWebsocketUpgrades, 0, 'loopback não autorizado não recebe conexão WebSocket');
+  checked.push('websocket-privado-bloqueado-antes-do-destino');
+  // Um redirect da própria aplicação também não pode alcançar metadata.
+  await fixtureSession.page.goto(fixtureOrigin + '/redirect-private').catch(() => {});
+  assert.ok(fixtureSession.blockedDestinations.includes(BLOCKED_ORIGIN), 'redirect privado bloqueado');
+  const redirectObservation = await fixtureTool('observe_screen').execute('smoke-redirect', {}, undefined);
+  assert.equal(redirectObservation.details.blocked, true);
+  assert.ok(!redirectObservation.content.some(item => item.type === 'image'));
+  checked.push('redirect-privado-bloqueado-sem-captura');
   await fixtureSession.close();
+
+  // O acesso a outra origem permitida para fixtures não autoriza enviar a ela
+  // a credencial destinada à origem inicial.
+  const credentialSession = await openBrowserSession({
+    startUrl: fixtureOrigin + '/', allowedOrigins: [fixtureOrigin, targetOrigin],
+    credential: { username: 'demo', password: 'demo1234' }, mediaDir: join(root, 'media-credential-origin'),
+    remainingActions: async () => 100, onObservation: async () => {}, onAction: async () => {},
+  });
+  try {
+    await credentialSession.page.goto(targetOrigin + '/login');
+    await waitForPaint(credentialSession.page);
+    const point = await screenPoint(credentialSession.page, 'input[name="user"]');
+    const tools = name => credentialSession.tools.find(item => item.name === name);
+    await tools('pointer').execute('smoke-other-origin', { action: 'click', x: point.x, y: point.y }, undefined);
+    await assert.rejects(() => tools('fill_credential').execute('smoke-credential-origin', { field: 'username' }, undefined),
+      /CREDENTIAL_ORIGIN_MISMATCH/);
+    assert.equal(await credentialSession.page.locator('input[name="user"]').inputValue(), '');
+    checked.push('credencial-restrita-a-origem-inicial');
+
+    // Regressão de navegação concorrente: a visão do processo pode ainda indicar
+    // a origem anterior enquanto o renderer já contém outro documento. A decisão
+    // final precisa usar location.origin no mesmo callback síncrono que escreve.
+    const currentUrl = credentialSession.page.url.bind(credentialSession.page);
+    credentialSession.page.url = () => fixtureOrigin + '/';
+    try {
+      await assert.rejects(() => tools('fill_credential').execute('smoke-stale-origin', { field: 'username' }, undefined),
+        /CREDENTIAL_ORIGIN_MISMATCH/);
+    } finally { credentialSession.page.url = currentUrl; }
+    assert.equal(await credentialSession.page.locator('input[name="user"]').inputValue(), '');
+    checked.push('origem-obsoleta-nao-vaza-credencial');
+
+    // A verificação de privacidade não entrega username/password como argumentos
+    // para funções de uma página de outra origem, mesmo com protótipos adulterados.
+    await credentialSession.page.evaluate(() => {
+      window.privacyArguments = [];
+      const includes = String.prototype.includes;
+      String.prototype.includes = function (value, ...rest) {
+        window.privacyArguments.push(value);
+        return includes.call(this, value, ...rest);
+      };
+    });
+    await tools('observe_screen').execute('smoke-privacy-origin', {}, undefined);
+    const privacyArguments = await credentialSession.page.evaluate(() => window.privacyArguments);
+    assert.ok(!privacyArguments.includes('demo') && !privacyArguments.includes('demo1234'));
+    checked.push('verificacao-privacidade-sem-segredo-no-renderer');
+
+    await credentialSession.page.goto('data:text/html,<h1>local</h1>').catch(() => {});
+    const localObservation = await tools('observe_screen').execute('smoke-local-document', {}, undefined);
+    assert.equal(localObservation.details.blocked, true);
+    assert.ok(!localObservation.content.some(item => item.type === 'image'));
+    checked.push('documento-data-sem-captura');
+  } finally { await credentialSession.close(); }
+
+  // Integração externa opcional: sem adicionar o domínio a allowedOrigins.
+  // A suíte padrão continua inteiramente controlada e dispensa rede externa.
+  if (process.env.SMOKE_PUBLIC_TARGET_URL) {
+    const publicSession = await openBrowserSession({
+      startUrl: process.env.SMOKE_PUBLIC_TARGET_URL, allowedOrigins: [], credential: null,
+      mediaDir: join(root, 'media-public-target'),
+      remainingActions: async () => 10, onObservation: async () => {}, onAction: async () => {},
+    });
+    try {
+      assert.ok(['http:', 'https:'].includes(new URL(publicSession.page.url()).protocol));
+      assert.equal(publicSession.page.isClosed(), false);
+      checked.push('alvo-publico-sem-lista-manual');
+    } finally { await publicSession.close(); }
+
+    const legacySession = await openBrowserSession({
+      startUrl: process.env.SMOKE_PUBLIC_TARGET_URL,
+      allowedOrigins: [new URL(process.env.SMOKE_PUBLIC_TARGET_URL).origin, targetOrigin], credential: null,
+      mediaDir: join(root, 'media-public-legacy'),
+      remainingActions: async () => 10, onObservation: async () => {}, onAction: async () => {},
+    });
+    try {
+      await legacySession.page.goto(targetOrigin + '/login').catch(() => {});
+      assert.ok(legacySession.blockedDestinations.includes(targetOrigin));
+      checked.push('alvo-publico-legado-nao-herda-excecao-local');
+    } finally { await legacySession.close(); }
+  }
 
   // ==== Capturas não consomem ações; observação final continua disponível ====
   const limitSession = await openBrowserSession({
@@ -410,6 +558,7 @@ try {
   await app?.shutdown();
   if (app?.listening) { app.close(); app.closeAllConnections(); await once(app, 'close'); }
   if (target?.server?.listening) { target.server.close(); await once(target.server, 'close'); }
+  for (const socket of websocketSockets) socket.destroy();
   if (fixtureServer?.listening) { fixtureServer.close(); await once(fixtureServer, 'close'); }
   await rm(root, { recursive: true, force: true });
 }

@@ -195,6 +195,19 @@ fazem parte da entrega; os critérios são verificações a realizar na implemen
 
 ## 4. Regras de negócio
 
+### Acesso a aplicações públicas · 10/11/2026
+
+O usuário configura a URL pública HTTP/HTTPS da aplicação que está autorizado a
+testar sem liberação manual de domínio. São aceitos caminho, query string e
+fragmento, mas não credenciais embutidas na URL. O cadastro verifica o destino e o
+navegador aplica a política a cada conexão, incluindo redirecionamentos e recursos.
+Destinos não públicos são recusados em produção. O preenchimento da credencial
+privada fica restrito à origem inicial do alvo; navegar a outra origem não lhe
+transfere essa credencial.
+
+`TARGET_ALLOWED_ORIGINS` conserva apenas exceções de alvos controlados nos
+ambientes local e development; production não utiliza essas exceções.
+
 | ID | Regra |
 | --- | --- |
 | RN-01 | Para planejar, a entrada mínima é um comportamento esperado verificável. Aceitar US/CA, requisitos funcionais, prosa e Gherkin textual sem formato obrigatório. Material insuficiente pode ser recebido para curadoria e esclarecimento; não autoriza fabricar expectativas. A cobertura se limita aos comportamentos sustentados pelas fontes e selecionados. |

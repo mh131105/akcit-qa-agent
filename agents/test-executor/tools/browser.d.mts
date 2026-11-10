@@ -21,7 +21,8 @@ export interface BrowserActionRecord {
 }
 export interface BrowserSessionOptions {
   startUrl: string;
-  allowedOrigins: readonly string[];
+  /** Exceções controladas para fixtures locais; destinos públicos dispensam lista. */
+  allowedOrigins?: readonly string[];
   credential: { username: string; password: string } | null;
   mediaDir: string;
   display?: string;

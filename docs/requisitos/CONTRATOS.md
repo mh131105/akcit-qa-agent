@@ -674,7 +674,8 @@ configuração. Origem ausente mantém o healthcheck disponível, mas autentica�
 responde `503`, informando a configuração pendente.
 O cadastro é aberto a qualquer e-mail válido e inicia a sessão imediatamente,
 sem convite, lista de e-mails autorizados ou confirmação de titularidade por e-mail.
-Isso não amplia as origens permitidas para a aplicação testada.
+O acesso ao alvo segue a política de destinos públicos descrita abaixo, sem
+lista de domínios públicos liberados pelo operador.
 
 As contas são persistidas em `DATA_DIR/auth/users.sqlite`, usando SQLite nativo do
 Node.js, com ID UUID v4, nome, e-mail normalizado único, equipe opcional, criação UTC
@@ -1690,12 +1691,14 @@ Permite configurar ou atualizar exclusivamente os dados de acesso ao alvo de uma
    - `run.input.credentialRef` é uma referência opaca gerada pelo backend (`cred-<uuid>`).
    - A gravação de `run.input`, `run.input.accessRevision` e `targetCredential` ocorre na mesma transação atômica em `RunStore.update`.
    - O arquivo usa permissão `0600` em diretório `0700`. A senha não é hasheada porque precisará ser usada pelo navegador no login do alvo.
-4. **Restrição de origens (`TARGET_ALLOWED_ORIGINS`):**
-   - O endereço `startUrl` deve pertencer a uma das origens expressamente habilitadas pela equipe em `TARGET_ALLOWED_ORIGINS`.
+4. **Destinos públicos:**
+   - O endereço `startUrl` pode pertencer a qualquer aplicação pública que a conta esteja autorizada a testar, sem liberação manual de domínio.
    - Aceita apenas protocolos `http:` e `https:`.
-   - Não aceita credenciais embutidas (`user:pass@host`), nem `query string` ou `fragmento`. Origem desconhecida retorna `403 / TARGET_NOT_ALLOWED`.
+   - Caminho, query string e fragmento são aceitos; credenciais embutidas (`user:pass@host`) continuam recusadas.
+   - Destinos não públicos e DNS com respostas não públicas retornam `TARGET_NOT_ALLOWED`. O navegador resolve cada conexão e conecta ao IP aprovado, inclusive em redirecionamentos e recursos.
+   - `TARGET_ALLOWED_ORIGINS` conserva somente exceções de fixtures em local/development, ignoradas em production. Um alvo público não recebe essas exceções internas.
 5. **Imutabilidade do endereço após início da preparação:**
-   - Em estado `draft`, o endereço pode ser alterado livremente para qualquer origem autorizada.
+   - Em estado `draft`, o endereço pode ser alterado para outro destino aceito pela política.
    - Após o início da preparação (`status !== 'draft'`), se `startUrl` ainda for nulo, pode ser preenchido pela primeira vez.
    - Uma vez definido com a preparação iniciada, `startUrl` torna-se imutável (`409 / TARGET_IMMUTABLE`). Trocar de alvo exige criar nova execução.
 6. **Estados permitidos para edição:**
@@ -1720,7 +1723,7 @@ Permite configurar ou atualizar exclusivamente os dados de acesso ao alvo de uma
 8. **Diferenciação na interface:**
    - Quando não configurado: *"Acesso pendente. Configure o endereço e a conta de teste antes do mapeamento."*
    - Quando configurado: *"Acesso configurado. O login ainda não foi verificado pelo navegador."*
-   - Salvar o acesso não realiza chamadas de rede externas, não abre o navegador, não verifica login nem dispara modelos ou transição de etapas. A verificação do login pertence à etapa seguinte (T8).
+   - Salvar o acesso pode resolver o DNS do destino; não envia requisição HTTP ao alvo, não abre navegador, não verifica login nem dispara modelos ou transição de etapas. A verificação do login pertence à etapa seguinte (T8).
 
 ## Mapeamento visual validado — T8.2
 
@@ -1804,9 +1807,11 @@ digitar). Capturas não consomem ações de interação: a observação final se
 continua disponível quando os cliques restantes acabam. Imagem e cursor
 compartilham a geometria real do display (captura X11); não há deslocamento fixo.
 HTTP 200 ou mudança de URL não confirmam login: o mapa registra a **observação
-visual** da área autenticada. Destinos são conferidos por `TARGET_ALLOWED_ORIGINS`
-antes de cada requisição (incluindo redirecionamentos e recursos); novas abas e
-mecanismos não suportados são bloqueados e destino bloqueado produz motivo legível.
+visual** da área autenticada. Cada conexão do navegador passa pelo proxy da sessão,
+que confere o DNS e conecta ao IP aprovado, incluindo redirecionamentos e recursos.
+Em produção, destinos não públicos são bloqueados; novas abas e mecanismos não
+suportados também são bloqueados, com motivo legível. `fill_credential` só preenche
+campos na origem inicial do alvo, sem transferir a credencial a outras origens.
 
 ### Contrato do mapa
 

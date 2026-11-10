@@ -185,6 +185,30 @@ async function mappedRun(t: TestContext, factory: { executor?: ExecutorFactory; 
   await configureAccess(h, run.id, owner.cookie, 0);
   return { h, owner, run, fake };
 }
+test('alvo público não listado mantém canMap e completa mapeamento com modelos substituídos', async t => {
+  const fake = fakeVisual({});
+  const h = await harness(t, { visualCall: fake.visualCall });
+  const owner = await h.register();
+  const run = await h.createRun(owner.cookie);
+  await seedApproved(h, run.id, owner.user.id);
+  const configured = await h.request('/api/runs/' + run.id, {
+    expectedAccessRevision: 0, startUrl: 'https://8.8.8.8/app?workspace=demo#/login',
+    accessProfile: 'Operador', dataPreparation: 'Dados sintéticos.', authorizedTarget: true,
+    credential: { username: 'demo', password: 'demo1234' },
+  }, owner.cookie, { method: 'PATCH' });
+  assert.equal(configured.status, 200, JSON.stringify(configured.body));
+  const before = await h.request('/api/runs/' + run.id, undefined, owner.cookie);
+  assert.equal(before.body.canMap, true);
+  const started = await h.request('/api/runs/' + run.id + '/continue', {
+    outputId: 'out-cases', outputRevision: 1, expectedAccessRevision: 1,
+  }, owner.cookie);
+  assert.equal(started.status, 202);
+  const review = await pollReview(h, run.id, owner.cookie, item => item.status !== 'running');
+  assert.equal(review.status, 'ready');
+  assert.equal(review.phase, 'mapping');
+  assert.equal(review.mapping.current, true);
+  assert.deepEqual(fake.calls, ['test-executor', 'output-validator']);
+});
 test('CA-01: mapeamento só inicia com casos aprovados e acesso configurado', async t => {
   const { h, owner, run, fake } = await mappedRun(t);
   // Sem decisão humana dos casos: recusado antes de qualquer chamada visual.
