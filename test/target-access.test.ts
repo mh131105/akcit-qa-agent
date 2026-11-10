@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import test, { type TestContext } from 'node:test';
 import { createApp } from '../src/app.js';
 import { readConfig } from '../src/config.js';
+import { configureTargetAccess } from '../src/application/target-access.js';
 import { RunStore, type RunRecord, type StoredRun } from '../src/storage/runs.js';
 
 const appOrigin = 'http://localhost:3000';
@@ -16,6 +17,13 @@ const accounts = [
   { name: 'Pessoa Dois', email: 'two@example.test', password: 'Senha ficticia longa 2!' },
 ];
 const cookieOf = (response: Response) => response.headers.get('set-cookie')!.split(';')[0]!;
+
+test('exceções de destinos controlados só são usadas fora de produção', () => {
+  for (const APP_ENV of ['local', 'development']) {
+    assert.deepEqual(readConfig({ APP_ENV, TARGET_ALLOWED_ORIGINS: targetOrigin }).targetAllowedOrigins, [targetOrigin]);
+  }
+  assert.deepEqual(readConfig({ APP_ENV: 'production', TARGET_ALLOWED_ORIGINS: `${targetOrigin},https://target.example.test:8443` }).targetAllowedOrigins, []);
+});
 
 async function harness(t: TestContext, env: NodeJS.ProcessEnv = {}) {
   const dataDir = await fs.mkdtemp(join(tmpdir(), 'akcit-target-access-'));
@@ -91,6 +99,110 @@ async function harness(t: TestContext, env: NodeJS.ProcessEnv = {}) {
     restart: async () => { await close(); app = await createApp(config); await listen(); },
   };
 }
+
+test('alvos HTTP/S públicos não exigem cadastro de origem e preservam query e rota SPA', async t => {
+  const h = await harness(t, { APP_ENV: 'production', TARGET_ALLOWED_ORIGINS: targetOrigin });
+  const owner = await h.register();
+  // IPs públicos literais tornam o teste independente de rede e DNS externos.
+  for (const startUrl of ['https://8.8.8.8/console?project=demo#/login', 'http://1.1.1.1:8080/app']) {
+    const run = await h.createRun(owner.cookie);
+    const result = await h.request(`/api/runs/${run.id}`, {
+      expectedAccessRevision: 0, startUrl, accessProfile: 'Operador', dataPreparation: 'Dados sintéticos.',
+      authorizedTarget: true, credential: { username: 'synthetic', password: 'synthetic-password' },
+    }, owner.cookie, { method: 'PATCH' });
+    assert.equal(result.status, 200, JSON.stringify(result.body));
+    assert.equal(result.body.targetAccess.startUrl, startUrl);
+    assert.equal((await h.store.read(run.id)).run.input.startUrl, startUrl);
+    assert.ok(!result.text.includes('synthetic-password'));
+  }
+  const run = await h.createRun(owner.cookie);
+  const internal = await h.request(`/api/runs/${run.id}`, {
+    expectedAccessRevision: 0, startUrl: targetOrigin, accessProfile: 'Operador', dataPreparation: 'Dados sintéticos.',
+    authorizedTarget: true, credential: { username: 'synthetic', password: 'synthetic-password' },
+  }, owner.cookie, { method: 'PATCH' });
+  assert.equal(internal.status, 400, 'configuração antiga não libera a rede interna em produção');
+  assert.equal(internal.body.error.code, 'TARGET_NOT_ALLOWED');
+});
+
+test('cadastro confere o DNS de domínio público e recusa resposta mista sem gravar o alvo', async t => {
+  const h = await harness(t, { TARGET_ALLOWED_ORIGINS: '' });
+  const owner = await h.register();
+  const payload = {
+    expectedAccessRevision: 0, startUrl: 'https://app.portfolio.dev/console?project=demo#/login',
+    accessProfile: 'Operador', dataPreparation: 'Dados sintéticos.', authorizedTarget: true,
+    credential: { username: 'synthetic', password: 'synthetic-password' },
+  };
+  const run = await h.createRun(owner.cookie);
+  const lookedUp: string[] = [];
+  const result = await configureTargetAccess(h.store, run.id, payload, {
+    userId: owner.user.id,
+    lookup: async hostname => { lookedUp.push(hostname); return [{ address: '8.8.8.8', family: 4 }, { address: '1.1.1.1', family: 4 }]; },
+  }, []);
+  assert.ok(result.ok, JSON.stringify(result));
+  assert.deepEqual(lookedUp, ['app.portfolio.dev']);
+  assert.equal((await h.store.read(run.id)).run.input.startUrl, payload.startUrl);
+
+  const mixedRun = await h.createRun(owner.cookie);
+  const mixed = await configureTargetAccess(h.store, mixedRun.id, payload, {
+    userId: owner.user.id,
+    lookup: async () => [{ address: '8.8.8.8', family: 4 }, { address: '10.0.0.1', family: 4 }],
+  }, []);
+  assert.equal(mixed.ok, false);
+  assert.equal(!mixed.ok && mixed.error.code, 'TARGET_NOT_ALLOWED');
+  const stored = await h.store.read(mixedRun.id);
+  assert.equal(stored.run.input.accessRevision ?? 0, 0);
+  assert.equal(stored.targetCredential, undefined);
+});
+
+test('DNS não é consultado para execução inexistente, de outra conta ou revisão antiga', async t => {
+  const h = await harness(t, { TARGET_ALLOWED_ORIGINS: '' });
+  const owner = await h.register(0), other = await h.register(1);
+  const run = await h.createRun(owner.cookie);
+  const payload = {
+    expectedAccessRevision: 0, startUrl: 'https://app.portfolio.dev/',
+    accessProfile: 'Operador', dataPreparation: 'Dados sintéticos.', authorizedTarget: true,
+    credential: { username: 'synthetic', password: 'synthetic-password' },
+  };
+  let lookups = 0;
+  const lookup = async () => { lookups++; return [{ address: '8.8.8.8', family: 4 }]; };
+  for (const item of [
+    { runId: randomUUID(), userId: owner.user.id, revision: 0, expected: 'RUN_NOT_FOUND' },
+    { runId: run.id, userId: other.user.id, revision: 0, expected: 'UNAUTHORIZED' },
+    { runId: run.id, userId: owner.user.id, revision: 1, expected: 'STALE_VERSION' },
+  ]) {
+    const result = await configureTargetAccess(h.store, item.runId,
+      { ...payload, expectedAccessRevision: item.revision }, { userId: item.userId, lookup }, []);
+    assert.equal(result.ok, false);
+    assert.equal(!result.ok && result.error.code, item.expected);
+    assert.equal(lookups, 0, item.expected + ' deve ser recusado antes de resolver o domínio');
+  }
+});
+
+test('revisão alterada enquanto DNS está pendente é reconferida antes de gravar', async t => {
+  const h = await harness(t, { TARGET_ALLOWED_ORIGINS: '' });
+  const owner = await h.register();
+  const run = await h.createRun(owner.cookie);
+  const result = await configureTargetAccess(h.store, run.id, {
+    expectedAccessRevision: 0, startUrl: 'https://app.portfolio.dev/',
+    accessProfile: 'Operador', dataPreparation: 'Dados sintéticos.', authorizedTarget: true,
+    credential: { username: 'synthetic', password: 'synthetic-password' },
+  }, {
+    userId: owner.user.id,
+    lookup: async () => {
+      await h.store.update(run.id, record => {
+        record.run.input.accessRevision = 1;
+        return { save: true, value: undefined };
+      });
+      return [{ address: '8.8.8.8', family: 4 }];
+    },
+  }, []);
+  assert.equal(result.ok, false);
+  assert.equal(!result.ok && result.error.code, 'STALE_VERSION');
+  const stored = await h.store.read(run.id);
+  assert.equal(stored.run.input.accessRevision, 1);
+  assert.equal(stored.run.input.startUrl, null);
+  assert.equal(stored.targetCredential, undefined);
+});
 
 test('T8.1 CA-01 / CA-04: cadastro inicial de acesso, consulta segura e sobrevivência a reinício', async t => {
   const h = await harness(t);
@@ -300,7 +412,7 @@ test('T8.1 CA-03: isolamento entre contas e proteções HTTP (Origin, Expected-U
   assert.equal(divergent.body.error.code, 'ACCOUNT_CHANGED');
 });
 
-test('T8.1 CA-02: validação e recusa de destino não autorizado, URLs inválidas e campos obrigatórios', async t => {
+test('T8.1 CA-02: recusa de destinos internos, URLs inválidas e campos obrigatórios', async t => {
   const h = await harness(t);
   const owner = await h.register(0);
   const run = await h.createRun(owner.cookie);
@@ -314,7 +426,7 @@ test('T8.1 CA-02: validação e recusa de destino não autorizado, URLs inválid
     credential: { username: 'user', password: 'password' },
   };
 
-  // 1. Destino não presente em TARGET_ALLOWED_ORIGINS
+  // 1. Destino interno sem exceção explícita para a fixture local.
   const unauthTarget = await h.request(`/api/runs/${run.id}`, {
     ...baseValid,
     startUrl: 'http://127.0.0.1:9999/reservas',
@@ -338,21 +450,21 @@ test('T8.1 CA-02: validação e recusa de destino não autorizado, URLs inválid
   assert.equal(embeddedCred.status, 400);
   assert.equal(embeddedCred.body.error.code, 'INVALID_URL');
 
-  // 4. Query string na URL
+  // 4. Query string não permite contornar o bloqueio de metadata.
   const queryString = await h.request(`/api/runs/${run.id}`, {
     ...baseValid,
-    startUrl: `${targetOrigin}/reservas?filter=all`,
+    startUrl: 'http://169.254.169.254/latest/meta-data/?filter=all',
   }, owner.cookie, { method: 'PATCH' });
   assert.equal(queryString.status, 400);
-  assert.equal(queryString.body.error.code, 'INVALID_URL');
+  assert.equal(queryString.body.error.code, 'TARGET_NOT_ALLOWED');
 
-  // 5. Fragmento na URL
+  // 5. Fragmento não permite contornar o bloqueio de loopback IPv6.
   const fragment = await h.request(`/api/runs/${run.id}`, {
     ...baseValid,
-    startUrl: `${targetOrigin}/reservas#section`,
+    startUrl: 'http://[::1]/reservas#section',
   }, owner.cookie, { method: 'PATCH' });
   assert.equal(fragment.status, 400);
-  assert.equal(fragment.body.error.code, 'INVALID_URL');
+  assert.equal(fragment.body.error.code, 'TARGET_NOT_ALLOWED');
 
   // 6. Confirmação de autorização ausente ou falsa
   const missingAuth = await h.request(`/api/runs/${run.id}`, {

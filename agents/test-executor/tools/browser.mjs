@@ -10,6 +10,8 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { chromium } from 'playwright-core';
+import { isPublicAddress, resolveTarget, validateTargetUrl } from './target-policy.mjs';
+import { createTargetProxy } from './target-proxy.mjs';
 
 const exec = promisify(execFile);
 const KEY_WHITELIST = new Set([
@@ -21,16 +23,25 @@ const ACTION_LIMIT = () => new Error('ACTION_LIMIT: o limite de cem ações de e
 export async function openBrowserSession(options) {
   const display = options.display ?? process.env.DISPLAY ?? ':99';
   const executablePath = options.chromiumPath ?? process.env.CHROMIUM_PATH ?? '/usr/bin/chromium';
-  const { credential, allowedOrigins, signal } = options;
-  const allowed = new Set(allowedOrigins);
+  const { credential, allowedOrigins = [], signal } = options;
   const blockedDestinations = [];
   // Processos de infraestrutura (xdotool/ffmpeg) em andamento; encerrados no close.
   const processes = new AbortController();
   let closed = false;
 
-  const start = new URL(options.startUrl);
-  if (!allowed.has(start.origin)) {
-    throw new Error(`ORIGIN_NOT_ALLOWED: a origem ${start.origin} não está autorizada para testes.`);
+  signal?.throwIfAborted();
+  const start = validateTargetUrl(options.startUrl, allowedOrigins);
+  const initialAddress = await resolveTarget(start, allowedOrigins);
+  // Nem um domínio público listado por uma configuração legada herda as exceções
+  // locais. Somente uma fixture inicial explicitamente autorizada e não pública.
+  const trustedOrigins = allowedOrigins.includes(start.origin) && !isPublicAddress(initialAddress.address)
+    ? allowedOrigins : [];
+  function recordBlocked(destination) {
+    let origin;
+    try { origin = new URL(destination).origin; } catch { return; }
+    if (origin !== 'null' && blockedDestinations.length < 64 && !blockedDestinations.includes(origin)) {
+      blockedDestinations.push(origin);
+    }
   }
   await mkdir(options.mediaDir, { recursive: true, mode: 0o700 });
 
@@ -50,12 +61,31 @@ export async function openBrowserSession(options) {
 
   let browser;
   let page;
+  let proxy;
+  let navigationRevision = 0;
+  let blockedNavigation = false;
+  const abort = () => {
+    processes.abort();
+    void browser?.close().catch(() => {});
+    void proxy?.close().catch(() => {});
+  };
+  function currentDestinationAllowed() {
+    if (!page || page.isClosed() || blockedNavigation) return false;
+    try { validateTargetUrl(page.url(), trustedOrigins); return true; }
+    catch { return false; }
+  }
   try {
+    signal?.throwIfAborted();
+    proxy = await createTargetProxy({ trustedOrigins, onBlocked: recordBlocked });
+    signal?.addEventListener('abort', abort, { once: true });
     signal?.throwIfAborted();
     browser = await chromium.launch({
       executablePath,
       headless: false,
-      args: ['--no-sandbox', '--window-position=0,0', `--window-size=${width},${height}`, '--force-device-scale-factor=1'],
+      proxy: { server: proxy.url, bypass: '<-loopback>' },
+      args: ['--no-sandbox', '--window-position=0,0', `--window-size=${width},${height}`, '--force-device-scale-factor=1',
+        '--proxy-bypass-list=<-loopback>', '--disable-quic',
+        '--webrtc-ip-handling-policy=disable_non_proxied_udp'],
     });
     try {
       const context = await browser.newContext({
@@ -63,6 +93,14 @@ export async function openBrowserSession(options) {
       });
       // Aba principal criada antes do bloqueio: o listener fecha apenas abas extras.
       page = await context.newPage();
+      page.on('framenavigated', frame => {
+        if (frame !== page.mainFrame()) return;
+        navigationRevision += 1;
+        blockedNavigation = false;
+        // Bloqueio adicional para navegações locais/data que não passam pelo HTTP.
+        // A revisão impede persistir uma captura feita durante troca de documento.
+        if (!currentDestinationAllowed()) void page.close().catch(() => {});
+      });
       // Piloto simples: uma única aba. Novas abas e popups são bloqueados com motivo.
       context.on('page', extra => { void extra.close().catch(() => {}); });
       await context.route('**/*', async route => {
@@ -70,11 +108,29 @@ export async function openBrowserSession(options) {
         let url;
         try { url = new URL(request.url()); }
         catch { return route.abort('blockedbyclient'); }
-        if (url.protocol !== 'http:' && url.protocol !== 'https:') return route.continue();
-        if (!allowed.has(url.origin)) {
-          if (!blockedDestinations.includes(url.origin)) blockedDestinations.push(url.origin);
+        const navigation = request.isNavigationRequest();
+        let mainNavigation = navigation;
+        if (navigation) {
+          // A primeira requisição de um popup pode chegar antes da criação do
+          // frame. Nesse intervalo, trate a navegação conservadoramente.
+          try { mainNavigation = request.frame() === page.mainFrame(); } catch { /* frame ainda indisponível */ }
+        }
+        const subresource = !navigation;
+        if (subresource && ['data:', 'blob:'].includes(url.protocol)) return route.continue();
+        // Quando o Chromium expõe o handshake WebSocket ao roteador, sua política
+        // de rede é a mesma de HTTP/S; ele continua passando pelo proxy pinado.
+        if (subresource && url.protocol === 'ws:') url.protocol = 'http:';
+        if (subresource && url.protocol === 'wss:') url.protocol = 'https:';
+        try { validateTargetUrl(url.href, trustedOrigins); }
+        catch {
+          recordBlocked(url.href);
+          // Um goto abortado pode conservar o documento anterior; não o capturar
+          // como se fosse uma observação do destino cuja navegação foi recusada.
+          if (mainNavigation) blockedNavigation = true;
           return route.abort('blockedbyclient');
         }
+        // A validação/pinagem DNS de cada conexão ocorre no proxy, inclusive em
+        // redirects e subrecursos. Este continue nunca abre uma conexão direta.
         return route.continue();
       });
       page.on('dialog', dialog => { void dialog.dismiss().catch(() => {}); });
@@ -94,6 +150,9 @@ export async function openBrowserSession(options) {
     async function guard(callSignal, requireAction = true) {
       if (closed) throw new Error('BROWSER_CLOSED: a sessão do navegador foi encerrada.');
       if (callSignal?.aborted) throw new Error('CANCELLED: a chamada foi cancelada.');
+      if (requireAction && !currentDestinationAllowed()) {
+        throw new Error('TARGET_NOT_ALLOWED: a página atual não é um destino HTTP/HTTPS permitido.');
+      }
       if (requireAction && (await options.remainingActions()) < 1) throw ACTION_LIMIT();
     }
     // O executor preenche credenciais sem receber os valores; capturas de uma tela
@@ -102,23 +161,33 @@ export async function openBrowserSession(options) {
     // campo tipo password não torna a captura segura. Falha na verificação bloqueia.
     async function credentialVisible() {
       if (!credential) return false;
-      return await page.evaluate(({ username, password }) => {
+      // A comparação fica no backend: nenhum segredo é passado ao renderer da
+      // página visitada, que pode alterar os protótipos de String/Array.
+      const snapshot = await page.evaluate(() => {
         const inputs = Array.from(document.querySelectorAll('input'));
         const values = inputs.map(input => input.value).filter(value => value.length > 0);
         const text = document.body ? document.body.textContent ?? '' : '';
-        return values.includes(username) || values.includes(password) ||
-          text.includes(username) || text.includes(password);
-      }, credential);
+        return { values, text };
+      });
+      let address = page.url();
+      try { address += '\n' + decodeURIComponent(address); } catch { /* URL literal remains checked. */ }
+      return [credential.username, credential.password].some(value =>
+        snapshot.values.includes(value) || snapshot.text.includes(value) || address.includes(value));
     }
     const capturePath = () => join(options.mediaDir, '.display.png');
     async function screenshot() {
       const path = capturePath();
+      const revision = navigationRevision;
+      if (!currentDestinationAllowed()) throw new Error('TARGET_NOT_ALLOWED: captura de destino recusado.');
       await exec('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'x11grab',
         '-video_size', `${width}x${height}`, '-draw_mouse', '1', '-i', display,
         '-frames:v', '1', '-threads', '1', '-update', '1', path], {
         env: { ...process.env, DISPLAY: display }, timeout: 20000, signal: combinedSignal(),
       });
       try {
+        if (revision !== navigationRevision || !currentDestinationAllowed()) {
+          throw new Error('PAGE_CHANGED: a página mudou durante a captura.');
+        }
         return { buffer: await readFile(path), size: bounds() };
       } finally { await unlink(path).catch(() => {}); }
     }
@@ -133,6 +202,10 @@ export async function openBrowserSession(options) {
       // Capturas não consomem ações de interação: a observação final segura continua
       // disponível mesmo quando os cliques restantes acabaram.
       await guard(callSignal, false);
+      if (!currentDestinationAllowed()) {
+        return blocked('TARGET_NOT_ALLOWED',
+          'Observação bloqueada: a página atual não é um destino HTTP/HTTPS permitido. Nenhuma captura foi salva nem enviada ao modelo.');
+      }
       let visible;
       try { visible = await credentialVisible(); }
       catch {
@@ -144,7 +217,15 @@ export async function openBrowserSession(options) {
         return blocked('CREDENTIAL_VISIBLE',
           'Observação bloqueada: a tela de login exibe a credencial digitada. Nenhuma captura foi enviada ou persistida. Use a última observação segura quando suficiente e pare se perder a referência visual.');
       }
-      const capture = await screenshot();
+      let capture;
+      try { capture = await screenshot(); }
+      catch (error) {
+        if (!currentDestinationAllowed() || String(error.message).startsWith('PAGE_CHANGED:')) {
+          return blocked('PAGE_CHANGED',
+            'Observação bloqueada: a página mudou ou deixou o destino permitido durante a captura. Nenhuma captura foi salva nem enviada ao modelo.');
+        }
+        throw error;
+      }
       const observationId = id();
       const assetId = id();
       await writeFile(join(options.mediaDir, assetId + '.png'), capture.buffer);
@@ -266,17 +347,36 @@ export async function openBrowserSession(options) {
         async execute(_toolCallId, params, callSignal) {
           await guard(callSignal);
           if (!credential) throw new Error('CREDENTIAL_UNAVAILABLE: não há credencial de teste cadastrada para este alvo.');
-          const focusOk = await page.evaluate(({ field }) => {
-            const element = document.activeElement;
-            if (!element || !(element instanceof HTMLInputElement)) return false;
-            const type = (element.type ?? 'text').toLowerCase();
-            return field === 'username' ? ['text', 'email', 'tel', 'url', 'search'].includes(type) : type === 'password';
-          }, { field: params.field });
-          if (!focusOk) {
-            throw new Error(`FOCUS_MISMATCH: o foco atual não está em um campo compatível com ${params.field}. Nenhum valor foi digitado; clique no campo correto e tente novamente.`);
+          if (new URL(page.url()).origin !== start.origin) {
+            throw new Error('CREDENTIAL_ORIGIN_MISMATCH: a credencial só pode ser preenchida na origem inicial da aplicação testada.');
+          }
+          if (!['username', 'password'].includes(params.field)) {
+            throw new Error('INVALID_PARAMETERS: informe username ou password.');
           }
           const value = params.field === 'username' ? credential.username : credential.password;
-          await page.keyboard.insertText(value);
+          // A origem, o foco e a escrita são conferidos na mesma tarefa síncrona
+          // do documento. Uma navegação não pode intercalar verificação e escrita.
+          const outcome = await page.evaluate(({ field, value, expectedOrigin }) => {
+            if (location.origin !== expectedOrigin) return 'origin_mismatch';
+            const element = document.activeElement;
+            if (!element || !(element instanceof HTMLInputElement)) return 'focus_mismatch';
+            const type = (element.type ?? 'text').toLowerCase();
+            const compatible = field === 'username'
+              ? ['text', 'email', 'tel', 'url', 'search'].includes(type) : type === 'password';
+            if (!compatible) return 'focus_mismatch';
+            const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+            if (!setter) return 'focus_mismatch';
+            setter.call(element, value);
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+            return 'filled';
+          }, { field: params.field, value, expectedOrigin: start.origin });
+          if (outcome === 'origin_mismatch') {
+            throw new Error('CREDENTIAL_ORIGIN_MISMATCH: a página mudou antes do preenchimento. Nenhum valor foi digitado.');
+          }
+          if (outcome !== 'filled') {
+            throw new Error(`FOCUS_MISMATCH: o foco atual não está em um campo compatível com ${params.field}. Nenhum valor foi digitado; clique no campo correto e tente novamente.`);
+          }
           const actionId = id();
           await options.onAction({ id: actionId, at: at(), tool: 'fill_credential', params: { field: params.field },
             outcome: 'ok', note: 'valor preenchido sem exposição ao modelo' });
@@ -294,14 +394,17 @@ export async function openBrowserSession(options) {
       async close() {
         if (closed) return;
         closed = true;
+        signal?.removeEventListener('abort', abort);
         processes.abort();
         await unlink(capturePath()).catch(() => {});
-        await browser.close().catch(() => {});
+        await Promise.allSettled([browser.close(), proxy.close()]);
       },
     };
   } catch (error) {
+    signal?.removeEventListener('abort', abort);
     processes.abort();
     await browser?.close().catch(() => {});
+    await proxy?.close().catch(() => {});
     throw error;
   }
 }
