@@ -1403,15 +1403,15 @@ try {
   // T8.1: Configurar acesso privado ao alvo
   await bodyIncludes('Acesso pendente. Configure o endereço e a conta de teste antes do mapeamento.');
 
-  // Erro de envio: destino não autorizado
-  await page.getByLabel('Endereço da aplicação', { exact: true }).fill('https://nao-autorizado.exemplo.test');
+  // Erro de envio: destino interno não pode ser cadastrado como aplicação pública.
+  await page.getByLabel('Endereço da aplicação', { exact: true }).fill('http://169.254.169.254/latest/meta-data/');
   await page.getByLabel('Perfil de acesso', { exact: true }).fill('Operador de reservas');
   await page.getByLabel('Preparação necessária', { exact: true }).fill('Iniciar com a lista de reservas vazia.');
   await page.getByLabel('Usuário da conta de teste', { exact: true }).fill('operador-reserva');
   await page.getByLabel('Senha da conta de teste', { exact: true }).fill('senha-secreta-alvo-123!');
   await page.getByLabel('Confirmo que tenho autorização para testar esta aplicação', { exact: true }).check();
   await page.getByRole('button', { name: 'Salvar acesso', exact: true }).click();
-  await bodyIncludes('Este endereço não está autorizado para testes.');
+  await bodyIncludes('Use o endereço público HTTP ou HTTPS da aplicação. Endereços internos não estão disponíveis para testes.');
   assert.equal(await page.getByLabel('Senha da conta de teste', { exact: true }).inputValue(), '', 'Senha limpa após erro de validação.');
 
   // Erro de envio: resposta perdida / falha de rede
