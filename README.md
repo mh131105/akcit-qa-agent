@@ -1,137 +1,91 @@
 # QAtron
 
-LINK DEMONSTRAÇÃO: https://drive.google.com/file/d/1njZJOCjh0ErBU8ssKVqBqWXJu2xxs-7K/view?usp=sharing
+[**Acessar a aplicação**](https://qatron.mhvps.site/) · [Como usar](docs/USO.md) · [Documentação](docs/README.md) · [Agentes e coordenação](agents/README.md)
 
-QAtron é o nome do produto. O repositório e os identificadores de infraestrutura
-continuam como `akcit-qa-agent`. A [identidade visual](docs/brand/README.md) inclui
-a marca utilizada na interface.
+**Dos requisitos ao relatório de testes de uma aplicação web.** O QAtron organiza os comportamentos esperados, prepara plano e casos de teste, navega pela interface da aplicação e registra os resultados com evidências. O usuário revisa o plano e os casos antes da execução e pode responder a perguntas durante o processo.
 
-Base de desenvolvimento para um sistema de testes caixa preta com Pi, um
-orquestrador e cinco especialistas: curadoria, planejamento, execução, relatório e
-validação das saídas. O validador avalia o trabalho dos outros especialistas; o
-orquestrador encaminha as tarefas e aplica os pareceres, sem julgar a qualidade.
-O produto oferece cadastro livre, entrada de requisitos, curadoria, plano e casos
-com validação independente e aprovação humana, navegação visual, execução e relatório.
-Perguntas podem ser respondidas pelo site; a retomada explícita incorpora os
-esclarecimentos sem alterar os originais. US/CA, requisitos em prosa e Gherkin textual
-são aceitos sem formato obrigatório. Contas usam SQLite, senhas Argon2id e UUID v4.
-Os requisitos e limites estão em [PROTOTIPO.md](docs/requisitos/PROTOTIPO.md); antes
-da primeira atualização de um ambiente com contas antigas, siga a
-[transição operacional](docs/OPERACAO.md#transição-única-para-cadastro-aberto).
+O projeto reúne uma interface web, coordenação de agentes, automação visual de navegador e um histórico de execuções. O relatório relaciona requisito, caso, tentativa, resultado esperado, observação e captura de tela.
 
-**Equipe: comecem pelo [guia de desenvolvimento da sprint](docs/requisitos/README.md).**
-Ele reúne o escopo proposto para 26/09, os contratos, a divisão de trabalho e os
-critérios para considerar o protótipo pronto.
+## O que a aplicação faz
 
-## Aplicações que podem ser testadas
+- Recebe requisitos em texto, histórias de usuário, critérios de aceite e Gherkin textual, além de arquivos `.txt`, `.md` e PDF com texto.
+- Organiza as fontes, identifica dúvidas e gera plano e casos para revisão humana.
+- Mapeia telas, associa percursos aos casos aprovados e realiza testes pela interface visual.
+- Valida as saídas dos agentes em sessões independentes e registra perguntas, revisões e tentativas.
+- Apresenta resultados aprovados, reprovados, bloqueados, inconclusivos e não executados, com relatório web e impressão em PDF.
+- Mantém contas, histórico e arquivos por execução, com opções de duplicação e exclusão.
 
-Uma conta pode configurar a URL pública HTTP ou HTTPS da aplicação que tem
-autorização para testar, sem solicitar liberação de domínio ao operador. Caminho,
-parâmetros e fragmento da URL são preservados. A conta de teste do alvo continua
-privada e seu preenchimento é restrito à origem inicial informada.
+## Como funciona
 
-Endereços internos, localhost, redes privadas e serviços de metadados não são
-destinos de produção. O navegador usa um proxy por sessão que verifica o DNS e
-conecta ao IP aprovado; redirecionamentos e recursos passam pelo mesmo controle.
-As exceções em `TARGET_ALLOWED_ORIGINS` servem somente a alvos controlados nos
-ambientes local/development e são ignoradas em production.
+1. **Informar os requisitos:** crie uma execução e envie os comportamentos que deseja verificar.
+2. **Revisar o plano:** confira a interpretação dos requisitos e aprove ou solicite ajustes.
+3. **Revisar os casos:** examine pré-condições, dados e resultados esperados antes de aprovar o conjunto.
+4. **Preparar o acesso:** informe a URL pública e a conta de teste da aplicação.
+5. **Mapear e testar:** acompanhe a navegação, o detalhamento dos percursos e as tentativas. Responda às perguntas quando houver impedimentos.
+6. **Consultar o relatório:** confira conclusões, capturas e pendências; use **Salvar em PDF** para imprimir a revisão publicada.
 
-Esta política também é aplicada no mapeamento e na execução dos casos.
+As aprovações humanas e as ações de continuidade são separadas. O [guia de uso](docs/USO.md) explica os controles e a interpretação dos resultados.
 
-## Começar na própria máquina
+## Agentes e decisões de implementação
 
-Requisitos: Git e Docker Desktop/Engine com Compose 2.24 ou posterior. O container
-instala Node.js 24.21.0, npm 12.2.0, Pi 0.87.0 e as dependências; não é preciso instalá-los no host.
-Há suporte às arquiteturas ARM64 (Mac Apple Silicon) e AMD64 (Linux/Windows).
+O backend controla a sequência por estados e regras explícitas. **O orquestrador é determinístico:** ele encaminha tarefas e aplica pareceres sem usar um modelo para escolher a próxima etapa.
+
+| Papel | Responsabilidade |
+| --- | --- |
+| Curador | Organizar requisitos, regras, fontes e perguntas. |
+| Projetista | Preparar plano e casos, associar percursos e analisar alterações. |
+| Executor | Observar a aplicação e realizar os casos com navegador, cursor e teclado. |
+| Validador | Revisar saídas textuais e visuais em contexto independente. |
+| Redator | Explicar os resultados consolidados no relatório. |
+
+O executor interage com a aplicação-alvo pela tela, sem ler seu código, consultar suas APIs ou usar seletores DOM. O backend mantém IDs, versões, contagens e vínculos das evidências. As conclusões dos agentes passam por validação antes de alimentar uma etapa dependente ou um relatório publicado.
+
+**Tecnologias:** TypeScript, Node.js 24, SDK Pi, Playwright/Chromium, SQLite, HTML/CSS/JavaScript e Docker. Os perfis atuais de modelos e suas configurações estão em [Operação](docs/OPERACAO.md); os [contratos](docs/requisitos/CONTRATOS.md) descrevem estados, formatos e aprovações.
+
+## Executar localmente
+
+Use Git e Docker com Compose 2.24 ou posterior:
 
 ```sh
-git clone git@github.com:mh131105/akcit-qa-agent.git
+git clone https://github.com/mh131105/akcit-qa-agent.git
 cd akcit-qa-agent
 git switch develop
 cp .env.example .env
 docker compose up --build -d --wait
 ```
 
-Abra http://127.0.0.1:3100. Edite `src/` na sua IDE; o processo reinicia ao salvar.
-Mudanças no package.json/package-lock.json ou Dockerfile exigem novo build.
+Abra [localhost:3100](http://127.0.0.1:3100). As ações dos agentes exigem os modelos e as credenciais configurados para o ambiente. Consulte [Desenvolvimento](docs/DESENVOLVIMENTO.md) para preparar o ambiente e [Operação](docs/OPERACAO.md) para configurar os provedores.
+
+## Verificações e evidências
+
+O repositório inclui testes de autenticação, entradas, estados, aprovações, coordenação e relatórios, além de verificações de navegador e execução visual. Para conferir tipos e testes no container:
 
 ```sh
 docker compose exec app npm run check
 docker compose exec app npm test
-docker compose exec app npm run build
-docker compose exec app npm run smoke:runtime
-docker compose exec app pi --version
-docker compose logs -f app
-docker compose down
 ```
 
-O último comando preserva o volume. `docker compose down -v` **apaga os dados locais**.
-Para trabalhar fora do container, use Node.js **24.21.0** (fixado em `.nvmrc`) e
-npm **12.2.0**: `nvm install && nvm use`, `npm install --global npm@12.2.0`,
-`npm ci` e `npm run dev`. O npm fixado preserva as versões do lockfile também
-nas dependências empacotadas pelo Pi. As ferramentas de tela e vídeo devem ser
-executadas no container Linux.
+Os testes automatizados substituem os modelos; as verificações de infraestrutura também não fazem chamadas pagas de LLM. Ensaios com modelos reais são uma etapa separada. Os [registros de validação](docs/evidencias/README.md) indicam método, ambiente, evidências e limitações de cada verificação.
 
-## Fluxo da equipe
+## Escopo e limitações
 
-1. Aceite o convite ao repositório privado.
-2. Crie uma branch a partir de `develop`: `git switch -c feat/nome-da-mudanca`.
-3. Faça commits e abra PR para `develop`. CI verifica tipos, testes e o runtime Docker.
-4. Após revisão, integre o PR. O workflow **Publicar desenvolvimento** constrói uma
-   imagem, testa Pi/navegador/cursor/vídeo e publica o ambiente remoto.
-5. Valide a mudança no ambiente de desenvolvimento.
-6. Abra PR de `develop` para `main`. Use **Create a merge commit** nesta promoção
-   para preservar a relação entre os branches; evite squash nesse PR de release.
-7. O responsável (`mh131105`) executa **Promover produção → Run workflow → main**.
-   O servidor só aceita a mesma árvore Git da versão que passou em desenvolvimento
-   e utiliza o mesmo digest da imagem, sem reconstruí-la.
+- O ambiente publicado trabalha com URLs públicas HTTP/HTTPS. Localhost e endereços de redes privadas são recusados em produção.
+- A configuração inicial de acesso exige uma conta de teste do alvo. As interações podem criar ou alterar dados; escolha um ambiente apropriado.
+- O escopo é teste funcional de caixa-preta. Testes de carga, segurança e usabilidade não fazem parte deste fluxo.
+- Capturas do mapeamento não comprovam a execução dos casos. Falta de evidência ou impedimento deve aparecer na conclusão correspondente.
+- A qualidade dos casos e das conclusões depende dos requisitos, do acesso e das respostas dos modelos. O relatório conserva falhas, bloqueios e pendências para revisão.
 
-O plano GitHub Free em repositório privado não permite exigir revisões/proteção de
-branches como em planos pagos. A revisão de PR é uma convenção da equipe nesta fase.
-O publicador confere branch, commit, workflow e identidade do responsável pela
-promoção, mas administradores e pessoas com acesso ao servidor continuam sendo
-operadores de confiança. Nunca use a chave pessoal da VPS como secret do GitHub.
+## Documentação
 
-## Acessar desenvolvimento remoto sem domínio
+| Documento | Conteúdo |
+| --- | --- |
+| [Como usar](docs/USO.md) | Fluxo da interface, perguntas, resultados e PDF. |
+| [Desenvolvimento](docs/DESENVOLVIMENTO.md) | Instalação, comandos, testes e contribuição. |
+| [Produto](docs/requisitos/PROTOTIPO.md) | Requisitos, regras de negócio e escopo. |
+| [Contratos](docs/requisitos/CONTRATOS.md) | Dados, estados, operações e aprovações. |
+| [Agentes](agents/README.md) | Papéis, ferramentas, sessões e validação. |
+| [Operação](docs/OPERACAO.md) | Modelos, publicação, dados, backup e recuperação. |
+| [Evidências](docs/evidencias/README.md) | Registros técnicos de verificações e experimentos. |
+| [Identidade visual](docs/brand/README.md) | Marca e convenções da interface. |
 
-Para integrantes com chave pública autorizada, use Node.js 24.21.0 e npm 12.2.0 na máquina local:
-
-```sh
-npm run dev:remote
-```
-
-Abra http://127.0.0.1:3111. O comando cria um canal criptografado por SSH até a
-aplicação; a chave não permite executar comandos nem acessar produção ou outros
-serviços. Use `AKCIT_SSH_KEY=/caminho/da/chave npm run dev:remote` para escolher uma
-chave, ou carregue sua chave no agente SSH. Chaves com senha precisam do `ssh-agent`.
-No Windows, execute pelo WSL ou com Node e OpenSSH disponíveis.
-
-O responsável já tem acesso administrativo e pode usar o túnel convencional:
-
-```sh
-ssh -N -L 3111:127.0.0.1:3101 -L 3112:127.0.0.1:3102 matheus@76.13.175.64
-```
-
-Desenvolvimento: http://127.0.0.1:3111, a origem configurada para esse ambiente.
-A porta http://127.0.0.1:3112 de produção serve somente para diagnóstico: a origem
-de autenticação é https://qatron.mhvps.site, portanto cadastro/login pelo endereço
-local são recusados. A rota pelo Traefik e o registro DNS estão descritos em
-[Operação](docs/OPERACAO.md#domínio-de-produção-e-dns).
-
-## Estrutura
-
-- `src/`: site, API, autenticação, persistência, contratos e coordenação do Pi.
-- `agents/`: diretórios de tools e skills de cada especialista.
-- `scripts/`: inicialização, verificação de runtime e integração com publicação.
-- `deploy/`: Compose da VPS e publicador com comandos restritos.
-- `.github/workflows/`: CI, desenvolvimento e promoção de produção.
-- `docs/requisitos/`: requisitos, regras de negócio, telas, contratos e exemplos sintéticos.
-- `docs/OPERACAO.md`: limites, dados, segredos, backup e recuperação.
-- `docs/EQUIPE.md`: convites e acesso temporário da equipe ao desenvolvimento.
-
-Salvar um rascunho não chama modelos. **Preparar plano** e **Retomar preparação**
-fazem inferências reais com os modelos e credenciais configurados privadamente por
-ambiente; siga [OPERACAO.md](docs/OPERACAO.md#modelos-e-preparação-do-plano--t41).
-Testes automatizados substituem os modelos e os smokes de infraestrutura não
-consomem tokens de provedores. A avaliação real das skills é um comando separado,
-com resultados e limitações em [ajuste de entradas](docs/evidencias/ajuste-entradas/README.md).
+**Autoria:** David Caetano, Erick Gomes, Gabriel Rafael e Matheus Henrique.
