@@ -1,81 +1,59 @@
-# Especialistas
+# Agentes e coordenação
 
-Esta pasta mantém tools e skills de cada papel. T9.1 acrescenta análise de alterações,
-execução e relatório ao fluxo anterior, com validações independentes. A sequência é coordenada pelo backend sem uma
-chamada adicional para escolher a próxima etapa. A implementação segue
-[PROTOTIPO.md](../docs/requisitos/PROTOTIPO.md) e os contratos na mesma pasta.
+O QAtron combina um orquestrador determinístico no backend com cinco papéis de agentes. O orquestrador controla estados, encaminha tarefas e aplica os pareceres; a escolha da próxima etapa não exige outra chamada de modelo.
 
-## Distribuição de papéis e etapas
+A especificação está em [Produto](../docs/requisitos/PROTOTIPO.md), os formatos de dados em [Contratos](../docs/requisitos/CONTRATOS.md) e a configuração em [Operação](../docs/OPERACAO.md#matriz-de-distribuição-de-modelos).
 
-A política de modelos adota a API oficial DeepSeek com níveis de raciocínio explícitos (`thinkingLevel`).
-Consulte a matriz completa em [OPERACAO.md](../docs/OPERACAO.md#matriz-de-distribuição-de-modelos).
+## Papéis e tarefas
 
-### Agentes e tarefas operacionais (implementados)
-- `orchestrator/`: delegação, controle de estado e avanço conforme parecer do validador. É lógica determinística do backend, sem modelo de linguagem associado. Não julga qualidade de saídas nem substitui decisão humana.
-- `artifact-curator/`: [curadoria textual](artifact-curator/skills/curate-artifacts/SKILL.md) com requisitos, regras, exemplos recebidos, fontes e perguntas localizadas; aceita prosa, US/CA, requisitos funcionais e Gherkin textual sem formato obrigatório. Opera com `deepseek-flash` e raciocínio `low`.
-- `test-designer/`: [plano de testes](test-designer/skills/create-test-plan/SKILL.md) com originais, respostas e curadoria aprovada; e [casos lógicos](test-designer/skills/create-test-cases/SKILL.md) com dados concretos, expectativas, fontes e técnicas (PCE/AVL). Ambas as tarefas operam com `deepseek-v4-pro` e raciocínio `high`.
-- `output-validator/`: [validação independente](output-validator/skills/validate-output/SKILL.md) da curadoria, do plano e dos casos lógicos. Opera em perfil textual com `deepseek-v4-pro` e raciocínio `high`, em sessão isolada, conferindo rigor metodológico, fontes, critérios e regras.
-- `test-executor/` (T8.2): [mapeamento visual da aplicação](test-executor/skills/map-application/SKILL.md) com sessão Pi exclusiva do papel e ferramentas próprias ([browser.mjs](test-executor/tools/browser.mjs)): observar tela, mover/clicar, teclado/rolagem e preenchimento privado de credenciais. Opera com `deepseek-flash` / `high`. Sem shell, sem leitura de código, sem seletores DOM, sem chamadas à API do alvo: só visão, cursor e teclado.
-- `output-validator/` (perfil visual, T8.2): [validação do mapa de navegação](output-validator/skills/validate-navigation/SKILL.md) em sessão independente, recebendo as próprias imagens referenciadas. Opera com `deepseek-flash` / `high`; o perfil textual acima permanece em Pro/high.
+| Papel | Responsabilidades | Perfil atual |
+| --- | --- | --- |
+| Curador — `artifact-curator/` | [Organizar requisitos, regras e fontes](artifact-curator/skills/curate-artifacts/SKILL.md), preservando os originais e formulando perguntas quando necessário. | `deepseek-flash`, `low` |
+| Projetista — `test-designer/` | Criar [planos](test-designer/skills/create-test-plan/SKILL.md) e [casos](test-designer/skills/create-test-cases/SKILL.md), [associar percursos](test-designer/skills/detail-test-routes/SKILL.md) e [analisar alterações](test-designer/skills/analyze-feedback/SKILL.md). | `deepseek-v4-pro`, `high` |
+| Executor — `test-executor/` | [Mapear a aplicação](test-executor/skills/map-application/SKILL.md) e [executar casos](test-executor/skills/execute-test-case/SKILL.md) pela interface visual. | `deepseek-flash`, `high` |
+| Validador — `output-validator/` | Revisar [saídas textuais](output-validator/skills/validate-output/SKILL.md), [mapas de navegação](output-validator/skills/validate-navigation/SKILL.md) e [resultados dos testes](output-validator/skills/validate-test-result/SKILL.md) em sessões independentes. | Textual: `deepseek-v4-pro`, `high`; visual: `deepseek-flash`, `high` |
+| Redator — `report-writer/` | [Explicar os resultados no relatório](report-writer/skills/write-report/SKILL.md), usando as contagens, conclusões e evidências consolidadas pelo backend. | `deepseek-flash`, `low` |
 
-- `test-designer/` (T6.3): [detalhar percursos](test-designer/skills/detail-test-routes/SKILL.md), com `deepseek-v4-pro` / `high`. Devolve apenas associações; o backend copia os casos aprovados, registra pendências e preserva os campos lógicos. O `output-validator` textual revisa cada associação com Pro/high em sessão independente.
+Os perfis usam a API oficial DeepSeek, com nível de raciocínio explícito em `thinkingLevel`. A configuração é definida por ambiente, sem fallback silencioso. O orquestrador não tem um modelo de linguagem associado.
 
-### Conclusão do fluxo — T9.1
-- `test-designer/`: [análise de alterações](test-designer/skills/analyze-feedback/SKILL.md), com Pro/high; classifica significado, casos, navegação ou pergunta localizada. O validador textual revisa a decisão antes de o backend invalidar dependentes e revisar documentos.
-- `test-executor/`: [execução visual por caso](test-executor/skills/execute-test-case/SKILL.md), com Flash/high. IDs, eventos, horários e arquivos pertencem ao backend; a conclusão candidata passa pela [validação visual do resultado](output-validator/skills/validate-test-result/SKILL.md) com imagens efetivas por tentativa.
-- `report-writer/`: [redação do relatório](report-writer/skills/write-report/SKILL.md), com Flash/low. O backend consolida contagens, cobertura, referências e resultados; o redator explica esse snapshot sem modificar vereditos. O validador textual Pro/high confere fidelidade antes da publicação.
+## Fluxo de trabalho
 
-> A implementação candidata não comprova qualidade com modelos reais. O estado dos ensaios R1–R5 e do aceite está em [fechamento da sprint](../docs/evidencias/fechamento-sprint/README.md).
+1. O curador organiza as entradas. O projetista prepara o plano. As duas saídas passam pelo validador.
+2. O usuário aprova a versão validada do plano antes de solicitar os casos.
+3. O projetista cria os casos; o validador revisa e o usuário aprova o conjunto.
+4. Com o acesso ao alvo configurado, o executor observa a aplicação. O validador visual confere o mapa e suas capturas.
+5. O projetista associa os percursos observados aos casos aprovados. O backend preserva os campos lógicos e registra pendências; o validador revisa as associações.
+6. O executor realiza os casos com percursos elegíveis. O validador visual confronta cada conclusão com as observações e imagens da tentativa.
+7. O backend consolida os resultados. O redator produz o relatório e o validador textual confere sua fidelidade antes da publicação.
 
-Cada saída passa pelas verificações estruturais do backend e pela revisão do
-validador antes de alimentar uma etapa dependente. O validador usa contexto próprio,
-com acesso às entradas originais e evidências, em leitura. Ele não corrige a saída
-pelo autor nem controla o navegador. Aprovar a documentação de um defeito não muda
-o veredito do teste para aprovado. O próprio parecer recebe verificação estrutural;
-não há outra chamada recursiva para o validador julgar a si mesmo.
+Aprovar o plano ou os casos registra uma decisão; a aprovação, sozinha, não chama modelos. Mudanças materiais voltam às aprovações correspondentes.
 
-Plano e casos lógicos também exigem aprovação humana da versão validada, antes do
-mapeamento. O planejador acrescenta os percursos observados; o validador revisa essa
-entrega antes da execução. Mudanças materiais voltam às aprovações correspondentes.
+## Sessões e ferramentas
 
-Os materiais enviados por usuários são dados, não instruções de sistema. Cada
-execução deve manter contexto e evidências próprios. O executor terá um navegador
-por sessão; especialistas não devem disputar o mesmo cursor.
+Cada produção ou validação textual utiliza uma sessão Pi nova por tentativa. Os papéis textuais não recebem ferramentas de terminal, escrita ou navegador. O backend seleciona uma skill por tarefa em uma lista fechada e recusa combinações incompatíveis de papel e tarefa.
 
-O backend seleciona uma única skill por tarefa em lista fechada: `artifact-curator`
-com `curate-artifacts`; `test-designer` com `create-test-plan`, `create-test-cases`, `detail-test-routes` ou `analyze-feedback`;
-`output-validator` com `validate-output` (textual), `validate-navigation` ou `validate-test-result` (visual);
-`test-executor` com `map-application` ou `execute-test-case`; `report-writer` com `write-report`. Papel e tarefa incompatíveis são recusados;
-caminhos não vêm do cliente. As tarefas do designer reutilizam o mesmo modelo.
-Cada produção/validação textual usa uma sessão Pi nova por
-tentativa, modelo configurado sem fallback e nenhuma tool de terminal, escrita ou
-navegador. O fluxo visual usa sessão própria com `customTools` do SDK: apenas as
-ferramentas de navegador listadas acima, imagens nas mensagens e contagem de todas
-as chamadas e ações. A saída JSON é conferida estruturalmente pelo backend e semanticamente
-pelo validador. O plano validado exige aprovação humana antes de **Gerar casos de
-teste**; aprovar não chama os modelos. T6.1 entrega os casos em `awaiting_approval/case_design`
-e T6.2 implementa a aprovação humana e a solicitação de alterações sobre o conjunto validado,
-mantendo a espera. T8.2 entrega o mapeamento validado: **Mapear aplicação** após as duas
-aprovações humanas e o acesso configurado; o mapa aprovado termina em `ready/mapping` e o
-T6.3 acrescenta `route_detail` validado; T9.1 continua com execução, encerramento e relatório. O ajuste de 24/09
-acrescenta respostas rastreáveis e retomada explícita da preparação: originais
-permanecem intactos, respostas viram fontes, revisões e aprovações antigas ficam
-históricas. Pergunta pode bloquear uma regra sem bloquear toda a história; novas
-revisões passam novamente pelo validador. O orçamento ativo de 45 minutos é
-acumulado na execução, sem contar a espera humana.
+O executor utiliza as [ferramentas de navegador](test-executor/tools/browser.mjs) para observar a tela, mover o cursor, clicar, digitar, rolar e preencher credenciais por um mecanismo privado. Os agentes não consultam código, seletores DOM ou APIs da aplicação-alvo, nem recebem uma ferramenta de shell.
 
-Gherkin é opcional e não substitui o contrato interno. Exemplo recebido não define
-regra geral; proposta só sustenta expectativa após decisão explícita. Não há parser
-completo de `.feature` ou executor Cucumber. Casos usam PCE/AVL apenas quando
-aplicáveis e com dados coerentes; um exemplo pontual não autoriza inventar intervalo.
-Cada caso permite uma tentativa original e até uma reprodução justificada. Uma
-correção textual da conclusão reutiliza as observações, sem nova interação física.
-Uma reprodução aprovada não apaga uma falha anterior sustentada. Só uma revisão
-aprovada do relatório substitui a publicação; durante correção a versão anterior
-permanece disponível. Cancelamento nunca dispara redação automática.
-A demonstração anterior permanece em [T4.1](../docs/evidencias/t4.1/README.md);
-a avaliação da versão atual está em
-[ajuste de entradas](../docs/evidencias/ajuste-entradas/README.md). A demonstração de
-casos tem registro próprio em [T6.1](../docs/evidencias/t6.1/README.md).
+O fluxo visual tem sessão própria e ferramentas registradas por `customTools` no SDK. Imagens, ações e chamadas são contabilizadas. Cada execução mantém seu contexto e suas evidências; os especialistas não disputam o mesmo cursor.
 
-Decisão de 26/09/2026: o relatório do protótipo usará capturas ligadas a caso e tentativa; vídeos são evolução futura. Capturas do mapa não comprovam testes executados.
+O validador recebe os originais e as evidências em contexto independente. Ele revisa a saída, mas não a reescreve pelo autor nem controla o navegador. O backend confere a estrutura do parecer; não há uma chamada recursiva para o validador julgar a si mesmo. Validar o registro de uma falha não transforma o teste em aprovado.
+
+## Requisitos, perguntas e alterações
+
+A curadoria aceita prosa, histórias de usuário, critérios de aceite, requisitos funcionais e Gherkin textual. Não há exigência de formato único, parser completo de arquivos `.feature` ou executor Cucumber.
+
+Casos aplicam particionamento em classes de equivalência e análise de valores-limite quando os requisitos sustentam essas técnicas. Um exemplo recebido não autoriza inventar uma regra geral ou intervalo.
+
+As entradas dos usuários são dados, não instruções de sistema. Os originais permanecem preservados; respostas a perguntas viram fontes rastreáveis. A análise de alterações identifica os itens afetados antes de invalidar saídas dependentes. Novas revisões passam pelo validador e mantêm o histórico das decisões anteriores.
+
+## Tentativas e relatório
+
+Cada caso permite uma tentativa original e até uma reprodução justificada. Uma correção textual da conclusão reutiliza as observações, sem nova interação física. Uma reprodução aprovada não apaga uma falha anterior sustentada.
+
+O backend mantém IDs, eventos, horários, arquivos, contagens e cobertura. As capturas do relatório pertencem a casos e tentativas identificados; uma captura do mapa, por si só, não comprova a execução de um teste.
+
+O redator explica os resultados consolidados sem modificar os vereditos. Somente uma revisão aprovada substitui o relatório publicado; durante uma correção, a versão anterior permanece disponível. Cancelamento não inicia redação automática. O limite de tempo ativo da execução é de 45 minutos, excluindo a espera humana.
+
+## Verificação e evidências
+
+Os registros de [validação integrada](../docs/evidencias/fechamento-sprint/README.md) e de [avaliação dos prompts](../docs/evidencias/ajuste-entradas/README.md) documentam verificações realizadas e seus limites. Testes com modelos substituídos validam o comportamento do pipeline; sua aprovação não comprova, sozinha, a qualidade das respostas dos modelos reais.

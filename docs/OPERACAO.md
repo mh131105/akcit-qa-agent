@@ -1,5 +1,7 @@
 # Operação dos ambientes
 
+[Documentação](README.md) · [Desenvolvimento](DESENVOLVIMENTO.md) · [Como usar](USO.md)
+
 ## Destinos públicos · 10/11/2026
 
 Aplicações públicas HTTP/HTTPS podem ser configuradas pela própria conta, sem
@@ -25,10 +27,10 @@ Não é necessário manter uma lista dos domínios públicos de usuários.
 
 ## Candidato T9.1 — execução e relatório
 
-O estado efetivo das verificações está no [fechamento da sprint](evidencias/fechamento-sprint/README.md).
-Matheus realizará a validação manual, incluindo ensaios reais e aceite das
-capturas/PDF. Testes automatizados com modelos substituídos não contam como R1–R5.
-As seções T4–T6/T8 abaixo preservam o histórico dos recortes anteriores.
+Os [registros de validação integrada](evidencias/fechamento-sprint/README.md)
+indicam os ensaios realizados, suas evidências e as verificações ainda pendentes.
+Testes automatizados com modelos substituídos e ensaios com modelos reais têm
+escopos distintos. As seções T4–T6/T8 abaixo preservam registros técnicos anteriores.
 
 O redator exige perfil explícito, conferido só ao iniciar relatório:
 
@@ -1400,3 +1402,16 @@ retroativamente a jornada anterior como aprovada.
 - [SDK do Pi](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/sdk.md)
 - [Docker Compose em produção](https://docs.docker.com/compose/how-tos/production/)
 - [Limites de ambientes por plano GitHub](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
+
+
+## Acesso restrito ao desenvolvimento
+
+O acesso remoto de colaboradores é separado das permissões do repositório. O operador autoriza apenas chaves públicas e mantém uma entrada restrita por colaborador em `/home/matheus/.ssh/authorized_keys`:
+
+```text
+restrict,command="/usr/bin/python3 /home/matheus/akcit-qa-agent/ops/dev-access.py" TIPO CHAVE_PUBLICA akcit-dev-viewer-USUARIO
+```
+
+Preserve as opções restritivas e as demais entradas do arquivo. O comando limita o acesso ao serviço de desenvolvimento, sem terminal ou produção. A configuração não acompanha automaticamente alterações futuras nas chaves do GitHub. Para revogar, remova somente a entrada correspondente e ajuste separadamente a permissão no repositório. Chaves privadas não são compartilhadas.
+
+O comando de uso pelo colaborador está em [Desenvolvimento](DESENVOLVIMENTO.md#acesso-ao-desenvolvimento-remoto). Os identificadores e caminhos operacionais existentes permanecem válidos independentemente do nome usado na apresentação do produto.
