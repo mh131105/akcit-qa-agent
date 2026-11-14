@@ -1,4 +1,4 @@
-# AKCIT QA Agent
+# QAtron
 
 Este repositório prepara os ambientes local, desenvolvimento e produção de um
 sistema multiagentes de testes caixa preta. Os requisitos do produto e o fluxo

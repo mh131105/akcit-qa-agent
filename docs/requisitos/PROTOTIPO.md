@@ -1,7 +1,6 @@
 # Especificação do produto
 
 Versão 1.4 · 07/10/2026 · Cadastro aberto e acabamento do MVP.
-O nome do arquivo foi preservado para manter os links existentes.
 
 Este documento define o que implementar e como aceitar a entrega. O fluxo e os seis
 agentes refletem as decisões da equipe. As telas, os limites operacionais e os critérios
@@ -24,10 +23,10 @@ projetos nem memória automática entre execuções.
 US/CA, duas aprovações humanas, seis agentes, navegação visual, dúvidas localizadas,
 capturas de tela, relatório web e PDF, cancelamento e recuperação do material salvo.
 
-**Fora desta sprint:** organizações com membros e permissões, convites, SSO, cobrança,
+**Fora do escopo atual:** organizações com membros e permissões, convites, SSO, cobrança,
 vídeos curtos por tentativa (evolução futura), integração com Jira/GitHub, OCR, planilhas, aplicativo móvel, editor de fluxogramas,
 chat geral, testes de carga, de segurança e de usabilidade, concorrência de navegadores e memória
-entre sprints. Recuperação de senha por e-mail e confirmação de e-mail não fazem
+entre execuções. Recuperação de senha por e-mail e confirmação de e-mail não fazem
 parte desta entrega. O cadastro é livre e inicia a sessão imediatamente; a publicação
 do domínio/HTTPS permanece uma etapa operacional separada.
 
@@ -290,4 +289,4 @@ reais. Resultados simulados ajudam a construir as telas, mas não encerram a ent
 
 Registrar a versão testada, evidências e limitações nas tarefas. Todos os critérios
 aplicáveis precisam de evidência; checks de infraestrutura não provam o comportamento
-do produto. Usar [SPRINT.md](../SPRINT.md) para responsabilidades e dependências.
+do produto. Consulte [Desenvolvimento](../DESENVOLVIMENTO.md) para o fluxo de contribuição.

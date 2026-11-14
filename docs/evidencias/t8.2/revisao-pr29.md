@@ -182,4 +182,4 @@ substituições explícitas sem tocar o componente sob verificação.
   do CI, todos `passed` (o smoke de mapeamento com 18 verificações de integração
   real de navegador/cursor/capturas).
 - Ensaio com LLM real: [ensaio-real.md](ensaio-real.md).
-- Pendências verdadeiras e resultados do card em [SPRINT.md](../../SPRINT.md).
+- Pendências verdadeiras e resultados do card em [SPRINT.md](https://github.com/mh131105/akcit-qa-agent/blob/22c737ba68c79beeac33c14452b2acedbc2df8b7/docs/SPRINT.md).
