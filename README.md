@@ -1,6 +1,6 @@
 # QAtron
 
-[**Acessar a aplicação**](https://qatron.mhvps.site/) · [Como usar](docs/USO.md) · [Documentação](docs/README.md) · [Agentes e coordenação](agents/README.md)
+[**Conhecer o QAtron**](https://qatron.mhvps.site/) · [Abrir aplicação](https://qatron.mhvps.site/execucoes) · [Como usar](docs/USO.md) · [Documentação](docs/README.md) · [Agentes e coordenação](agents/README.md)
 
 **Dos requisitos ao relatório de testes de uma aplicação web.** O QAtron organiza os comportamentos esperados, prepara plano e casos de teste, navega pela interface da aplicação e registra os resultados com evidências. O usuário revisa o plano e os casos antes da execução e pode responder a perguntas durante o processo.
 

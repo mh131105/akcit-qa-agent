@@ -4,7 +4,7 @@ O QAtron organiza testes funcionais de aplicações web a partir dos comportamen
 
 ## 1. Criar uma execução
 
-Entre na sua conta ou selecione **Criar conta**. No histórico, abra **Nova execução** e informe o nome da execução, a aplicação e, se necessário, um objetivo.
+Na página inicial, selecione **Abrir aplicação** ou **Experimentar o QAtron**. Entre na sua conta ou selecione **Criar conta**. No histórico, abra **Nova execução** e informe o nome da execução, a aplicação e, se necessário, um objetivo.
 
 No campo **Requisitos**, descreva os comportamentos esperados. São aceitos requisitos funcionais, histórias de usuário, critérios de aceite e cenários Gherkin. Você também pode enviar até cinco arquivos `.txt`, `.md` ou PDF com texto, com até 10 MiB por arquivo. PDFs digitalizados sem texto extraível não têm OCR.
 
