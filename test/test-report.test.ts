@@ -39,6 +39,22 @@ function fixture(): RunRecord {
   return record;
 }
 
+test('relatório conserva limitação de captura sem inventar bloqueio ou aprovação de caso não executado', () => {
+  const record = fixture();
+  const limitation = 'Captura do login recusada por privacidade; área autenticada observada. Login fora do escopo.';
+  const mapping: RunOutput = { id: 'map', phase: 'mapping', revision: 1, dependsOn: [], payload: {
+    authentication: { status: 'authenticated', observationId: 'auth-observation' },
+    map: { screens: [], transitions: [], paths: [] }, pending: [], limitations: [limitation] } };
+  record.outputs.push(mapping);
+  record.validations.push({ outputId: mapping.id, outputRevision: 1, validator: 'output-validator', ...approved });
+  const snapshot = buildReportSnapshot(record, 'partial');
+  assert.ok(snapshot.limitations.includes(limitation));
+  assert.equal(snapshot.cases.find(item => item.caseId === 'CT-NONE')!.verdict, 'not_run');
+  assert.equal(snapshot.cases.find(item => item.caseId === 'CT-BLOCK')!.verdict, 'blocked');
+  assert.equal(snapshot.questions.some(question => question.id === 'mapping:0'), false);
+  assert.deepEqual(snapshot.counts, { total: 5, passed: 1, failed: 1, blocked: 1, inconclusive: 1, not_run: 1 });
+});
+
 test('relatório: contagens incluem cinco vereditos, falha anterior persiste e critérios sem cobertura são explícitos', () => {
   const snapshot = buildReportSnapshot(fixture(), 'final');
   assert.deepEqual(snapshot.counts, { total: 5, passed: 1, failed: 1, blocked: 1, inconclusive: 1, not_run: 1 });
