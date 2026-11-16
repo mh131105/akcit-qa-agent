@@ -88,4 +88,4 @@ Os testes automatizados substituem os modelos; as verificações de infraestrutu
 | [Evidências](docs/evidencias/README.md) | Registros técnicos de verificações e experimentos. |
 | [Identidade visual](docs/brand/README.md) | Marca e convenções da interface. |
 
-**Autoria:** David Caetano, Erick Gomes, Gabriel Rafael e Matheus Henrique.
+**Autoria:** David Caetano, Erick Gomes, Gabriel Rafael e Matheus Henrique de Oliveira Garcia.
