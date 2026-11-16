@@ -139,6 +139,24 @@ concretas do mapa; não aceite uma pendência genérica quando existe caminho
 adequado. Necessidade de mudar conteúdo lógico deve ficar registrada e nunca
 ser aprovada como alteração implícita de um caso.
 
+No contrato desta etapa, `pending` contém exatamente os casos com `pathId: null`.
+Para um caminho válido, `reason` é `null`; o projetista não pode acrescentar uma
+justificativa, copiar avisos do mapa para esse campo nem reescrever o mapa.
+Não peça a propagação automática de `approvedMapping.payload.pending` para
+`output.payload.pending`. Examine a lacuna descrita, o escopo e a evidência de
+acesso/percurso para decidir se ela realmente impede cada caso.
+
+Se login for somente preparo, houver observação da área autenticada no mapa
+validado e o caminho atender à funcionalidade e às pré-condições do caso, a falta
+de captura do login é uma limitação preservada no mapa referenciado. Não exija
+captura/transição de login fora do escopo, uma justificativa em campo inexistente
+ou `pathId: null` só porque o mapa vinculou essa limitação ao caso. A aprovação
+da associação não afirma que o login foi observado nem que o teste foi executado.
+Sem evidência de autenticação ou com percurso/preparo necessário ausente, mantenha
+o impedimento localizado. Para casos de login, confira o percurso até a ação e
+suas pré-condições, sem exigir o resultado futuro do teste. Caminho existente porém
+inadequado continua exigindo correção; privacidade e evidências não são dispensadas.
+
 `approved` pode validar um detalhamento parcialmente ou totalmente pendente se
 as justificativas forem sustentadas. Isso aprova a identificação das pendências,
 não significa que os casos foram executados. Use `changes_requested` para

@@ -143,6 +143,60 @@ test('alvo público não listado permanece válido no detalhamento e na elegibil
   assert.equal(view.canExecute, true);
 });
 
+for (const legacyPending of [false, true]) {
+  test(`limitação de captura do login preserva percurso autenticado (pendência legada: ${legacyPending})`, async t => {
+    const limitation = 'A captura do login foi recusada por privacidade; acesso confirmado na área autenticada. Login é somente preparo.';
+    const h = await setup(t, { modelCall: async task => {
+      const input = JSON.parse(task.prompt);
+      assert.equal(input.approvedMapping.payload.authentication.observationId, 'obs-1');
+      assert.deepEqual(input.approvedMapping.payload.limitations, [limitation]);
+      assert.equal(input.pending.length, legacyPending ? 1 : 0, 'o contexto original não deve ser apagado para liberar os casos');
+      return result(task.role === 'output-validator' ? approved : association(input));
+    } });
+    await h.store.update(h.id, ({ run }) => {
+      const map = run.outputs.find(output => output.phase === 'mapping')!;
+      map.payload.limitations = [limitation];
+      map.payload.pending = legacyPending ? [{ id: 'login-capture', description: limitation,
+        affectedCaseIds: ['CASE-0', 'CASE-1', 'CASE-10', 'CASE-11'] }] : [];
+      return { save: true, value: undefined };
+    });
+    const before = await h.read();
+    await h.start(); await h.coordinator.settled();
+    const view = await h.review();
+    assert.equal(view.canExecute, true);
+    assert.deepEqual(view.routeDetail!.payload.pending, []);
+    assert.ok(view.routeDetail!.payload.testCases.every(item => item.pathId === 'path-form'));
+    assert.deepEqual((await h.read()).outputs.slice(0, -1), before.outputs, 'a limitação e o mapa continuam preservados');
+    const dependencies = before.outputs.find(output => output.phase === 'case_design')!;
+    const mapping = before.outputs.find(output => output.phase === 'mapping')!;
+    const invalid = structuredClone(view.routeDetail!.payload);
+    invalid.pending = [{ caseId: 'CASE-0', reason: limitation }];
+    assert.throws(() => validateRouteDetail(invalid, dependencies.payload as TestCasesPayload,
+      mapping.payload as NavigationPayload, { outputId: dependencies.id, revision: dependencies.revision }),
+    { code: 'INVALID_MODEL_OUTPUT' }, 'copiar aviso para pending com caminho não nulo viola o contrato');
+  });
+}
+
+test('limitação do login não libera caso sem caminho nem autenticação sem evidência', async t => {
+  const h = await setup(t, { modelCall: async task => {
+    if (task.role === 'output-validator') return result(approved);
+    const routes = association(JSON.parse(task.prompt)).routes;
+    routes[0] = { caseId: routes[0].caseId, pathId: null, reason: 'A tela necessária para este caso não foi observada.' };
+    return result({ routes });
+  } });
+  await h.start(); await h.coordinator.settled();
+  const view = await h.review();
+  assert.equal(view.canExecute, true, 'casos com percurso observado permanecem independentes');
+  assert.equal(view.routeDetail!.payload.testCases[0]!.pathId, null);
+  assert.equal(view.routeDetail!.payload.pending[0]!.caseId, 'CASE-0');
+  await h.store.update(h.id, ({ run }) => {
+    run.outputs.find(output => output.phase === 'mapping')!.payload.authentication =
+      { status: 'not_authenticated', observationId: null };
+    return { save: true, value: undefined };
+  });
+  assert.equal((await h.review()).canExecute, false, 'nenhum caso é liberado sem evidência de acesso autenticado');
+});
+
 test('T6.3: domínio recusa omissões, duplicatas, IDs inventados, razões vazias e alteração lógica', async t => {
   const h = await setup(t), run = await h.read();
   const cases = run.outputs.find(item => item.phase === 'case_design')!;

@@ -215,7 +215,7 @@ export async function openBrowserSession(options) {
       }
       if (visible) {
         return blocked('CREDENTIAL_VISIBLE',
-          'Observação bloqueada: a tela de login exibe a credencial digitada. Nenhuma captura foi enviada ou persistida. Use a última observação segura quando suficiente e pare se perder a referência visual.');
+          'Observação bloqueada: a página contém um valor da credencial cadastrada, em campos, texto ou endereço. Isso não comprova que ele tenha sido digitado nesta sessão. Nenhuma captura foi enviada ou persistida. Use a última observação segura quando suficiente; se ainda não houver referência visual segura, pare e registre o impedimento.');
       }
       let capture;
       try { capture = await screenshot(); }
