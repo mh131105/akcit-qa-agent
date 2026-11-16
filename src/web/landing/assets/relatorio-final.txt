@@ -1,0 +1,108 @@
+RELATÓRIO PUBLICADO · REVISÃO 1 · FINAL
+
+QAtron em ação — Ordenação de transações
+
+Applitools Demo — Hackathon Build 1
+
+Criado em 16 de nov. de 2026, 18:45
+
+Foi avaliado um único caso (TC-01), que cobre R1 e as regras CA-01, CA-02 e CA-03: a ordenação das seis transações da tabela Recent Transactions por valor numérico, primeiro crescente e depois decrescente, preservando os pares descrição/valor. O snapshot registra 1 execução concluída, com 1 resultado validado como passed, 0 failed, 0 blocked, 0 inconclusive e 0 not_run. A conclusão possível, conforme as contagens, é que o comportamento esperado foi reproduzido na tentativa validada.
+
+Escopo
+
+O objetivo foi validar pela interface a ordenação numérica crescente e decrescente das seis transações fictícias da tabela Recent Transactions, mantendo a associação entre descrição e valor e registrando evidências da execução. O escopo vigente abrange R1 e as regras CA-01, CA-02 e CA-03, todas selecionadas e cobertas pelo caso TC-01, sem critérios pendentes ou não cobertos. Ficaram excluídos o login como comportamento sob teste (usado apenas como preparação), pagamentos, criação de contas, empréstimos, cartões, busca, gráficos e navegação adicional, incluindo Make Payment, Pay Now e Add Account.
+
+Validar pela interface a ordenação numérica crescente e decrescente das seis transações fictícias da tabela Recent Transactions, preservando os pares descrição/valor e registrando evidências da execução.
+
+Total de casos
+1
+Aprovado
+1
+Reprovado
+0
+Bloqueado
+0
+Inconclusivo
+0
+Não executado
+0
+Cobertura por requisito e critério
+R1 · Ordenar as seis transações por valor numérico, preservando a associação entre descrição e valor.
+Fontes do escopo
+historias-e-criterios.txt · L4 — Preparação: usar o formulário de login e os dados de demonstração cadastrados no acesso da execução. O login é apenas preparação, não um comportamento sob teste. Confirmar visualmente o dashboard ACME com Financial Overview e Recent Transactions. Cada tentativa começa em uma nova sessão; se necessário, recarregar o dashboard para restaurar a ordem inicial da tabela. A exploração deve se restringir ao login de preparação, à tabela e ao cabeçalho Amount.
+historias-e-criterios.txt · L6 — R1 — Ordenar as seis transações por valor numérico, preservando a associação entre descrição e valor.
+historias-e-criterios.txt · L7 — CA-01: partindo da ordem inicial, clicar uma vez no cabeçalho Amount. Esperado: valores em ordem crescente: -320.00 USD (MailChimp Services), -244.00 USD (Ebay Marketplace), +17.99 USD (Shopify product), +340.00 USD (Templates Inc), +952.23 USD (Stripe Payment Processing), +1,250.00 USD (Starbucks coffee). Registrar captura da tabela.
+historias-e-criterios.txt · L8 — CA-02: clicar novamente no cabeçalho Amount. Esperado: ordem decrescente: +1,250.00 USD (Starbucks coffee), +952.23 USD (Stripe Payment Processing), +340.00 USD (Templates Inc), +17.99 USD (Shopify product), -244.00 USD (Ebay Marketplace), -320.00 USD (MailChimp Services). Registrar captura da tabela.
+historias-e-criterios.txt · L9 — CA-03: nos dois estados, manter exatamente as mesmas seis transações e os mesmos pares descrição/valor, sem perda ou duplicação de linhas.
+historias-e-criterios.txt · L11 — Fora de escopo: pagamentos, criação de contas, empréstimos, cartões, busca, gráficos, validação do login e qualquer navegação adicional. Não interagir com Make Payment, Pay Now ou Add Account. Usar somente os dados fictícios do sandbox. Não criar casos adicionais. Registrar resultado esperado, resultado observado e capturas da tentativa; ações de mapeamento não são resultados de teste.
+Exclusões
+Login e validação de login ficam fora do comportamento sob teste; servem apenas como preparação. — O artefato delimita o login como preparação, não como comportamento sob teste.
+Pagamentos, criação de contas, empréstimos, cartões, busca, gráficos e navegação adicional, incluindo Make Payment, Pay Now e Add Account, ficam fora do escopo. — Definido como fora de escopo pelo artefato para restringir a exploração à tabela Recent Transactions e ao cabeçalho Amount.
+TC-01 · Aprovado
+
+R1 / CA-01, CA-02, CA-03
+
+Resultado esperado
+
+Após o primeiro clique no cabeçalho Amount, a tabela Recent Transactions deve apresentar os valores em ordem crescente exatamente nesta sequência: -320.00 USD (MailChimp Services), -244.00 USD (Ebay Marketplace), +17.99 USD (Shopify product), +340.00 USD (Templates Inc), +952.23 USD (Stripe Payment Processing), +1,250.00 USD (Starbucks coffee). Deve ser registrada captura da tabela nesse estado. Após o segundo clique no cabeçalho Amount, a tabela deve apresentar ordem decrescente exatamente nesta sequência: +1,250.00 USD (Starbucks coffee), +952.23 USD (Stripe Payment Processing), +340.00 USD (Templates Inc), +17.99 USD (Shopify product), -244.00 USD (Ebay Marketplace), -320.00 USD (MailChimp Services). Deve ser registrada captura da tabela nesse estado. Nos dois estados, a tabela deve manter exatamente as mesmas seis transações e os mesmos pares descrição/valor, sem perda ou duplicação de linhas.
+
+Resultado observado
+
+Partindo da ordem inicial confirmada, cliquei uma vez no cabeçalho Amount: a tabela passou a exibir -320.00 USD MailChimp Services, -244.00 USD Ebay Marketplace, +17.99 USD Shopify product, +340.00 USD Templates Inc, +952.23 USD Stripe Payment Processing, +1,250.00 USD Starbucks coffee, com as seis linhas e os mesmos pares descrição/valor (c9f1d2df-70c9-4b48-9817-d2d50bf954e1). Cliquei novamente no mesmo cabeçalho Amount: a tabela passou a exibir +1,250.00 USD Starbucks coffee, +952.23 USD Stripe Payment Processing, +340.00 USD Templates Inc, +17.99 USD Shopify product, -244.00 USD Ebay Marketplace, -320.00 USD MailChimp Services, igualmente com seis linhas e sem alteração dos pares descrição/valor (e7769342-b57f-4314-890f-f93d7b4a0905).
+
+O primeiro clique no cabeçalho Amount reproduziu exatamente a sequência crescente exigida por CA-01 (-320.00, -244.00, +17.99, +340.00, +952.23, +1,250.00 com as descrições correspondentes), e o segundo clique reproduziu exatamente a sequência decrescente exigida por CA-02 (+1,250.00, +952.23, +340.00, +17.99, -244.00, -320.00). Em ambos os estados a tabela manteve exatamente as mesmas seis transações com os mesmos pares descrição/valor, sem linha ausente ou duplicada, atendendo CA-03.
+
+Pré-condições
+A execução ocorre em uma nova sessão.
+O dashboard ACME está visível com Financial Overview e Recent Transactions após o login de preparação com os dados de demonstração cadastrados no acesso da execução.
+A tabela Recent Transactions contém as seis transações fictícias esperadas na ordem inicial.
+Preparo
+
+Realizar o login de preparação no formulário com os dados de demonstração cadastrados no acesso da execução e, se necessário, recarregar o dashboard para restaurar a ordem inicial da tabela.
+
+Dados utilizados
+
+Nenhum item informado.
+
+Fontes do caso
+historias-e-criterios.txt · L4 — Preparação: usar o formulário de login e os dados de demonstração cadastrados no acesso da execução. O login é apenas preparação, não um comportamento sob teste. Confirmar visualmente o dashboard ACME com Financial Overview e Recent Transactions. Cada tentativa começa em uma nova sessão; se necessário, recarregar o dashboard para restaurar a ordem inicial da tabela. A exploração deve se restringir ao login de preparação, à tabela e ao cabeçalho Amount.
+historias-e-criterios.txt · L6 — R1 — Ordenar as seis transações por valor numérico, preservando a associação entre descrição e valor.
+historias-e-criterios.txt · L7 — CA-01: partindo da ordem inicial, clicar uma vez no cabeçalho Amount. Esperado: valores em ordem crescente: -320.00 USD (MailChimp Services), -244.00 USD (Ebay Marketplace), +17.99 USD (Shopify product), +340.00 USD (Templates Inc), +952.23 USD (Stripe Payment Processing), +1,250.00 USD (Starbucks coffee). Registrar captura da tabela.
+historias-e-criterios.txt · L8 — CA-02: clicar novamente no cabeçalho Amount. Esperado: ordem decrescente: +1,250.00 USD (Starbucks coffee), +952.23 USD (Stripe Payment Processing), +340.00 USD (Templates Inc), +17.99 USD (Shopify product), -244.00 USD (Ebay Marketplace), -320.00 USD (MailChimp Services). Registrar captura da tabela.
+historias-e-criterios.txt · L9 — CA-03: nos dois estados, manter exatamente as mesmas seis transações e os mesmos pares descrição/valor, sem perda ou duplicação de linhas.
+Tentativa 1 · Original · Aprovado
+Pendências
+
+Nenhum item informado.
+
+Perguntas
+
+Nenhum item informado.
+
+Respostas registradas
+
+Nenhum item informado.
+
+Limitações
+As capturas imediatamente posteriores ao preenchimento das credenciais ficaram indisponíveis por bloqueio de privacidade; a evidência do acesso é a observação do dashboard autenticado (9463046b-2d68-4aaf-b5bf-2f1d60600c8b), e a posição dos campos e do botão Log In vem da última observação segura (c14eaca3-1e55-4273-a6fe-4bcc89292c3a).
+O cabeçalho Amount foi localizado visualmente no topo da coluna de valores (aprox. x=1278, y=299 na observação 9dbb1374-3bc1-41f2-859a-740d30f2d18c), mas não foi clicado no mapeamento para não executar os casos TC-01/CA-01 e CA-02; os estados ordenados crescente e decrescente não foram observados nesta fase.
+A exploração ficou restrita ao login de preparação e à tabela Recent Transactions, conforme o escopo; demais áreas do dashboard não foram percorridas.
+As capturas imediatamente posteriores ao preenchimento das credenciais ficaram indisponíveis por bloqueio de privacidade; a evidência do acesso é a observação do dashboard autenticado, e a posição dos campos e do botão Log In vem da última observação segura.
+O cabeçalho Amount foi localizado visualmente no mapeamento, mas não foi clicado nessa fase; os estados ordenados crescente e decrescente não foram observados no mapeamento, e capturas de mapeamento não comprovam execução de casos.
+Pareceres utilizados
+Curadoria · Revisão 1 · Validação automática aprovada — A curadoria reproduz fielmente R1, CA-01, CA-02 e CA-03, com fontes e citações corretas, mantém as sequências, valores, pares descrição/valor e a relação de continuidade entre os cliques; não há informação inventada nem omissão material dos comportamentos selecionados.
+Plano de testes · Revisão 1 · Validação automática aprovada — O plano cobre integralmente R1 e CA-01, CA-02 e CA-03, preserva o objetivo, as sequências exatas esperadas, a captura de evidências e as exclusões definidas no artefato, sem acrescentar comportamento sem fonte.
+Casos de teste · Revisão 1 · Validação automática aprovada — O caso único cobre fielmente CA-01, CA-02 e CA-03 no mesmo fluxo, respeita o escopo definido, mantém pathId nulo e apresenta pré-condições e expectativas alinhadas às fontes, à curadoria e ao plano aprovados.
+Mapa de navegação · Revisão 1 · Validação automática aprovada — O mapa é sustentado pelas três imagens e pelas duas ações registradas: o formulário de login (c14eaca3), o dashboard autenticado ACME (9463046b) e a tabela Recent Transactions completa (9dbb1374) existem no manifesto, a transição login→dashboard apoia-se no clique com desfecho ok e na imagem autenticada subsequente, e a rolagem registrada liga corretamente o dashboard à tabela. As telas declaradas correspondem ao conteúdo visível, o percurso parte da tela inicial sem inventar navegação, o status 'authenticated' tem observação da área autenticada, e as limitações registram honestamente a ausência de captura das credenciais e dos estados ordenados, sem transformar em pendência algo que impeça o percurso aprovado.
+Detalhamento dos percursos · Revisão 2 · Validação automática aprovada — TC-01 aparece exatamente uma vez e foi corretamente associado ao percurso percurso-tabela-amount, existente no mapa validado e suficiente para alcançar a tabela Recent Transactions com o cabeçalho Amount, atendendo às pré-condições e permitindo as ações de ordenação definidas. IDs, escopo, dados, expectativa, fontes e approvedCaseRevision foram preservados, e a pendência anterior foi removida de forma sustentada.
+Resultado · TC-01 · Revisão 1 · Validação automática aprovada — As imagens desta tentativa confirmam o preparo e o percurso: sessão nova no Login Form, dashboard ACME autenticado com Financial Overview e Recent Transactions, seis transações na ordem inicial, após o primeiro clique no cabeçalho Amount a sequência crescente exata de CA-01, e após o segundo clique a sequência decrescente exata de CA-02. Em ambos os estados permanecem as mesmas seis transações e os mesmos pares descrição/valor, sem perda ou duplicação, atendendo CA-03.
+Referências às versões
+Curadoria · Revisão 1
+Plano de testes · Revisão 1
+Casos de teste · Revisão 1
+Mapa de navegação · Revisão 1
+Detalhamento dos percursos · Revisão 2
+Resultado · TC-01 · Revisão 1
+Conclusão
+
+O resultado validado do caso TC-01 foi passed: o primeiro clique no cabeçalho Amount produziu a sequência crescente exigida por CA-01 e o segundo clique produziu a sequência decrescente exigida por CA-02, mantendo nos dois estados as mesmas seis transações e os mesmos pares descrição/valor, sem perda ou duplicação, conforme CA-03. Não há pendências registradas no snapshot. Trata-se de relatório final, que indica processo encerrado, sem garantir que todos os testes passaram além do que foi efetivamente validado.

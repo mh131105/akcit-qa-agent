@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1512">
+  <meta name="description" content="QAtron: testes funcionais com agentes de IA, revisão humana e evidências. Dos requisitos ao relatório, acompanhe cada etapa de uma execução visual.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="QAtron — Testes com evidências">
+  <meta property="og:description" content="Testes funcionais, dos requisitos às evidências. Agentes de IA, revisão humana e execução visual em uma aplicação web.">
+  <link rel="canonical" href="https://qatron.mhvps.site/">
+  <meta property="og:url" content="https://qatron.mhvps.site/">
+  <meta property="og:image" content="https://qatron.mhvps.site/landing/assets/qatron-poster.jpg">
+  <title>QAtron — Testes com evidências</title>
+  <link rel="icon" href="/landing/qatron-mark.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/landing/styles.css">
+  <script src="/landing/script.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+  <header class="site-header">
+    <div class="header-inner wrap">
+      <a class="brand" href="#inicio" aria-label="QAtron — início">
+        <img src="/landing/qatron-mark.png" width="40" height="40" alt="">
+        <span>QAtron<span class="brand-dot">.</span></span>
+      </a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="main-nav" aria-label="Abrir menu"><span></span><span></span></button>
+      <nav id="main-nav" class="main-nav" aria-label="Navegação principal">
+        <a href="#demonstracao">Como funciona</a>
+        <a href="#arquitetura">Por dentro</a>
+        <a href="https://github.com/mh131105/akcit-qa-agent" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+        <a class="nav-cta" href="/execucoes">Abrir aplicação <span aria-hidden="true">↗</span></a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="conteudo">
+    <section class="hero wrap" id="inicio" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="signal" aria-hidden="true"></span> Testes com evidências</p>
+        <h1 id="hero-title">Testes funcionais,<br>dos requisitos<br><span>às evidências.</span></h1>
+        <p class="hero-description">Descreva o que sua aplicação deve fazer. Revise o plano, aprove os casos e acompanhe agentes de IA testando pela interface.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="/execucoes">Experimentar o QAtron <span aria-hidden="true">↗</span></a>
+          <a class="text-link" href="#demonstracao">Explore o fluxo <span aria-hidden="true">↓</span></a>
+        </div>
+        <p class="hero-note">Aplicação web <span aria-hidden="true">/</span> Cadastro aberto <span aria-hidden="true">/</span> Código público</p>
+      </div>
+      <div class="hero-visual" aria-label="Representação do fluxo: requisito, revisão humana, execução visual e evidência">
+        <div class="visual-label"><span>QA / WORKFLOW</span><span>01 — 04</span></div>
+        <div class="trace-line" aria-hidden="true"></div>
+        <div class="trace-item trace-input"><span class="trace-node" aria-hidden="true"></span><span class="trace-index">01</span><div><span class="trace-kicker">ENTRADA</span><strong>O comportamento esperado</strong><p>Requisitos e critérios de aceite</p></div><span class="trace-symbol" aria-hidden="true">↳</span></div>
+        <div class="trace-item trace-review"><span class="trace-node" aria-hidden="true"></span><span class="trace-index">02</span><div><span class="trace-kicker">REVISÃO HUMANA</span><strong>Você aprova o caminho</strong><p>Plano e casos antes da execução</p></div><span class="trace-symbol check" aria-hidden="true">✓</span></div>
+        <div class="trace-item trace-run"><span class="trace-node" aria-hidden="true"></span><span class="trace-index">03</span><div><span class="trace-kicker">EXECUÇÃO VISUAL</span><strong>O agente interage pela tela</strong><p>Navegador, cursor e teclado</p></div><svg class="cursor-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 3 13 10-6 1-3 6-4-17Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></div>
+        <div class="trace-item trace-proof"><span class="trace-node" aria-hidden="true"></span><span class="trace-index">04</span><div><span class="trace-kicker">EVIDÊNCIAS</span><strong>A conclusão tem contexto</strong><p>Esperado · observado · captura</p></div><span class="trace-symbol" aria-hidden="true">↗</span></div>
+        <div class="visual-footer"><span class="mono-square" aria-hidden="true"></span> Cada etapa deixa um registro.</div>
+      </div>
+      <div class="hero-bottom"><span class="section-number">[ 01 / VISÃO GERAL ]</span><p>Da intenção ao teste.<br>Do teste ao que foi observado.</p><a href="#demonstracao" aria-label="Ir para a demonstração" class="scroll-link">↓</a></div>
+    </section>
+
+    <section class="demo-section section-pad" id="demonstracao" aria-labelledby="demo-title">
+      <div class="wrap">
+        <div class="section-heading">
+          <div><p class="eyebrow">[ 02 / O FLUXO ]</p><h2 id="demo-title">Veja o fluxo completo.<br><span>Do requisito ao relatório.</span></h2></div>
+          <p>O QAtron mantém requisitos, casos, tentativas e evidências conectados. Você revisa as etapas de planejamento antes de liberar os testes.</p>
+        </div>
+
+        <div id="real-demo" class="real-demo" aria-labelledby="real-demo-title">
+          <div class="real-demo-heading">
+            <div><p class="eyebrow">CAPTURAS REAIS / APPLITOOLS DEMO</p><h3 id="real-demo-title">Ordenação verificada pela interface.</h3></div>
+            <p>No sandbox Hackathon Build 1 da Applitools, o QAtron verificou a ordenação crescente e decrescente de seis transações fictícias, preservando os pares descrição e valor.</p>
+          </div>
+          <p id="real-demo-status" class="real-demo-status"><span class="signal" aria-hidden="true"></span> 1 caso aprovado · 3 critérios verificados · Relatório final</p>
+          <p id="real-demo-progress" class="real-demo-progress">Nesta demonstração, uma tentativa validada confirmou as duas ordens e a preservação das seis transações. A galeria reúne as evidências do caso TC-01 e o relatório final. <a href="/landing/assets/relatorio-final.txt" target="_blank" rel="noopener noreferrer">Consultar relatório final <span aria-hidden="true">↗</span></a></p>
+          <figure id="real-demo-video" class="real-demo-video">
+            <video id="real-demo-video-player" controls playsinline preload="metadata" src="/landing/assets/qatron-showcase.mp4" poster="/landing/assets/qatron-poster.jpg" aria-label="Demonstração editada do fluxo completo de teste de ordenação com o QAtron"></video>
+            <figcaption>Demonstração editada do fluxo completo: requisitos, revisão humana, execução visual e relatório final.</figcaption>
+          </figure>
+          <div class="capture-gallery">
+            <figure>
+              <a href="/landing/assets/ordenacao-crescente.png" target="_blank" rel="noopener noreferrer" aria-label="Ampliar evidência da tabela em ordem crescente"><img src="/landing/assets/ordenacao-crescente.png" width="1366" height="768" class="transaction-capture" loading="lazy" decoding="async" alt="Tabela Recent Transactions após o primeiro clique em Amount, com seis valores em ordem crescente, de menos 320 a mais 1.250 dólares fictícios."></a>
+              <figcaption><strong>01 / Ordem crescente</strong>O primeiro clique em Amount ordenou os valores do menor para o maior, conforme o critério CA-01.</figcaption>
+            </figure>
+            <figure id="real-demo-approval">
+              <a href="/landing/assets/ordenacao-decrescente.png" target="_blank" rel="noopener noreferrer" aria-label="Ampliar evidência da tabela em ordem decrescente"><img src="/landing/assets/ordenacao-decrescente.png" width="1366" height="768" class="transaction-capture" loading="lazy" decoding="async" alt="Tabela Recent Transactions após o segundo clique em Amount, com os mesmos seis pares de descrição e valor em ordem decrescente, de mais 1.250 a menos 320 dólares fictícios."></a>
+              <figcaption><strong>02 / Ordem decrescente</strong>O segundo clique inverteu a ordem. Nos dois estados, as seis transações mantiveram seus pares descrição e valor.</figcaption>
+            </figure>
+            <figure class="capture-featured" id="real-demo-map">
+              <a href="/landing/assets/ordenacao-relatorio-final.jpg" target="_blank" rel="noopener noreferrer" aria-label="Ampliar o resumo do relatório final de ordenação"><img src="/landing/assets/ordenacao-relatorio-final.jpg" width="1220" height="630" class="report-capture" loading="lazy" decoding="async" alt="Relatório final do QAtron, revisão 1, para ordenação de transações no Applitools Demo, com um caso aprovado e nenhum reprovado, bloqueado, inconclusivo ou não executado."></a>
+              <figcaption><strong>03 / Relatório final</strong>O caso TC-01 foi aprovado em uma tentativa, com os três critérios verificados e nenhuma pendência registrada.</figcaption>
+            </figure>
+          </div>
+        </div>
+
+        <details class="workflow-disclosure">
+          <summary><span class="disclosure-title">Explore as etapas do QAtron<small>Exemplo interativo do fluxo completo</small></span><span class="disclosure-symbol" aria-hidden="true">+</span></summary>
+          <div class="walkthrough-body">
+        <div class="workflow-demo" id="workflow-demo">
+          <div class="demo-topbar"><span><span class="signal" aria-hidden="true"></span> EXEMPLO INTERATIVO</span><span class="demo-disclaimer">Fluxo ilustrativo · não executa testes</span></div>
+          <div class="demo-body">
+            <div class="step-list" role="tablist" aria-label="Etapas do QAtron" aria-orientation="vertical">
+              <button id="step-tab-0" class="step-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="step-panel" data-stage="0"><span class="step-num">01</span><span>Requisitos<small>Defina o esperado</small></span><span class="step-arrow" aria-hidden="true">↗</span></button>
+              <button id="step-tab-1" class="step-tab" type="button" role="tab" aria-selected="false" aria-controls="step-panel" tabindex="-1" data-stage="1"><span class="step-num">02</span><span>Plano de testes<small>Revise e aprove</small></span><span class="step-arrow" aria-hidden="true">↗</span></button>
+              <button id="step-tab-2" class="step-tab" type="button" role="tab" aria-selected="false" aria-controls="step-panel" tabindex="-1" data-stage="2"><span class="step-num">03</span><span>Casos de teste<small>Revise e aprove</small></span><span class="step-arrow" aria-hidden="true">↗</span></button>
+              <button id="step-tab-3" class="step-tab" type="button" role="tab" aria-selected="false" aria-controls="step-panel" tabindex="-1" data-stage="3"><span class="step-num">04</span><span>Acesso ao alvo<small>Prepare o ambiente</small></span><span class="step-arrow" aria-hidden="true">↗</span></button>
+              <button id="step-tab-4" class="step-tab" type="button" role="tab" aria-selected="false" aria-controls="step-panel" tabindex="-1" data-stage="4"><span class="step-num">05</span><span>Mapeamento<small>Telas e percursos</small></span><span class="step-arrow" aria-hidden="true">↗</span></button>
+              <button id="step-tab-5" class="step-tab" type="button" role="tab" aria-selected="false" aria-controls="step-panel" tabindex="-1" data-stage="5"><span class="step-num">06</span><span>Execução visual<small>Interação pela interface</small></span><span class="step-arrow" aria-hidden="true">↗</span></button>
+              <button id="step-tab-6" class="step-tab" type="button" role="tab" aria-selected="false" aria-controls="step-panel" tabindex="-1" data-stage="6"><span class="step-num">07</span><span>Relatório<small>Resultados e evidências</small></span><span class="step-arrow" aria-hidden="true">↗</span></button>
+            </div>
+            <div class="demo-content">
+              <div class="demo-stage-header"><span id="stage-role">CURADOR</span><span id="stage-counter">ETAPA 01 / 07</span></div>
+              <div id="step-panel" class="step-panel" role="tabpanel" aria-labelledby="step-tab-0" tabindex="0">
+                <p class="panel-label">O ponto de partida</p><h3>O que precisa funcionar?</h3><p>Informe requisitos, histórias de usuário ou critérios de aceite. O curador organiza as fontes e identifica dúvidas antes do planejamento.</p>
+                <div class="demo-document"><div class="document-header"><span>REQUISITO</span><span>RQ-01</span></div><p>Ao criar uma tarefa com um título válido, ela deve aparecer na lista de tarefas.</p><span class="document-note">Exemplo: aplicação de tarefas</span></div>
+              </div>
+              <div class="demo-controls"><button id="previous-stage" class="control-button" type="button" disabled aria-label="Etapa anterior">←</button><p id="stage-hint">Comece pelo comportamento que você espera.</p><button id="next-stage" class="control-button control-next" type="button" aria-label="Próxima etapa">→</button></div>
+            </div>
+          </div>
+        </div>
+        <p class="demo-footnote">Na aplicação, o fluxo registra perguntas, revisões e tentativas. Quando há um impedimento, você pode fornecer informações para continuar.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section class="architecture section-pad wrap" id="arquitetura" aria-labelledby="architecture-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">[ 03 / POR DENTRO ]</p><h2 id="architecture-title">Agentes com papéis claros.<br><span>Um fluxo sob controle.</span></h2></div>
+        <p>Um orquestrador determinístico conduz a sequência por estados e regras explícitas. Os modelos trabalham nas tarefas de cada etapa.</p>
+      </div>
+      <div class="orchestration">
+        <div class="orchestrator"><span class="bracket" aria-hidden="true">{</span><div><span class="eyebrow">COORDENAÇÃO</span><h3>Orquestrador por estados</h3><p>Etapas · aprovações · versões · vínculos</p></div><span class="bracket" aria-hidden="true">}</span></div>
+        <div class="agent-grid">
+          <div class="agent"><span>01 / CURADOR</span><h4>Entende a entrada.</h4><p>Organiza requisitos, fontes e perguntas.</p></div>
+          <div class="agent"><span>02 / PROJETISTA</span><h4>Prepara o teste.</h4><p>Elabora planos, casos e percursos.</p></div>
+          <div class="agent"><span>03 / EXECUTOR</span><h4>Interage pela tela.</h4><p>Observa e realiza ações no navegador.</p></div>
+          <div class="agent"><span>04 / VALIDADOR</span><h4>Revisa as saídas.</h4><p>Confere textos e imagens em contexto independente.</p></div>
+          <div class="agent"><span>05 / REDATOR</span><h4>Explica o resultado.</h4><p>Consolida conclusões e evidências no relatório.</p></div>
+        </div>
+      </div>
+      <div class="tech-row"><span class="tech-label">CONSTRUÍDO COM</span><p>TypeScript <span>/</span> Node.js <span>/</span> SDK Pi <span>/</span> Playwright <span>/</span> SQLite <span>/</span> Docker</p></div>
+    </section>
+
+    <section class="evidence-section section-pad" id="evidencias" aria-labelledby="evidence-title">
+      <div class="wrap evidence-layout">
+        <div class="evidence-copy"><p class="eyebrow">[ 04 / RASTREABILIDADE ]</p><h2 id="evidence-title">Uma conclusão.<br><span>Todo o contexto.</span></h2><p>Abra o relatório e percorra o que foi pedido, o caso executado e o que o agente observou. As capturas acompanham os registros para apoiar sua revisão.</p><p>Falhas, bloqueios e resultados inconclusivos permanecem visíveis. O relatório também pode ser impresso em PDF.</p><a class="text-link" href="https://github.com/mh131105/akcit-qa-agent/blob/main/docs/USO.md" target="_blank" rel="noopener noreferrer">Conheça o guia de uso <span aria-hidden="true">↗</span></a></div>
+        <div class="evidence-map" aria-label="Informações presentes no relatório"><div class="evidence-map-header"><span>RELATÓRIO / ESTRUTURA</span><span aria-hidden="true">↙</span></div><div class="evidence-row"><span>01</span><strong>Requisito</strong><p>A origem do comportamento esperado</p></div><div class="evidence-row"><span>02</span><strong>Caso e tentativa</strong><p>O percurso e as ações realizadas</p></div><div class="evidence-row"><span>03</span><strong>Esperado × observado</strong><p>A comparação que sustenta a conclusão</p></div><div class="evidence-row"><span>04</span><strong>Captura de tela</strong><p>O registro visual associado ao teste</p></div><div class="evidence-row"><span>05</span><strong>Pendências</strong><p>Impedimentos e pontos para revisão</p></div></div>
+      </div>
+    </section>
+
+    <section class="faq-section section-pad wrap" id="perguntas" aria-labelledby="faq-title">
+      <div class="faq-intro"><p class="eyebrow">[ 05 / PARA COMEÇAR ]</p><h2 id="faq-title">Antes da<br><span>primeira execução.</span></h2></div>
+      <div class="faq-list">
+        <details open><summary>O que preciso para testar uma aplicação?<span aria-hidden="true">+</span></summary><div><p>Crie sua conta no QAtron e informe os requisitos. Após aprovar o plano e os casos, configure a URL pública HTTP/HTTPS da aplicação-alvo e uma conta de teste para o acesso. Use um ambiente apropriado: as interações podem criar ou alterar dados.</p></div></details>
+        <details><summary>Como os agentes interagem com a aplicação?<span aria-hidden="true">+</span></summary><div><p>O executor observa a tela e usa cursor e teclado no navegador. Ele não lê o código da aplicação-alvo, não consulta suas APIs e não utiliza seletores DOM para realizar as ações.</p></div></details>
+        <details><summary>Que tipo de teste o QAtron realiza?<span aria-hidden="true">+</span></summary><div><p>O foco é teste funcional de caixa-preta em aplicações web. A qualidade dos resultados depende dos requisitos, do acesso ao ambiente e das respostas dos modelos. O relatório mantém as evidências e os impedimentos para revisão; testes de carga, segurança e usabilidade ficam fora desse fluxo.</p></div></details>
+      </div>
+    </section>
+
+    <section class="closing wrap" aria-labelledby="closing-title"><div><p class="eyebrow">QAtron / Testes com evidências</p><h2 id="closing-title">Seu próximo teste<br>começa com um requisito<span>.</span></h2></div><div class="closing-actions"><a class="button button-primary" href="/execucoes">Abrir o QAtron <span aria-hidden="true">↗</span></a><a class="text-link" href="https://github.com/mh131105/akcit-qa-agent" target="_blank" rel="noopener noreferrer">Explorar o código <span aria-hidden="true">↗</span></a></div></section>
+  </main>
+
+  <footer class="site-footer wrap"><div class="footer-top"><a class="brand" href="#inicio"><img src="/landing/qatron-mark.png" width="34" height="34" alt=""><span>QAtron<span class="brand-dot">.</span></span></a><p>Dos requisitos às evidências.</p><a href="#inicio" class="back-top">Voltar ao início <span aria-hidden="true">↑</span></a></div><div class="footer-bottom"><p>Desenvolvido por David Caetano, Erick Gomes,<br>Gabriel Rafael e Matheus Henrique de Oliveira Garcia.</p><span>TESTES FUNCIONAIS / AGENTES DE IA</span></div></footer>
+</body>
+</html>
