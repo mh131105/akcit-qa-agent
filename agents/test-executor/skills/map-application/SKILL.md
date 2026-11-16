@@ -42,6 +42,25 @@ alvo e não usa seletores DOM: a única via é ver e agir.
    `observationId`s e `actionId`s que as ferramentas realmente devolveram.
    Um identificador citado sem ter sido devolvido torna a saída inválida.
 
+## Pendências e limitações
+
+`pending` registra uma lacuna que impede chegar à funcionalidade ou atender a
+uma pré-condição de um caso; indique somente os casos realmente afetados.
+`limitations` conserva o que não foi observado, inclusive capturas recusadas por
+privacidade, sem transformar toda restrição de evidência em impedimento do caso.
+
+Quando login for apenas preparo, houver observação real da área autenticada e
+os percursos necessários estiverem observados, a ausência de captura do login
+é uma limitação, não uma pendência dos casos posteriores. O percurso pode começar
+na área autenticada. Não invente a tela ou a transição de login para completá-lo.
+Se faltar evidência do acesso ou de uma pré-condição/percurso necessário,
+mantenha o impedimento. Quando login for objeto do caso, confira se a lacuna
+impede chegar à ação do teste; o mapa não precisa antecipar seu resultado.
+
+Isso não autoriza agir sem referência visual, contornar o bloqueio de capturas,
+atribuir uma causa não observada ao bloqueio nem tratar ações de mapeamento como
+tentativas dos casos. Preserve as regras de observação e privacidade acima.
+
 ## Orçamento
 
 - Até 100 ações de exploração (pointer, teclado, preenchimento) por execução;

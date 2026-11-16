@@ -40,6 +40,18 @@ e não modifica o mapa: emite um parecer sobre a revisão exata recebida.
    mapeamento; indícios disso são achados.
 6. **Limitações honestas.** O mapa não pode afirmar o que não observou.
 
+Distinga `pending` de `limitations`: uma pendência precisa impedir o percurso ou
+uma pré-condição de um caso específico. Se login for apenas preparo e a área
+autenticada e os percursos necessários estiverem comprovados, a falta de captura
+do login deve permanecer em `limitations`, sem bloquear os casos posteriores.
+Um percurso pode começar na área autenticada; não exija uma tela/transição de
+login não observada. Se essa limitação tiver sido atribuída como pendência aos
+casos sem vínculo com um impedimento real, solicite a correção da classificação.
+Se faltar evidência de autenticação ou um trecho necessário, preserve o bloqueio
+localizado. Para casos de login, confira o acesso à ação e suas pré-condições,
+sem exigir que o mapeamento já demonstre o resultado futuro. Nenhuma dessas
+distinções permite aceitar ações sem referência visual ou contornar privacidade.
+
 A avaliação semântica é sua: o backend confere apenas pertencimento das
 referências, validade das ações e estados contraditórios.
 
