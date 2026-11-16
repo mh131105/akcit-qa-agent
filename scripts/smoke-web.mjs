@@ -1355,6 +1355,13 @@ try {
   const pageErrors = [];
   page.on('pageerror', error => pageErrors.push(error.message));
   await page.goto('/');
+  await visible(page.getByRole('heading', { name: 'Testes funcionais, dos requisitos às evidências.' }));
+  assert.equal(new URL(page.url()).pathname, '/', 'A raiz abre a landing pública sem redirecionar para login.');
+  const showcase = page.locator('#real-demo-video-player');
+  await showcase.evaluate(video => video.load());
+  await page.waitForFunction(() => document.querySelector('#real-demo-video-player')?.readyState >= 1);
+  assert.ok(Math.abs(await showcase.evaluate(video => video.duration) - 48) < 0.1, 'O vídeo final da landing carrega dentro da imagem de produção.');
+  await page.getByRole('link', { name: 'Experimentar o QAtron', exact: false }).click();
   await page.waitForURL('**/acesso*');
   await visible(page.getByRole('button', { name: 'Entrar na conta', exact: true }));
   await accessInteractions();

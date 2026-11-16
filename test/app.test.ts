@@ -48,9 +48,65 @@ test('páginas e arquivos locais usam lista explícita, cabeçalhos seguros e ca
     const html = await readFile(new URL('../src/web/index.html', import.meta.url), 'utf8');
     // A localização dos arquivos não depende do diretório de execução do comando.
     process.chdir(data);
-    const redirect = await fetch(url, { redirect: 'manual' });
-    assert.equal(redirect.status, 302);
-    assert.equal(redirect.headers.get('location'), '/execucoes');
+    const home = await fetch(url, { redirect: 'manual' });
+    assert.equal(home.status, 200);
+    assert.equal(home.headers.get('location'), null);
+    assert.equal(home.headers.get('set-cookie'), null);
+    const landingHtml = await home.text();
+    assert.match(landingHtml, /Testes funcionais,/);
+    assert.match(landingHtml, /href="\/execucoes"/);
+    assert.match(landingHtml, /src="\/landing\/assets\/qatron-showcase\.mp4"/);
+    assert.doesNotMatch(landingHtml, /(?:href|src)="(?:styles\.css|script\.js|assets\/)|\bstyle=/);
+    assert.doesNotMatch(landingHtml, /<script\b(?![^>]*\bsrc=)/i);
+    const landingPolicy = home.headers.get('content-security-policy') ?? '';
+    for (const directive of ["media-src 'self'", "style-src 'self' https://fonts.googleapis.com", 'font-src https://fonts.gstatic.com']) {
+      assert.ok(landingPolicy.split('; ').includes(directive), directive);
+    }
+    assert.doesNotMatch(landingPolicy, /unsafe-inline|unsafe-eval/);
+    const homeHead = await fetch(url, { method: 'HEAD' });
+    assert.equal(homeHead.status, 200);
+    assert.equal(homeHead.headers.get('content-length'), home.headers.get('content-length'));
+    assert.equal(await homeHead.text(), '');
+    for (const [path, mime] of [
+      ['styles.css', 'text/css; charset=utf-8'], ['script.js', 'text/javascript; charset=utf-8'], ['qatron-mark.png', 'image/png'],
+      ['assets/ordenacao-crescente.png', 'image/png'], ['assets/ordenacao-decrescente.png', 'image/png'],
+      ['assets/ordenacao-relatorio-final.jpg', 'image/jpeg'], ['assets/relatorio-final.txt', 'text/plain; charset=utf-8'],
+      ['assets/qatron-poster.jpg', 'image/jpeg'],
+    ]) {
+      const asset = await fetch(`${url}/landing/${path}`);
+      assert.equal(asset.status, 200, path);
+      assert.equal(asset.headers.get('content-type'), mime);
+      assert.deepEqual(Buffer.from(await asset.arrayBuffer()), await readFile(new URL(`../src/web/landing/${path}`, import.meta.url)));
+    }
+    const video = await readFile(new URL('../src/web/landing/assets/qatron-showcase.mp4', import.meta.url));
+    const videoUrl = `${url}/landing/assets/qatron-showcase.mp4`;
+    const videoHead = await fetch(videoUrl, { method: 'HEAD', headers: { Range: 'bytes=0-1' } });
+    assert.equal(videoHead.status, 200);
+    assert.equal(videoHead.headers.get('accept-ranges'), 'bytes');
+    assert.equal(videoHead.headers.get('content-type'), 'video/mp4');
+    assert.equal(videoHead.headers.get('content-length'), String(video.length));
+    assert.equal(await videoHead.text(), '');
+    for (const [range, start, end] of [
+      ['bytes=0-1', 0, 1], ['bytes=512-1023', 512, 1023], ['bytes=-32', video.length - 32, video.length - 1],
+      [`bytes=${video.length - 8}-`, video.length - 8, video.length - 1],
+      [`bytes=${video.length - 8}-${video.length + 50}`, video.length - 8, video.length - 1],
+    ] as const) {
+      const partial = await fetch(videoUrl, { headers: { Range: range } });
+      assert.equal(partial.status, 206, range);
+      assert.equal(partial.headers.get('content-type'), 'video/mp4');
+      assert.equal(partial.headers.get('content-range'), `bytes ${start}-${end}/${video.length}`);
+      assert.equal(partial.headers.get('content-length'), String(end - start + 1));
+      assert.deepEqual(Buffer.from(await partial.arrayBuffer()), video.subarray(start, end + 1));
+    }
+    for (const range of [`bytes=${video.length}-`, 'bytes=10-1', 'bytes=-0']) {
+      const unavailable = await fetch(videoUrl, { headers: { Range: range } });
+      assert.equal(unavailable.status, 416, range);
+      assert.equal(unavailable.headers.get('content-range'), `bytes */${video.length}`);
+      assert.equal(await unavailable.text(), '');
+    }
+    const completeVideo = await fetch(videoUrl);
+    assert.equal(completeVideo.status, 200);
+    assert.deepEqual(Buffer.from(await completeVideo.arrayBuffer()), video);
     for (const path of ['/acesso', '/acesso?returnTo=%2Fexecucoes%2Fnova', '/execucoes', '/execucoes/nova', '/execucoes/run-demo-001']) {
       const result = await fetch(`${url}${path}`);
       assert.equal(result.status, 200, path);
@@ -63,6 +119,7 @@ test('páginas e arquivos locais usam lista explícita, cabeçalhos seguros e ca
         assert.ok(policy.split('; ').includes(directive), directive);
       }
       assert.doesNotMatch(policy, /unsafe-inline|unsafe-eval/);
+      assert.doesNotMatch(policy, /fonts\.googleapis\.com|fonts\.gstatic\.com|media-src/);
       assert.equal(await result.text(), html);
     }
     assert.match(html, /lang=["']pt(?:-BR)?["']/);
@@ -85,7 +142,7 @@ test('páginas e arquivos locais usam lista explícita, cabeçalhos seguros e ca
     const head = await fetch(`${url}/execucoes/run-demo-001`, { method: 'HEAD' });
     assert.equal(head.status, 200);
     assert.equal(await head.text(), '');
-    for (const path of ['/.env', '/package.json', '/web/index.html', '/src/web/index.html', '/web/app.js.map', '/web/app.js/extra', '/web/qatron-mark.png/extra', '/execucoes/demo/extra', '/execucoes/', '/desconhecido']) {
+    for (const path of ['/.env', '/package.json', '/web/index.html', '/src/web/index.html', '/web/app.js.map', '/web/app.js/extra', '/web/qatron-mark.png/extra', '/execucoes/demo/extra', '/execucoes/', '/desconhecido', '/landing/index.html', '/landing/assets/relatorio-parcial.txt', '/landing/assets/qatron-showcase.mp4/extra', '/landing/%2e%2e%2f.env']) {
       const result = await fetch(`${url}${path}`);
       assert.equal(result.status, 404, path);
       assert.deepEqual(await result.json(), { error: 'not-found' });

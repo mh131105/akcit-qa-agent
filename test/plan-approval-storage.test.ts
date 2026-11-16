@@ -636,8 +636,8 @@ test('T3.1 CA-09/10: createApp recupera antes de servir, entrega site/health e n
   assert.ok(address && typeof address !== 'string');
   const url = `http://127.0.0.1:${address.port}`;
   const home = await fetch(url, { redirect: 'manual' });
-  assert.equal(home.status, 302);
-  assert.equal(home.headers.get('location'), '/execucoes');
+  assert.equal(home.status, 200);
+  assert.match(await home.text(), /href="\/execucoes"/);
   const site = await fetch(`${url}/execucoes`);
   assert.equal(site.status, 200);
   assert.match(await site.text(), /<script src="\/web\/app\.js" defer><\/script>/);
